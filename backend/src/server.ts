@@ -28,21 +28,19 @@ app.use(
   }),
 );
 
-const allowedOrigins = env.FRONTEND_ORIGIN
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
+// НАСТРОЙКА CORS: Разрешаем доступ вашему сайту на Vercel
 app.use(
   cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(null, false);
-    },
+    origin: [
+      "http://localhost:5173",
+      "https://tea-achievements.vercel.app"
+    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
 app.use(requireStagingAccess);
 app.use(
   morgan(env.APP_ENV === "production" ? "combined" : "dev", {
@@ -51,7 +49,7 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 
-// Статика загрузок: при UPLOAD_DIR=uploads файлы доступны как {PUBLIC_BASE_URL}/uploads/avatars/...
+// Статика загрузок
 app.use(
   `/${env.UPLOAD_DIR}`,
   express.static(path.resolve(process.cwd(), env.UPLOAD_DIR), {
@@ -91,8 +89,7 @@ app.listen(env.PORT, () => {
   console.log(`API listening on ${env.API_URL} [${env.APP_ENV}]`);
   if (process.env.RENDER === "true") {
     console.warn(
-      "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта. Для продакшена планируйте S3 / Supabase Storage.",
+      "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",
     );
   }
 });
-
