@@ -1,0 +1,44 @@
+services:
+  staging-db:
+    image: postgres:16
+    container_name: tea_achievements_staging_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tea_app
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: tea_achievements_staging
+    volumes:
+      - tea_achievements_staging_pgdata:/var/lib/postgresql/data
+
+  staging-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: tea_achievements_staging_backend
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env.staging
+    depends_on:
+      - staging-db
+    ports:
+      - "127.0.0.1:4100:4000"
+    volumes:
+      - ../backend/uploads:/app/uploads
+
+  staging-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://zbt.tea-achievements.com
+        VITE_CREATOR_USER_ID: ""
+        VITE_STAGING_ACCESS_TOKEN: ""
+    container_name: tea_achievements_staging_frontend
+    restart: unless-stopped
+    depends_on:
+      - staging-backend
+    ports:
+      - "127.0.0.1:3100:80"
+
+volumes:
+  tea_achievements_staging_pgdata:

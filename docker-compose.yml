@@ -1,0 +1,64 @@
+# Опциональный полный стек: Postgres + API + nginx (SPA + прокси /api и /uploads).
+# Перед первым запуском: скопируйте .env.docker.example → .env и задайте секреты.
+#
+# Миграции и сид (один раз или после обновления схемы):
+#   docker compose run --rm backend sh -c "npx prisma migrate deploy && npx prisma db seed"
+#
+# Запуск:
+#   docker compose up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tea_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-tea_achievements}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tea_app} -d ${POSTGRES_DB:-tea_achievements}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tea_app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tea_achievements}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (min 16 chars)}
+      PORT: "4000"
+      API_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
+      UPLOAD_DIR: uploads
+      TRUST_PROXY: "true"
+      STAGING_ACCESS_TOKEN: ${STAGING_ACCESS_TOKEN:-}
+      STAGING_IP_WHITELIST: ${STAGING_IP_WHITELIST:-}
+    volumes:
+      - uploads_data:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: ${FRONTEND_BUILD_MODE:-production}
+        VITE_STAGING_ACCESS_TOKEN: ${VITE_STAGING_ACCESS_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+
+volumes:
+  postgres_data:
+  uploads_data:

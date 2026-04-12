@@ -1,0 +1,335 @@
+// SQLite dev schema — keep in sync with schema.prisma (models/enums), datasource only differs.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  CREATOR
+}
+
+enum Rarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+  EXCLUSIVE
+  SECRET
+}
+
+enum SupportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  REJECTED
+}
+
+enum NotificationType {
+  SYSTEM
+  ACH
+  XP
+  LVL
+  SHOP
+  SUPPORT
+  GIFT
+}
+
+enum ShopItemType {
+  FRAME
+  BADGE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  nickname     String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  blocked      Boolean  @default(false)
+
+  level Int @default(1)
+  xp    Int @default(0)
+
+  avatarPath String?
+  bannerPath String?
+  avatarUrl  String?
+  bannerUrl  String?
+  frameKey   String?
+  badgesJson Json?
+  statusEmoji String?
+  unlockedFramesJson   Json @default("[]")
+  unlockedStatusesJson Json @default("[]")
+  adminNotes String?
+  adminTags  Json?
+
+  achievements UserAchievement[]
+  createdAchievements Achievement[] @relation("AchievementCreator")
+  accessGrants AchievementAccess[]
+
+  notifications Notification[]
+  suggestions   Suggestion[] @relation("SuggestionAuthor")
+  reportsMade   Report[]     @relation("ReportReporter")
+  reportsAgainst Report[]    @relation("ReportReported")
+
+  shopPurchases ShopPurchase[]
+  giftsSent     Gift[] @relation("GiftSender")
+  giftsReceived Gift[] @relation("GiftReceiver")
+  giftSendRequests GiftSendRequest[]
+  taskSubmissions TaskSubmission[] @relation("TaskSubmissionAuthor")
+  reviewedTaskSubmissions TaskSubmission[] @relation("TaskSubmissionReviewer")
+  createdTasks Task[] @relation("TaskCreator")
+
+  auditLogsAsAdmin   AdminAuditLog[] @relation("AdminAuditActor")
+  auditLogsAsTarget  AdminAuditLog[] @relation("AdminAuditTarget")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Achievement {
+  id          String  @id @default(uuid())
+  title       String
+  description String
+  rarity      Rarity
+  points      Int
+
+  iconPath  String?
+  frameKey  String?
+  isPublic  Boolean @default(true)
+
+  createdById String?
+  createdBy   User? @relation("AchievementCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  accessGrants AchievementAccess[]
+  awards       UserAchievement[]
+  task         Task?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([rarity, isPublic])
+}
+
+model Task {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  conditions   String
+  rewardCoins  Int      @default(0)
+  isActive     Boolean  @default(true)
+  isEvent      Boolean  @default(false)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  styleTag     String?
+
+  achievementId String  @unique
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  createdById   String?
+  createdBy     User? @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  submissions TaskSubmission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, isEvent, endsAt])
+}
+
+model TaskSubmission {
+  id           String        @id @default(uuid())
+  taskId       String
+  userId       String
+  message      String
+  evidenceJson Json?
+  status       SupportStatus @default(PENDING)
+  adminResponse String?
+  isRead       Boolean       @default(false)
+  reviewedAt   DateTime?
+  reviewedById String?
+
+  task         Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User @relation("TaskSubmissionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy   User? @relation("TaskSubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId, status, isRead, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AchievementAccess {
+  achievementId String
+  userId        String
+
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([achievementId, userId])
+  @@index([userId])
+}
+
+model UserAchievement {
+  userId        String
+  achievementId String
+  awardedAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, achievementId])
+  @@index([userId, awardedAt])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType @default(SYSTEM)
+  text      String
+  adminName String?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  giftId String? @unique
+  gift   Gift?   @relation("GiftNotification", fields: [giftId], references: [id], onDelete: Cascade)
+
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Suggestion {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  status      SupportStatus @default(PENDING)
+  adminResponse String?
+  isRead      Boolean       @default(false)
+
+  authorId String
+  author   User   @relation("SuggestionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, isRead, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model Report {
+  id          String        @id @default(uuid())
+  reason      String
+  description String
+  status      SupportStatus @default(PENDING)
+  adminResponse String?
+  isRead      Boolean       @default(false)
+
+  reporterId String
+  reporter   User @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  reportedId String
+  reported   User @relation("ReportReported", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, isRead, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([reportedId, createdAt])
+}
+
+model ShopItem {
+  id          String        @id @default(uuid())
+  name        String
+  type        ShopItemType
+  key         String
+  price       Int
+  rarity      Rarity
+  description String?
+  icon        String?
+
+  purchases ShopPurchase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, key])
+  @@index([type, rarity, price])
+}
+
+model ShopPurchase {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  createdAt DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@index([userId, createdAt])
+}
+
+model Gift {
+  id        String   @id @default(uuid())
+  fromUserId String
+  toUserId   String
+  xpAmount  Int      @default(0)
+  message   String?
+  accepted  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  acceptedAt DateTime?
+  receiverViewedAt DateTime?
+
+  fromUser User @relation("GiftSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("GiftReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  giftNotification Notification? @relation("GiftNotification")
+  sendRequest      GiftSendRequest?
+
+  @@index([toUserId, receiverViewedAt, createdAt])
+  @@index([fromUserId, createdAt])
+}
+
+model GiftSendRequest {
+  id             String   @id @default(uuid())
+  senderId       String
+  idempotencyKey String
+  giftId         String   @unique
+  createdAt      DateTime @default(now())
+
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  gift   Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, idempotencyKey])
+  @@index([senderId, createdAt])
+}
+
+model AdminAuditLog {
+  id             String   @id @default(uuid())
+  adminId        String
+  adminNickname  String
+  action         String
+  summary        String
+  targetUserId   String?
+  targetNickname String?
+  meta           Json?
+
+  createdAt DateTime @default(now())
+
+  admin      User  @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUser User? @relation("AdminAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([adminId, createdAt])
+}

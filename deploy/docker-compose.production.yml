@@ -1,0 +1,43 @@
+services:
+  production-db:
+    image: postgres:16
+    container_name: tea_achievements_production_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tea_app
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: tea_achievements_production
+    volumes:
+      - tea_achievements_production_pgdata:/var/lib/postgresql/data
+
+  production-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: tea_achievements_production_backend
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env.production
+    depends_on:
+      - production-db
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ../backend/uploads:/app/uploads
+
+  production-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://tea-achievements.com
+        VITE_CREATOR_USER_ID: ""
+    container_name: tea_achievements_production_frontend
+    restart: unless-stopped
+    depends_on:
+      - production-backend
+    ports:
+      - "127.0.0.1:3000:80"
+
+volumes:
+  tea_achievements_production_pgdata:

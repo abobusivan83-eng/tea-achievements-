@@ -1,0 +1,54 @@
+# Render Blueprint: два Web Service (staging + production) на бесплатном плане.
+# Подключите репозиторий в Render → Blueprints → apply этот файл.
+# Секреты (DATABASE_URL, JWT_SECRET, …) задайте в дашборде или через sync: false + Dashboard.
+#
+# Требуется: 2 проекта Supabase (отдельные DATABASE_URL).
+
+version: "1"
+
+services:
+  - type: web
+    name: tea-backend-staging
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: develop
+    rootDir: backend
+    buildCommand: npm ci && npx prisma generate && npm run build && npx prisma migrate deploy
+    startCommand: node dist/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: APP_ENV
+        value: staging
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: STAGING_ACCESS_TOKEN
+        generateValue: true
+
+  - type: web
+    name: tea-backend-production
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    rootDir: backend
+    buildCommand: npm ci && npx prisma generate && npm run build && npx prisma migrate deploy
+    startCommand: node dist/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        sync: false

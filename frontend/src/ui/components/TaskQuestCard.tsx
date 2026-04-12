@@ -1,0 +1,352 @@
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import clsx from "clsx";
+import type { Rarity, SupportStatus, TaskItem } from "../../lib/types";
+import { rarityGlowClass } from "../rarityStyles";
+import { Button } from "./Button";
+import { AchievementIcon } from "./AchievementIcon";
+import { FiAward, FiChevronDown, FiClock, FiUpload } from "react-icons/fi";
+
+function statusLabel(s: SupportStatus) {
+  switch (s) {
+    case "PENDING":
+      return "На проверке";
+    case "REVIEWED":
+      return "Рассмотрено";
+    case "RESOLVED":
+      return "Принято";
+    case "REJECTED":
+      return "Отклонено";
+    default:
+      return s;
+  }
+}
+
+function rarityClassFrom(r: Rarity | undefined) {
+  if (!r) return "rarity-common";
+  switch (r) {
+    case "EXCLUSIVE":
+      return "rarity-exclusive";
+    case "SECRET":
+      return "rarity-secret";
+    case "LEGENDARY":
+      return "rarity-legendary";
+    case "EPIC":
+      return "rarity-epic";
+    case "RARE":
+      return "rarity-rare";
+    default:
+      return "rarity-common";
+  }
+}
+
+function rarityShortRu(r: Rarity | undefined) {
+  if (!r) return "";
+  switch (r) {
+    case "COMMON":
+      return "Обычное";
+    case "RARE":
+      return "Редкое";
+    case "EPIC":
+      return "Эпическое";
+    case "LEGENDARY":
+      return "Легендарное";
+    case "EXCLUSIVE":
+      return "Эксклюзив (создатель)";
+    case "SECRET":
+      return "Секретное";
+    default:
+      return r;
+  }
+}
+
+type TaskKind = "event" | "timed" | "permanent";
+
+function taskKind(t: TaskItem): TaskKind {
+  if (t.isEvent) return "event";
+  if (t.startsAt || t.endsAt) return "timed";
+  return "permanent";
+}
+
+function kindLabel(k: TaskKind) {
+  switch (k) {
+    case "event":
+      return "Ивентовое";
+    case "timed":
+      return "Временное";
+    case "permanent":
+      return "Постоянное";
+  }
+}
+
+export type TaskQuestCardVariant = "available" | "completed";
+
+export function TaskQuestCard(props: {
+  task: TaskItem;
+  variant?: TaskQuestCardVariant;
+  expanded: boolean;
+  showForm: boolean;
+  onToggleExpand: () => void;
+  onOpenForm: () => void;
+  message: string;
+  onMessageChange: (v: string) => void;
+  files: File[];
+  onFilesChange: (files: File[]) => void;
+  submitting: boolean;
+  onSubmit: () => void;
+}) {
+  const variant = props.variant ?? "available";
+  const reduce = useReducedMotion();
+  const t = props.task;
+  const sub = t.mySubmission;
+  const ach = t.achievement;
+  const resolved = sub?.status === "RESOLVED";
+  const rarity = ach?.rarity;
+  const rClass = rarityClassFrom(rarity);
+  const glow = rarityGlowClass(rarity ?? "COMMON", resolved);
+  const kind = taskKind(t);
+  const canSubmit =
+    variant === "available" &&
+    (!sub ||
+      sub.status === "REJECTED" ||
+      (sub.status !== "PENDING" && sub.status !== "REVIEWED" && sub.status !== "RESOLVED"));
+
+  const hoverLift = resolved ? -5 : kind === "event" ? -4 : -2;
+
+  return (
+    <motion.div
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      whileHover={reduce ? undefined : { y: hoverLift, scale: 1.012 }}
+      transition={{ type: "spring", stiffness: 520, damping: 34 }}
+      className={clsx(
+        "achievement-card task-card group relative",
+        rClass,
+        !resolved && "is-locked",
+        glow,
+        kind === "event" && "task-card--event",
+        kind === "timed" && "task-card--timed",
+        kind === "permanent" && "task-card--permanent",
+      )}
+    >
+      {kind === "event" ? <div className="task-card__event-halo" aria-hidden /> : null}
+
+      {!reduce && kind === "event" ? (
+        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100">
+          <div className="absolute -inset-[45%] bg-[linear-gradient(90deg,transparent,rgba(253,224,71,0.12),transparent)] [transform:translateX(-60%)_rotate(16deg)] animate-[shine_2.4s_ease-in-out_infinite]" />
+        </div>
+      ) : null}
+
+      <button type="button" className="task-card__header" onClick={() => props.onToggleExpand()}>
+        <div className="ach-icon-box">
+          <AchievementIcon
+            iconUrl={ach?.iconUrl}
+            alt={ach?.title ?? t.title}
+            sizeClassName="ach-icon"
+            className="border-[2px] border-[rgba(61,68,80,0.85)] bg-[rgba(0,0,0,0.35)]"
+          />
+          {resolved ? <div className="ach-check">✓</div> : null}
+        </div>
+
+        <div className="ach-content min-w-0">
+          <div className="ach-title">{t.title}</div>
+          <div className="ach-desc">{t.description}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={clsx(
+                "task-kind-badge",
+                kind === "event" && "task-kind-badge--event",
+                kind === "timed" && "task-kind-badge--timed",
+                kind === "permanent" && "task-kind-badge--permanent",
+              )}
+            >
+              {kindLabel(kind)}
+            </span>
+            {t.styleTag ? (
+              <span className="task-kind-badge border-white/15 bg-white/[0.06] text-steam-muted normal-case tracking-normal">
+                {t.styleTag}
+              </span>
+            ) : null}
+            {ach ? (
+              <span className="ach-reward">
+                +{ach.points} XP
+                {typeof t.rewardCoins === "number" && t.rewardCoins > 0 ? ` · ${t.rewardCoins} мон.` : ""}
+              </span>
+            ) : null}
+            {sub ? (
+              <span
+                className={clsx(
+                  "ml-auto shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  sub.status === "RESOLVED"
+                    ? "border-steam-green/45 bg-steam-green/12 text-steam-green"
+                    : sub.status === "REJECTED"
+                      ? "border-red-400/40 bg-red-500/12 text-red-200"
+                      : "border-white/15 bg-white/5 text-steam-muted",
+                )}
+              >
+                {statusLabel(sub.status)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <FiChevronDown className={clsx("task-card__chevron h-5 w-5", props.expanded && "task-card__chevron--open")} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {props.expanded ? (
+          <motion.div
+            key="body"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="task-card__body mt-3 border-t border-white/10 pt-3"
+          >
+            <div className="task-conditions-block">
+              <div className="task-conditions-block__label">Условия выполнения</div>
+              <div className="whitespace-pre-line">{t.conditions}</div>
+            </div>
+
+            {(t.startsAt || t.endsAt) && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black/22 px-3 py-2 text-[12px] text-steam-muted">
+                <FiClock className="h-4 w-4 shrink-0 text-steam-accent opacity-80" />
+                {t.startsAt ? <span>Старт: {new Date(t.startsAt).toLocaleString()}</span> : null}
+                {t.endsAt ? <span>Окончание: {new Date(t.endsAt).toLocaleString()}</span> : null}
+              </div>
+            )}
+
+            {ach ? (
+              <div className="task-reward-panel">
+                <div className="task-reward-panel__title">Награда</div>
+                <div className="task-reward-row">
+                  <div className="task-reward-ach">
+                    <AchievementIcon iconUrl={ach.iconUrl} alt={ach.title} className="task-reward-ach__icon" />
+                    <div className="task-reward-ach__meta min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <FiAward className="h-3.5 w-3.5 shrink-0 text-emerald-300/90" />
+                        <span className="task-reward-ach__name truncate">{ach.title}</span>
+                      </div>
+                      <div className="task-reward-ach__sub">
+                        Достижение · {rarityShortRu(ach.rarity)} · +{ach.points} очков
+                      </div>
+                    </div>
+                  </div>
+                  {typeof t.rewardCoins === "number" && t.rewardCoins > 0 ? (
+                    <div className="task-reward-coins shrink-0">+{t.rewardCoins} монет</div>
+                  ) : (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] text-steam-muted">
+                      Монеты не начисляются
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {sub?.adminResponse ? (
+              <div className="rounded-lg border border-steam-accent/30 bg-steam-accent/10 p-3 text-sm">
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-steam-muted">Ответ администрации</div>
+                <div className="mt-1.5 whitespace-pre-line text-steam-text">{sub.adminResponse}</div>
+              </div>
+            ) : null}
+
+            {variant === "completed" && resolved && sub ? (
+              <div className="rounded-lg border border-steam-green/35 bg-steam-green/10 px-3 py-2.5 text-sm text-steam-text">
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-steam-green">Выполнено вами</div>
+                <div className="mt-1 text-[13px] text-steam-muted">
+                  Принято модерацией:{" "}
+                  <span className="font-semibold text-steam-text">
+                    {new Date(sub.reviewedAt ?? sub.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                {sub.reviewedByNickname ? (
+                  <div className="mt-1 text-[13px] text-steam-muted">
+                    Администратор, выдавший награду:{" "}
+                    <span className="font-semibold text-steam-text">{sub.reviewedByNickname}</span>
+                  </div>
+                ) : null}
+                <div className="mt-1 text-xs text-steam-muted">
+                  Задание остаётся доступным для остальных участников; награда привязана к вашему профилю.
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              {variant === "completed" ? null : canSubmit ? (
+                <Button size="sm" variant="primary" onClick={(e) => { e.stopPropagation(); props.onOpenForm(); }}>
+                  {props.showForm ? "Скрыть форму" : sub ? "Отправить снова" : "Отправить доказательства"}
+                </Button>
+              ) : (
+                <span className="text-xs text-steam-muted">Ожидайте решения по текущей отправке.</span>
+              )}
+            </div>
+
+            <AnimatePresence initial={false}>
+              {variant === "available" && props.showForm && canSubmit ? (
+                <motion.div
+                  key="form"
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="grid gap-3 border-t border-white/10 pt-3">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-steam-muted">Комментарий (мин. 10 символов)</span>
+                      <textarea
+                        className="min-h-[100px] rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-steam-accent"
+                        value={props.message}
+                        onChange={(e) => props.onMessageChange(e.target.value)}
+                        placeholder="Опишите выполнение задания"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-steam-muted">Фото или видео (до 8 файлов)</span>
+                      <span className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
+                        <FiUpload />
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => props.onFilesChange(Array.from(e.target.files ?? []).slice(0, 8))}
+                        />
+                        Выбрать файлы
+                      </span>
+                      {props.files.length ? (
+                        <span className="text-xs text-steam-muted">Выбрано: {props.files.length}</span>
+                      ) : null}
+                    </label>
+                    <div className="flex justify-end">
+                      <Button
+                        loading={props.submitting}
+                        variant="primary"
+                        onClick={() => props.onSubmit()}
+                        disabled={props.message.trim().length < 10}
+                      >
+                        Отправить
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {!reduce &&
+      resolved &&
+      ach &&
+      (ach.rarity === "RARE" ||
+        ach.rarity === "EPIC" ||
+        ach.rarity === "LEGENDARY" ||
+        ach.rarity === "EXCLUSIVE" ||
+        ach.rarity === "SECRET") ? (
+        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100">
+          <div className="absolute -inset-[40%] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)] [transform:translateX(-65%)_rotate(18deg)] animate-[shine_2.2s_ease-in-out_infinite]" />
+        </div>
+      ) : null}
+    </motion.div>
+  );
+}

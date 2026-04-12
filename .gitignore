@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+backend/uploads/avatars/*
+!backend/uploads/avatars/.gitkeep
+backend/uploads/banners/*
+!backend/uploads/banners/.gitkeep
+backend/uploads/misc/*
+!backend/uploads/misc/.gitkeep
+

@@ -1,0 +1,1 @@
+-- Rarity.EXCLUSIVE (только для достижений; в SQLite хранится как TEXT)
