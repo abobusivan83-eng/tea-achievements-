@@ -60,6 +60,14 @@ model RegistrationOtp {
 
   @@index([expiresAt])
   @@index([telegramChatId])
+  @@index([telegramUsername])
+}
+
+/// После сообщения боту: @username (нижний регистр) → chat_id для отправки кода без ввода числового ID.
+model TelegramChatLookup {
+  usernameLower String   @id
+  chatId        String
+  updatedAt     DateTime @updatedAt
 }
 
 model User {

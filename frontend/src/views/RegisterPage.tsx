@@ -3,7 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
 import { getStoredTelegramLogin, setStoredTelegramLogin } from "../lib/authStorage";
 import { AuthRememberMe } from "../ui/components/AuthRememberMe";
+import { AuthTelegramBotPromo } from "../ui/components/AuthTelegramBotPromo";
 import { Button } from "../ui/components/Button";
+import { TELEGRAM_BOT_URL } from "../lib/config";
 import { FiArrowRight, FiAward, FiExternalLink, FiShield, FiTrendingUp, FiUserPlus } from "react-icons/fi";
 import { motion } from "framer-motion";
 
@@ -14,11 +16,11 @@ export function RegisterPage() {
   const [step, setStep] = useState<"form" | "code">("form");
   const [nickname, setNickname] = useState("");
   const [telegramUsername, setTelegramUsername] = useState("");
-  const [telegramChatId, setTelegramChatId] = useState("");
   const [password, setPassword] = useState("");
   const [linkToken, setLinkToken] = useState("");
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
+  const [activationNeeded, setActivationNeeded] = useState(false);
   const [code, setCode] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,37 +28,27 @@ export function RegisterPage() {
 
   useEffect(() => {
     const saved = getStoredTelegramLogin();
-    if (!saved) return;
-    if (/^\d+$/.test(saved)) setTelegramChatId(saved);
-    else setTelegramUsername(saved.replace(/^@/, ""));
+    if (!saved || /^\d+$/.test(saved)) return;
+    setTelegramUsername(saved.replace(/^@/, ""));
   }, []);
 
   async function submitRegistration() {
     setError(null);
     const tg = telegramUsername.trim().replace(/^@/, "");
-    const chat = telegramChatId.trim();
-    if (!chat) {
-      if (!tg || tg.length < 5 || tg.length > 32 || !/^[a-zA-Z0-9_]+$/.test(tg)) {
-        setError("Укажи ник в Telegram (латиница, 5–32 символа) или числовой ID чата.");
-        return;
-      }
+    if (!tg || tg.length < 5 || tg.length > 32 || !/^[a-zA-Z0-9_]+$/.test(tg)) {
+      setError("Укажи ник в Telegram: 5–32 символа, латиница, цифры и подчёркивание (как в t.me/username).");
+      return;
     }
     setLoading(true);
     try {
-      const resp = await registerRequest(nickname.trim(), password, {
-        telegramUsername: tg || undefined,
-        telegramChatId: chat || undefined,
-      });
+      const resp = await registerRequest(nickname.trim(), password, tg);
       setLinkToken(resp.linkToken);
       setDeepLink(resp.deepLink);
       setCodeSent(resp.codeSent);
-      if (tg) setStoredTelegramLogin(tg.startsWith("@") ? tg : `@${tg}`);
-      else if (chat) setStoredTelegramLogin(chat);
+      setActivationNeeded(resp.activationNeeded ?? !resp.codeSent);
+      setStoredTelegramLogin(tg.startsWith("@") ? tg : `@${tg}`);
       setCode("");
       setStep("code");
-      if (resp.deepLink && !resp.codeSent) {
-        window.open(resp.deepLink, "_blank", "noopener,noreferrer");
-      }
     } catch (e: any) {
       setError(e?.message ?? "Ошибка регистрации");
     } finally {
@@ -78,7 +70,7 @@ export function RegisterPage() {
         </div>
         <h1 className="auth-title">Присоединяйся к «Чайным достижениям» и начни свой путь в системе прогресса клана</h1>
         <p className="auth-copy">
-          Вход и регистрация привязаны к твоему нику в Telegram. Код подтверждения приходит в личку бота — по одному только нику Telegram API не шлёт сообщения, нужен либо переход по ссылке с кнопкой «Start», либо числовой ID.
+          Регистрация привязана к твоему нику в Telegram: код подтверждения приходит в личку бота после того, как ты нажмёшь Start у бота и продолжишь на сайте.
         </p>
 
         <div className="auth-feature-grid">
@@ -105,11 +97,14 @@ export function RegisterPage() {
         {step === "form" ? (
           <form
             className="mt-6 grid gap-4"
+            noValidate
             onSubmit={async (e) => {
               e.preventDefault();
               await submitRegistration();
             }}
           >
+            <AuthTelegramBotPromo />
+
             <label className="auth-field">
               <span className="auth-label">Никнейм на сайте</span>
               <input
@@ -129,28 +124,16 @@ export function RegisterPage() {
                 className="auth-input"
                 value={telegramUsername}
                 onChange={(e) => setTelegramUsername(e.target.value.replace(/^@+/, ""))}
-                placeholder="username (латиница, без @), если нет ID ниже"
+                placeholder="username (латиница, без @)"
+                minLength={5}
                 maxLength={32}
+                required
+                autoComplete="username"
               />
               <span className="mt-1 block text-xs text-steam-muted">
                 Как в ссылке t.me/<strong className="text-steam-text/90">username</strong>. Не подставляй ник с сайта — только Telegram.
               </span>
             </label>
-
-            <label className="auth-field">
-              <span className="auth-label">Числовой ID в Telegram (необязательно)</span>
-              <input
-                className="auth-input font-mono"
-                value={telegramChatId}
-                onChange={(e) => setTelegramChatId(e.target.value.replace(/\D/g, ""))}
-                placeholder="Чтобы код пришёл сразу — узнай у @userinfobot"
-                inputMode="numeric"
-              />
-            </label>
-            <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-relaxed text-steam-muted">
-              <span className="font-medium text-steam-text/90">Как приходит код:</span> с ID бот шлёт сообщение сразу (ты уже должен был написать боту хотя бы раз).{" "}
-              <span className="text-steam-text/80">Только ник без ID</span> — откроется бот, нажми «Start»: сервер узнает твой chat_id и тогда отправит код. По API нельзя написать пользователю, зная только @ник.
-            </p>
 
             <label className="auth-field">
               <span className="auth-label">Пароль</span>
@@ -162,6 +145,7 @@ export function RegisterPage() {
                 minLength={6}
                 maxLength={72}
                 required
+                autoComplete="new-password"
               />
             </label>
 
@@ -176,6 +160,7 @@ export function RegisterPage() {
         ) : (
           <form
             className="mt-6 grid gap-4"
+            noValidate
             onSubmit={async (e) => {
               e.preventDefault();
               setError(null);
@@ -184,7 +169,6 @@ export function RegisterPage() {
                 await registerVerify(linkToken, code.trim(), rememberMe);
                 const u = telegramUsername.trim().replace(/^@/, "");
                 if (u) setStoredTelegramLogin(u.startsWith("@") ? u : `@${u}`);
-                else if (telegramChatId.trim()) setStoredTelegramLogin(telegramChatId.trim());
                 nav("/profile");
               } catch (e: any) {
                 setError(e?.message ?? "Ошибка подтверждения");
@@ -193,26 +177,31 @@ export function RegisterPage() {
               }
             }}
           >
-            {!codeSent && deepLink ? (
-              <div className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-steam-muted">
-                <p className="mb-2 text-steam-text">
-                  Открой бота и нажми «Start» — мы уже открыли ссылку в новой вкладке. После этого бот сможет отправить код в личку (так работает Telegram для регистрации по нику).
+            <AuthTelegramBotPromo />
+
+            {!codeSent && activationNeeded ? (
+              <div className="rounded-lg border border-amber-400/35 bg-amber-500/10 p-3 text-sm leading-relaxed text-steam-muted">
+                <p className="text-steam-text/95">
+                  Пожалуйста, сначала активируй бота кнопкой Start в Telegram, затем нажми «Продолжить» на предыдущем шаге или «Отправить код снова» ниже.
                 </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={<FiExternalLink />}
-                  onClick={() => deepLink && window.open(deepLink, "_blank", "noopener,noreferrer")}
-                >
-                  Подтвердить через Telegram
-                </Button>
+                {deepLink ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    leftIcon={<FiExternalLink />}
+                    onClick={() => window.open(deepLink ?? TELEGRAM_BOT_URL, "_blank", "noopener,noreferrer")}
+                  >
+                    Открыть бота в Telegram
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 
             {codeSent ? (
               <p className="text-sm text-steam-muted">Код из 4 цифр отправлен в Telegram. Введи его ниже.</p>
-            ) : !deepLink ? (
+            ) : !activationNeeded ? (
               <p className="text-sm text-steam-muted">Введи код из Telegram.</p>
             ) : null}
 
@@ -257,17 +246,11 @@ export function RegisterPage() {
                   setLoading(true);
                   try {
                     const tg = telegramUsername.trim().replace(/^@/, "");
-                    const chat = telegramChatId.trim();
-                    const resp = await registerRequest(nickname.trim(), password, {
-                      telegramUsername: tg || undefined,
-                      telegramChatId: chat || undefined,
-                    });
+                    const resp = await registerRequest(nickname.trim(), password, tg);
                     setLinkToken(resp.linkToken);
                     setDeepLink(resp.deepLink);
                     setCodeSent(resp.codeSent);
-                    if (resp.deepLink && !resp.codeSent) {
-                      window.open(resp.deepLink, "_blank", "noopener,noreferrer");
-                    }
+                    setActivationNeeded(resp.activationNeeded ?? !resp.codeSent);
                   } catch (e: any) {
                     setError(e?.message ?? "Не удалось отправить код повторно");
                   } finally {

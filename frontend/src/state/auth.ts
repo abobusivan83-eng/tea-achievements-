@@ -8,6 +8,7 @@ export type RegisterRequestResponse = {
   deepLink: string | null;
   botUsername: string | null;
   codeSent: boolean;
+  activationNeeded?: boolean;
 };
 
 type AuthState = {
@@ -15,11 +16,7 @@ type AuthState = {
   me: Me | null;
   isReady: boolean;
   login: (login: string, password: string, rememberMe?: boolean) => Promise<void>;
-  registerRequest: (
-    nickname: string,
-    password: string,
-    options?: { telegramUsername?: string; telegramChatId?: string },
-  ) => Promise<RegisterRequestResponse>;
+  registerRequest: (nickname: string, password: string, telegramUsername: string) => Promise<RegisterRequestResponse>;
   registerVerify: (linkToken: string, code: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
   hydrate: () => Promise<void>;
@@ -44,12 +41,11 @@ export const useAuth = create<AuthState>((set, get) => ({
     await get().hydrate();
   },
 
-  async registerRequest(nickname, password, options) {
+  async registerRequest(nickname, password, telegramUsername) {
     return apiJson<RegisterRequestResponse>("/api/auth/register/request", {
       nickname,
       password,
-      telegramUsername: options?.telegramUsername?.trim() || undefined,
-      telegramChatId: options?.telegramChatId?.trim() || undefined,
+      telegramUsername: telegramUsername.trim(),
     });
   },
 

@@ -47,6 +47,12 @@ export function telegramDeepLink(linkToken: string) {
   return `https://t.me/${u}?start=${encodeURIComponent(linkToken)}`;
 }
 
+/** Открыть чат с ботом (без payload), для активации через Start. */
+export function telegramOpenBotUrl() {
+  const u = env.TELEGRAM_BOT_USERNAME!.replace(/^@/, "").trim();
+  return `https://t.me/${u}`;
+}
+
 export function randomFourDigitCode() {
   return String(randomInt(0, 10_000)).padStart(4, "0");
 }
@@ -93,9 +99,28 @@ export async function handleTelegramStartLink(linkToken: string, chatId: string)
   await issueCodeAndNotify(chatId, pending.id);
 }
 
-/** Отправка кода при регистрации с уже известным chat id (пользователь ввёл ID на сайте). */
+/** Отправка кода при регистрации с уже известным chat id (кэш после /start у бота). */
 export async function issueRegistrationCodeForPending(pendingId: string, chatId: string) {
   await issueCodeAndNotify(chatId, pendingId);
+}
+
+/** Если есть ожидающая регистрация по этому @username — отправить код в chatId. */
+async function trySendPendingRegistrationCode(usernameLower: string, chatId: string): Promise<boolean> {
+  const pending = await prisma.registrationOtp.findFirst({
+    where: {
+      telegramUsername: { equals: usernameLower, mode: "insensitive" },
+      codeHash: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!pending) return false;
+
+  const existingUser = await prisma.user.findUnique({ where: { telegramChatId: chatId } });
+  if (existingUser) return false;
+
+  await issueCodeAndNotify(chatId, pending.id);
+  return true;
 }
 
 let pollingOffset = 0;
@@ -120,7 +145,14 @@ export function startTelegramLongPolling() {
       const res = await fetch(url.toString());
       const data = (await res.json()) as {
         ok?: boolean;
-        result?: Array<{ update_id: number; message?: { text?: string; chat?: { id: number } } }>;
+        result?: Array<{
+          update_id: number;
+          message?: {
+            text?: string;
+            chat?: { id: number };
+            from?: { id: number; username?: string; is_bot?: boolean };
+          };
+        }>;
       };
 
       if (!data.ok || !data.result) {
@@ -132,22 +164,54 @@ export function startTelegramLongPolling() {
       for (const u of data.result) {
         pollingOffset = u.update_id + 1;
         const msg = u.message;
-        if (!msg?.text?.startsWith("/start")) continue;
-        const chatId = msg.chat?.id;
-        if (chatId == null) continue;
-        const parts = msg.text.split(/\s+/);
-        const token = parts[1]?.trim();
-        if (!token) {
-          await telegramSendMessage(
-            String(chatId),
-            "Открой ссылку с сайта «Подтвердить через Telegram» или введи свой числовой Telegram ID на сайте и нажми «Получить код».",
-          );
+        if (!msg?.chat?.id) continue;
+        const chatIdStr = String(msg.chat.id);
+        const from = msg.from;
+
+        if (from && !from.is_bot && from.username?.trim()) {
+          const un = from.username.trim().toLowerCase();
+          try {
+            await prisma.telegramChatLookup.upsert({
+              where: { usernameLower: un },
+              create: { usernameLower: un, chatId: chatIdStr },
+              update: { chatId: chatIdStr },
+            });
+          } catch (e) {
+            console.error("[telegram] TelegramChatLookup upsert:", e);
+          }
+        }
+
+        const text = msg.text ?? "";
+        const isStart = text.startsWith("/start");
+        const startToken = isStart ? text.split(/\s+/)[1]?.trim() : undefined;
+
+        if (isStart && startToken) {
+          try {
+            await handleTelegramStartLink(startToken, chatIdStr);
+          } catch (e) {
+            console.error("[telegram] handleTelegramStartLink:", e);
+          }
           continue;
         }
-        try {
-          await handleTelegramStartLink(token, String(chatId));
-        } catch (e) {
-          console.error("[telegram] handleTelegramStartLink:", e);
+
+        let issuedByUsername = false;
+        if (from && !from.is_bot && from.username?.trim()) {
+          try {
+            issuedByUsername = await trySendPendingRegistrationCode(from.username.trim().toLowerCase(), chatIdStr);
+          } catch (e) {
+            console.error("[telegram] trySendPendingRegistrationCode:", e);
+          }
+        }
+
+        if (isStart && !startToken && !issuedByUsername) {
+          try {
+            await telegramSendMessage(
+              chatIdStr,
+              "Готово! Вернись на сайт и нажми «Продолжить», чтобы получить код.",
+            );
+          } catch (e) {
+            console.error("[telegram] /start reply:", e);
+          }
         }
       }
     } catch (e) {

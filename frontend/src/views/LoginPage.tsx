@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
 import { getStoredTelegramLogin } from "../lib/authStorage";
 import { AuthRememberMe } from "../ui/components/AuthRememberMe";
+import { AuthTelegramBotPromo } from "../ui/components/AuthTelegramBotPromo";
 import { Button } from "../ui/components/Button";
 import { FiArrowRight, FiLock, FiLogIn, FiShield, FiStar } from "react-icons/fi";
 import { motion } from "framer-motion";
@@ -79,6 +80,7 @@ export function LoginPage() {
 
         <form
           className="mt-6 grid gap-4"
+          noValidate
           onSubmit={async (e) => {
             e.preventDefault();
             setError(null);
@@ -93,6 +95,8 @@ export function LoginPage() {
             }
           }}
         >
+          <AuthTelegramBotPromo />
+
           <label className="auth-field">
             <span className="auth-label">Ваш ник в Telegram</span>
             <input

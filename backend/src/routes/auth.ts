@@ -14,8 +14,7 @@ import { env } from "../lib/env.js";
 import {
   isTelegramConfigured,
   issueRegistrationCodeForPending,
-  randomFourDigitCode,
-  telegramDeepLink,
+  telegramOpenBotUrl,
   telegramSyntheticEmail,
   TelegramNotConfiguredError,
 } from "../lib/telegram.js";
@@ -26,23 +25,15 @@ const RegisterSchema = z
   .object({
     nickname: z.string().min(2).max(24),
     password: z.string().min(6).max(72),
-    telegramUsername: z.string().max(32).optional(),
-    telegramChatId: z.string().regex(/^\d+$/).optional(),
+    telegramUsername: z.string().min(1).max(32),
   })
   .superRefine((data, ctx) => {
     const u = normalizeTelegramUsername(data.telegramUsername);
-    const c = data.telegramChatId?.trim();
-    if (!c && !u) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Укажи ник в Telegram или числовой ID чата",
-      });
-    }
-    if (u && !/^[a-zA-Z0-9_]{5,32}$/.test(u)) {
+    if (!u || !/^[a-zA-Z0-9_]{5,32}$/.test(u)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["telegramUsername"],
-        message: "Ник Telegram: 5–32 символа, латиница, цифры и подчёркивание",
+        message: "Ник Telegram: 5–32 символа, латиница, цифры и подчёркивание (как в t.me/username).",
       });
     }
   });
@@ -101,88 +92,12 @@ authRouter.post("/register/request", async (req, res) => {
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
 
   const tgUser = normalizeTelegramUsername(parsed.data.telegramUsername);
-  const chatId = parsed.data.telegramChatId?.trim();
+  if (!tgUser) return fail(res, 400, "Укажи ник в Telegram.");
 
-  if (tgUser) {
-    const clash = await prisma.user.findFirst({
-      where: { telegramUsername: { equals: tgUser, mode: "insensitive" } },
-    });
-    if (clash) return fail(res, 409, "Этот Telegram-ник уже занят");
-  }
-
-  if (chatId) {
-    const clash = await prisma.user.findFirst({
-      where: { OR: [{ telegramChatId: chatId }, { email: telegramSyntheticEmail(chatId) }] },
-    });
-    if (clash) return fail(res, 409, "Этот Telegram уже привязан к аккаунту");
-  }
-
-  const linkToken = newLinkToken();
-  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  const nickname = parsed.data.nickname.trim();
-
-  if (chatId) {
-    await prisma.registrationOtp.deleteMany({ where: { telegramChatId: chatId } });
-  }
-
-  if (chatId && isTelegramConfigured()) {
-    const pending = await prisma.registrationOtp.create({
-      data: {
-        linkToken,
-        nickname,
-        passwordHash,
-        telegramUsername: tgUser,
-        telegramChatId: chatId,
-        expiresAt,
-        codeHash: null,
-      },
-    });
-    try {
-      await issueRegistrationCodeForPending(pending.id, chatId);
-    } catch (e) {
-      await prisma.registrationOtp.delete({ where: { id: pending.id } }).catch(() => {});
-      console.error("[auth] Telegram:", e);
-      const msg =
-        e instanceof Error
-          ? e.message
-          : "Не удалось отправить код в Telegram. Напиши боту /start вручную, затем попробуй снова.";
-      return fail(res, 502, msg);
-    }
-    return ok(res, {
-      linkToken,
-      deepLink: telegramDeepLink(linkToken),
-      botUsername: env.TELEGRAM_BOT_USERNAME,
-      codeSent: true,
-    });
-  }
-
-  if (chatId && env.APP_ENV === "development" && !isTelegramConfigured()) {
-    const code = randomFourDigitCode();
-    const codeHash = await bcrypt.hash(code, 8);
-    await prisma.registrationOtp.create({
-      data: {
-        linkToken,
-        nickname,
-        passwordHash,
-        telegramUsername: tgUser,
-        telegramChatId: chatId,
-        expiresAt,
-        codeHash,
-      },
-    });
-    console.warn(`[auth:dev] Регистрация без бота. Chat ${chatId}, код: ${code}`);
-    return ok(res, {
-      linkToken,
-      deepLink: null,
-      botUsername: null,
-      codeSent: true,
-    });
-  }
-
-  if (chatId) {
-    return fail(res, 503, new TelegramNotConfiguredError().message);
-  }
+  const clash = await prisma.user.findFirst({
+    where: { telegramUsername: { equals: tgUser, mode: "insensitive" } },
+  });
+  if (clash) return fail(res, 409, "Этот Telegram-ник уже занят");
 
   if (!isTelegramConfigured()) {
     if (env.APP_ENV === "development") {
@@ -191,7 +106,19 @@ authRouter.post("/register/request", async (req, res) => {
     return fail(res, 503, new TelegramNotConfiguredError().message);
   }
 
-  await prisma.registrationOtp.create({
+  const linkToken = newLinkToken();
+  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const nickname = parsed.data.nickname.trim();
+
+  await prisma.registrationOtp.deleteMany({
+    where: {
+      telegramUsername: { equals: tgUser, mode: "insensitive" },
+      codeHash: null,
+    },
+  });
+
+  const pending = await prisma.registrationOtp.create({
     data: {
       linkToken,
       nickname,
@@ -203,11 +130,37 @@ authRouter.post("/register/request", async (req, res) => {
     },
   });
 
+  const cached = await prisma.telegramChatLookup.findUnique({
+    where: { usernameLower: tgUser },
+  });
+
+  if (cached) {
+    try {
+      await issueRegistrationCodeForPending(pending.id, cached.chatId);
+      return ok(res, {
+        linkToken,
+        deepLink: telegramOpenBotUrl(),
+        botUsername: env.TELEGRAM_BOT_USERNAME,
+        codeSent: true,
+        activationNeeded: false,
+      });
+    } catch (e) {
+      await prisma.registrationOtp.delete({ where: { id: pending.id } }).catch(() => {});
+      console.error("[auth] Telegram:", e);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : "Не удалось отправить код в Telegram. Сначала напиши боту /start, затем нажми «Продолжить» снова.";
+      return fail(res, 502, msg);
+    }
+  }
+
   return ok(res, {
     linkToken,
-    deepLink: telegramDeepLink(linkToken),
+    deepLink: telegramOpenBotUrl(),
     botUsername: env.TELEGRAM_BOT_USERNAME,
     codeSent: false,
+    activationNeeded: true,
   });
 });
 
@@ -229,7 +182,7 @@ authRouter.post("/register/verify", async (req, res) => {
     return fail(
       res,
       400,
-      "Сначала получи код в Telegram: нажми «Подтвердить через Telegram» или введи Chat ID и запроси код.",
+      "Пожалуйста, сначала активируй бота кнопкой Start в Telegram, затем на сайте нажми «Продолжить», чтобы получить код.",
     );
   }
 
