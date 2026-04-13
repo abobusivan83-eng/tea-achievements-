@@ -16,6 +16,7 @@ import { shopRouter } from "./routes/shop.js";
 import { giftsRouter } from "./routes/gifts.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { fail, ok } from "./lib/http.js";
+import { startTelegramLongPolling } from "./lib/telegram.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 
 const app = express();
@@ -92,4 +93,5 @@ app.listen(env.PORT, () => {
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",
     );
   }
+  startTelegramLongPolling();
 });

@@ -37,10 +37,9 @@ const EnvSchema = z.object({
   }, z.coerce.boolean().default(false)),
   STAGING_ACCESS_TOKEN: z.string().min(12).optional(),
   STAGING_IP_WHITELIST: z.string().optional(),
-  /** MailerSend API: https://www.mailersend.com/help/managing-api-tokens */
-  MAILERSEND_API_KEY: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
-  /** Отправитель: `Имя <email@верифицированный-домен>` или только email. */
-  SMTP_FROM: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+  TELEGRAM_BOT_TOKEN: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+  /** Имя бота без @ (для ссылки t.me/...). */
+  TELEGRAM_BOT_USERNAME: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
 });
 
 const parsed = EnvSchema.parse(process.env);

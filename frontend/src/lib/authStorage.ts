@@ -1,17 +1,18 @@
-const LAST_LOGIN_EMAIL_KEY = "tea_last_login_email";
+const LAST_TG_LOGIN_KEY = "tea_last_tg_login";
+const LEGACY_EMAIL_KEY = "tea_last_login_email";
 
-export function getStoredLoginEmail(): string {
+export function getStoredTelegramLogin(): string {
   try {
-    return localStorage.getItem(LAST_LOGIN_EMAIL_KEY) ?? "";
+    return localStorage.getItem(LAST_TG_LOGIN_KEY) ?? localStorage.getItem(LEGACY_EMAIL_KEY) ?? "";
   } catch {
     return "";
   }
 }
 
-export function setStoredLoginEmail(email: string) {
+export function setStoredTelegramLogin(login: string) {
   try {
-    const t = email.trim().toLowerCase();
-    if (t) localStorage.setItem(LAST_LOGIN_EMAIL_KEY, t);
+    const t = login.trim();
+    if (t) localStorage.setItem(LAST_TG_LOGIN_KEY, t);
   } catch {
     /* ignore */
   }

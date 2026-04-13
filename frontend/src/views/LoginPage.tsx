@@ -1,23 +1,24 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
-import { getStoredLoginEmail } from "../lib/authStorage";
+import { getStoredTelegramLogin } from "../lib/authStorage";
+import { AuthRememberMe } from "../ui/components/AuthRememberMe";
 import { Button } from "../ui/components/Button";
 import { FiArrowRight, FiLock, FiLogIn, FiShield, FiStar } from "react-icons/fi";
 import { motion } from "framer-motion";
 
 export function LoginPage() {
   const nav = useNavigate();
-  const login = useAuth((s) => s.login);
-  const [email, setEmail] = useState("");
+  const signIn = useAuth((s) => s.login);
+  const [loginField, setLoginField] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const saved = getStoredLoginEmail();
-    if (saved) setEmail(saved);
+    const saved = getStoredTelegramLogin();
+    if (saved) setLoginField(saved);
   }, []);
 
   return (
@@ -83,7 +84,7 @@ export function LoginPage() {
             setError(null);
             setLoading(true);
             try {
-              await login(email, password, rememberMe);
+              await signIn(loginField, password, rememberMe);
               nav("/profile");
             } catch (e: any) {
               setError(e?.message ?? "Ошибка входа");
@@ -93,14 +94,17 @@ export function LoginPage() {
           }}
         >
           <label className="auth-field">
-            <span className="auth-label">Почта</span>
+            <span className="auth-label">Ваш ник в Telegram</span>
             <input
-              type="email"
               className="auth-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
+              value={loginField}
+              onChange={(e) => setLoginField(e.target.value)}
+              placeholder="@username или username"
+              autoComplete="username"
             />
+            <span className="mt-1 block text-xs text-steam-muted">
+              Можно с @ или без. Альтернатива: числовой ID чата. Для очень старых аккаунтов допускается почта.
+            </span>
           </label>
 
           <label className="auth-field">
@@ -114,15 +118,7 @@ export function LoginPage() {
             />
           </label>
 
-          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-steam-muted select-none">
-            <input
-              type="checkbox"
-              className="h-4 w-4 shrink-0 rounded border border-white/20 bg-black/30 accent-steam-accent"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-            />
-            <span>Запомнить меня</span>
-          </label>
+          <AuthRememberMe id="remember-me-login" checked={rememberMe} onChange={setRememberMe} />
 
           {error ? <div className="auth-error">{error}</div> : null}
 

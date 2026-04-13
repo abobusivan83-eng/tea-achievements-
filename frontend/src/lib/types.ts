@@ -6,6 +6,8 @@ export type Me = {
   publicId?: number;
   nickname: string;
   email: string;
+  telegramChatId?: string | null;
+  telegramUsername?: string | null;
   role: Role;
   blocked: boolean;
   level?: number;

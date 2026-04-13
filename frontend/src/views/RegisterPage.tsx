@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
-import { getStoredLoginEmail, setStoredLoginEmail } from "../lib/authStorage";
+import { getStoredTelegramLogin, setStoredTelegramLogin } from "../lib/authStorage";
+import { AuthRememberMe } from "../ui/components/AuthRememberMe";
 import { Button } from "../ui/components/Button";
-import { FiArrowRight, FiAward, FiShield, FiTrendingUp, FiUserPlus } from "react-icons/fi";
+import { FiArrowRight, FiAward, FiExternalLink, FiShield, FiTrendingUp, FiUserPlus } from "react-icons/fi";
 import { motion } from "framer-motion";
 
 export function RegisterPage() {
@@ -12,17 +13,56 @@ export function RegisterPage() {
   const registerVerify = useAuth((s) => s.registerVerify);
   const [step, setStep] = useState<"form" | "code">("form");
   const [nickname, setNickname] = useState("");
-  const [email, setEmail] = useState("");
+  const [telegramUsername, setTelegramUsername] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [password, setPassword] = useState("");
+  const [linkToken, setLinkToken] = useState("");
+  const [deepLink, setDeepLink] = useState<string | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const saved = getStoredLoginEmail();
-    if (saved) setEmail(saved);
+    const saved = getStoredTelegramLogin();
+    if (!saved) return;
+    if (/^\d+$/.test(saved)) setTelegramChatId(saved);
+    else setTelegramUsername(saved.replace(/^@/, ""));
   }, []);
+
+  async function submitRegistration() {
+    setError(null);
+    const tg = telegramUsername.trim().replace(/^@/, "");
+    const chat = telegramChatId.trim();
+    if (!chat) {
+      if (!tg || tg.length < 5 || tg.length > 32 || !/^[a-zA-Z0-9_]+$/.test(tg)) {
+        setError("Укажи ник в Telegram (латиница, 5–32 символа) или числовой ID чата.");
+        return;
+      }
+    }
+    setLoading(true);
+    try {
+      const resp = await registerRequest(nickname.trim(), password, {
+        telegramUsername: tg || undefined,
+        telegramChatId: chat || undefined,
+      });
+      setLinkToken(resp.linkToken);
+      setDeepLink(resp.deepLink);
+      setCodeSent(resp.codeSent);
+      if (tg) setStoredTelegramLogin(tg.startsWith("@") ? tg : `@${tg}`);
+      else if (chat) setStoredTelegramLogin(chat);
+      setCode("");
+      setStep("code");
+      if (resp.deepLink && !resp.codeSent) {
+        window.open(resp.deepLink, "_blank", "noopener,noreferrer");
+      }
+    } catch (e: any) {
+      setError(e?.message ?? "Ошибка регистрации");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="auth-shell auth-shell--register">
@@ -38,7 +78,7 @@ export function RegisterPage() {
         </div>
         <h1 className="auth-title">Присоединяйся к «Чайным достижениям» и начни свой путь в системе прогресса клана</h1>
         <p className="auth-copy">
-          После регистрации ты получишь доступ к личному профилю, системе достижений, заданиям от администрации, рейтингу участников и магазину наград. Это пространство, где активность внутри клана становится заметной, ценной и визуально красивой.
+          Вход и регистрация привязаны к твоему нику в Telegram. Код подтверждения приходит в личку бота — по одному только нику Telegram API не шлёт сообщения, нужен либо переход по ссылке с кнопкой «Start», либо числовой ID.
         </p>
 
         <div className="auth-feature-grid">
@@ -67,22 +107,11 @@ export function RegisterPage() {
             className="mt-6 grid gap-4"
             onSubmit={async (e) => {
               e.preventDefault();
-              setError(null);
-              setLoading(true);
-              try {
-                await registerRequest(nickname.trim(), email.trim(), password);
-                setStoredLoginEmail(email.trim());
-                setCode("");
-                setStep("code");
-              } catch (e: any) {
-                setError(e?.message ?? "Ошибка регистрации");
-              } finally {
-                setLoading(false);
-              }
+              await submitRegistration();
             }}
           >
             <label className="auth-field">
-              <span className="auth-label">Никнейм</span>
+              <span className="auth-label">Никнейм на сайте</span>
               <input
                 className="auth-input"
                 value={nickname}
@@ -95,16 +124,33 @@ export function RegisterPage() {
             </label>
 
             <label className="auth-field">
-              <span className="auth-label">Почта</span>
+              <span className="auth-label">Ваш ник в Telegram</span>
               <input
-                type="email"
                 className="auth-input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                required
+                value={telegramUsername}
+                onChange={(e) => setTelegramUsername(e.target.value.replace(/^@+/, ""))}
+                placeholder="username (латиница, без @), если нет ID ниже"
+                maxLength={32}
+              />
+              <span className="mt-1 block text-xs text-steam-muted">
+                Как в ссылке t.me/<strong className="text-steam-text/90">username</strong>. Не подставляй ник с сайта — только Telegram.
+              </span>
+            </label>
+
+            <label className="auth-field">
+              <span className="auth-label">Числовой ID в Telegram (необязательно)</span>
+              <input
+                className="auth-input font-mono"
+                value={telegramChatId}
+                onChange={(e) => setTelegramChatId(e.target.value.replace(/\D/g, ""))}
+                placeholder="Чтобы код пришёл сразу — узнай у @userinfobot"
+                inputMode="numeric"
               />
             </label>
+            <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-relaxed text-steam-muted">
+              <span className="font-medium text-steam-text/90">Как приходит код:</span> с ID бот шлёт сообщение сразу (ты уже должен был написать боту хотя бы раз).{" "}
+              <span className="text-steam-text/80">Только ник без ID</span> — откроется бот, нажми «Start»: сервер узнает твой chat_id и тогда отправит код. По API нельзя написать пользователю, зная только @ник.
+            </p>
 
             <label className="auth-field">
               <span className="auth-label">Пароль</span>
@@ -121,18 +167,10 @@ export function RegisterPage() {
 
             {error ? <div className="auth-error">{error}</div> : null}
 
-            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-steam-muted select-none">
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0 rounded border border-white/20 bg-black/30 accent-steam-accent"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
-              <span>Запомнить меня</span>
-            </label>
+            <AuthRememberMe id="remember-me-register-form" checked={rememberMe} onChange={setRememberMe} />
 
             <Button type="submit" loading={loading} className="auth-submit auth-submit--register">
-              {loading ? "Отправляем код…" : "Продолжить — код на почту"}
+              {loading ? "Отправляем…" : "Продолжить"}
             </Button>
           </form>
         ) : (
@@ -143,7 +181,10 @@ export function RegisterPage() {
               setError(null);
               setLoading(true);
               try {
-                await registerVerify(email.trim(), code.trim(), rememberMe);
+                await registerVerify(linkToken, code.trim(), rememberMe);
+                const u = telegramUsername.trim().replace(/^@/, "");
+                if (u) setStoredTelegramLogin(u.startsWith("@") ? u : `@${u}`);
+                else if (telegramChatId.trim()) setStoredTelegramLogin(telegramChatId.trim());
                 nav("/profile");
               } catch (e: any) {
                 setError(e?.message ?? "Ошибка подтверждения");
@@ -152,11 +193,31 @@ export function RegisterPage() {
               }
             }}
           >
-            <p className="text-sm text-steam-muted">
-              Мы отправили код из 4 цифр на <span className="text-steam-text">{email.trim()}</span>. Введите его ниже.
-            </p>
+            {!codeSent && deepLink ? (
+              <div className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-steam-muted">
+                <p className="mb-2 text-steam-text">
+                  Открой бота и нажми «Start» — мы уже открыли ссылку в новой вкладке. После этого бот сможет отправить код в личку (так работает Telegram для регистрации по нику).
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<FiExternalLink />}
+                  onClick={() => deepLink && window.open(deepLink, "_blank", "noopener,noreferrer")}
+                >
+                  Подтвердить через Telegram
+                </Button>
+              </div>
+            ) : null}
+
+            {codeSent ? (
+              <p className="text-sm text-steam-muted">Код из 4 цифр отправлен в Telegram. Введи его ниже.</p>
+            ) : !deepLink ? (
+              <p className="text-sm text-steam-muted">Введи код из Telegram.</p>
+            ) : null}
+
             <label className="auth-field">
-              <span className="auth-label">Код из письма</span>
+              <span className="auth-label">Код из Telegram</span>
               <input
                 className="auth-input font-mono tracking-widest"
                 value={code}
@@ -170,15 +231,7 @@ export function RegisterPage() {
             </label>
             {error ? <div className="auth-error">{error}</div> : null}
 
-            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-steam-muted select-none">
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0 rounded border border-white/20 bg-black/30 accent-steam-accent"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
-              <span>Запомнить меня</span>
-            </label>
+            <AuthRememberMe id="remember-me-register-code" checked={rememberMe} onChange={setRememberMe} />
 
             <Button type="submit" loading={loading} className="auth-submit auth-submit--register" disabled={code.length !== 4}>
               {loading ? "Проверяем…" : "Завершить регистрацию"}
@@ -203,7 +256,18 @@ export function RegisterPage() {
                   setError(null);
                   setLoading(true);
                   try {
-                    await registerRequest(nickname.trim(), email.trim(), password);
+                    const tg = telegramUsername.trim().replace(/^@/, "");
+                    const chat = telegramChatId.trim();
+                    const resp = await registerRequest(nickname.trim(), password, {
+                      telegramUsername: tg || undefined,
+                      telegramChatId: chat || undefined,
+                    });
+                    setLinkToken(resp.linkToken);
+                    setDeepLink(resp.deepLink);
+                    setCodeSent(resp.codeSent);
+                    if (resp.deepLink && !resp.codeSent) {
+                      window.open(resp.deepLink, "_blank", "noopener,noreferrer");
+                    }
                   } catch (e: any) {
                     setError(e?.message ?? "Не удалось отправить код повторно");
                   } finally {
