@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import path from "path";
 import fs from "fs";
@@ -447,7 +448,9 @@ adminRouter.post("/shop/items", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
   const parsed = CreateShopItemSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
-  const created = await prisma.shopItem.create({ data: parsed.data });
+  const created = await prisma.shopItem.create({
+    data: parsed.data as Prisma.ShopItemCreateInput,
+  });
   return ok(res, created);
 });
 

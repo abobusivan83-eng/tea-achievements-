@@ -25,9 +25,16 @@ authRouter.post("/register", async (req, res) => {
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return fail(res, 409, "Email already registered");
 
+  // Первый пользователь в пустой БД — CREATOR (остальные через prisma/promoteFirstCreator при старте в облаке).
+  const isFirstUser = (await prisma.user.count()) === 0;
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { nickname, email, passwordHash },
+    data: {
+      nickname,
+      email,
+      passwordHash,
+      ...(isFirstUser ? { role: "CREATOR" as const } : {}),
+    },
     select: { id: true, nickname: true, email: true, role: true },
   });
 

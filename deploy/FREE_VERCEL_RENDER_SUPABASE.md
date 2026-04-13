@@ -63,7 +63,7 @@ npx prisma migrate deploy
 |-----------------|----------|
 | Root Directory  | `backend` |
 | Build Command   | `npm ci && npm run build && npx prisma migrate deploy` |
-| Start Command   | `node dist/server.js` |
+| Start Command   | `npm start` (или `node dist/src/server.js` после ручного promote) |
 | Health Check    | `/api/health` |
 
 **Переменные окружения**

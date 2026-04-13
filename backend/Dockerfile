@@ -17,9 +17,9 @@ RUN apk add --no-cache openssl libc6-compat
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY prisma ./prisma/
-RUN npm ci --omit=dev && npx prisma generate && npm install -g tsx@4.19.3
+RUN npm ci --omit=dev && npx prisma generate
 COPY --from=build /app/dist ./dist
 RUN mkdir -p uploads/avatars uploads/banners uploads/misc
 EXPOSE 4000
 # Запись в volume uploads (часто root); при необходимости ужесточьте: chown + USER node
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/src/server.js"]

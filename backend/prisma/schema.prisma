@@ -51,6 +51,7 @@ model User {
   nickname     String
   email        String   @unique
   passwordHash String
+  /// USER по умолчанию; первый зарегистрированный аккаунт получает CREATOR в POST /api/auth/register.
   role         Role     @default(USER)
   blocked      Boolean  @default(false)
 

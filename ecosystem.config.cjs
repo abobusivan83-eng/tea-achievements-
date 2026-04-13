@@ -13,7 +13,7 @@ module.exports = {
     {
       name: "tea-backend-production",
       cwd: "/var/www/tea-achievements/backend",
-      script: "dist/server.js",
+      script: "dist/src/server.js",
       interpreter: "node",
       interpreter_args: "--env-file=.env.production",
       instances: 1,
@@ -27,7 +27,7 @@ module.exports = {
     {
       name: "tea-backend-staging",
       cwd: "/var/www/tea-achievements-staging/backend",
-      script: "dist/server.js",
+      script: "dist/src/server.js",
       interpreter: "node",
       interpreter_args: "--env-file=.env.staging",
       instances: 1,
