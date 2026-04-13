@@ -9,7 +9,7 @@ import { signToken } from "../lib/auth.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
 import { parseJsonStringArray } from "../lib/cosmeticsAccess.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
-import { sendRegistrationCode } from "../lib/mailer.js";
+import { formatMailSendError, MailNotConfiguredError, sendRegistrationCode } from "../lib/mailer.js";
 
 export const authRouter = Router();
 
@@ -69,8 +69,15 @@ authRouter.post("/register/request", async (req, res) => {
     await sendRegistrationCode(emailNorm, code, nickname.trim());
   } catch (e) {
     await prisma.registrationOtp.deleteMany({ where: { email: emailNorm } });
-    console.error("[mail] sendRegistrationCode failed", e);
-    return fail(res, 502, "Не удалось отправить письмо. Проверьте настройки почты на сервере.");
+    console.error("[mail] sendRegistrationCode failed:", formatMailSendError(e));
+    if (e instanceof MailNotConfiguredError) {
+      return fail(res, 503, e.message);
+    }
+    return fail(
+      res,
+      502,
+      "Не удалось отправить письмо. Проверьте SMTP в Render (хост, порт, логин, пароль, From) и папку «Спам».",
+    );
   }
 
   return ok(res, { sent: true, email: emailNorm });
