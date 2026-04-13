@@ -5,10 +5,12 @@ import { getStoredTelegramLogin } from "../lib/authStorage";
 import { AuthRememberMe } from "../ui/components/AuthRememberMe";
 import { AuthTelegramBotPromo } from "../ui/components/AuthTelegramBotPromo";
 import { Button } from "../ui/components/Button";
+import { useVisualViewportKeyboardInset } from "../hooks/useVisualViewportKeyboardInset";
 import { FiArrowRight, FiLock, FiLogIn, FiShield, FiStar } from "react-icons/fi";
 import { motion } from "framer-motion";
 
 export function LoginPage() {
+  const keyboardInset = useVisualViewportKeyboardInset();
   const nav = useNavigate();
   const signIn = useAuth((s) => s.login);
   const [loginField, setLoginField] = useState("");
@@ -66,6 +68,9 @@ export function LoginPage() {
 
       <motion.section
         className="auth-form-panel"
+        style={{
+          paddingBottom: `calc(28px + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`,
+        }}
         initial={{ opacity: 0, x: 18, y: 10, filter: "blur(8px)" }}
         animate={{ opacity: 1, x: 0, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.45, delay: 0.05, ease: "easeOut" }}

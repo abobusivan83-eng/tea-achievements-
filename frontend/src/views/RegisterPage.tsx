@@ -5,11 +5,13 @@ import { getStoredTelegramLogin, setStoredTelegramLogin } from "../lib/authStora
 import { AuthRememberMe } from "../ui/components/AuthRememberMe";
 import { AuthTelegramBotPromo } from "../ui/components/AuthTelegramBotPromo";
 import { Button } from "../ui/components/Button";
-import { TELEGRAM_BOT_URL } from "../lib/config";
+import { useVisualViewportKeyboardInset } from "../hooks/useVisualViewportKeyboardInset";
+import { telegramOpenHref } from "../lib/config";
 import { FiArrowRight, FiAward, FiExternalLink, FiShield, FiTrendingUp, FiUserPlus } from "react-icons/fi";
 import { motion } from "framer-motion";
 
 export function RegisterPage() {
+  const keyboardInset = useVisualViewportKeyboardInset();
   const nav = useNavigate();
   const registerRequest = useAuth((s) => s.registerRequest);
   const registerVerify = useAuth((s) => s.registerVerify);
@@ -82,6 +84,9 @@ export function RegisterPage() {
 
       <motion.section
         className="auth-form-panel auth-form-panel--register"
+        style={{
+          paddingBottom: `calc(28px + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`,
+        }}
         initial={{ opacity: 0, x: 18, y: 10, filter: "blur(8px)" }}
         animate={{ opacity: 1, x: 0, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.45, delay: 0.05, ease: "easeOut" }}
@@ -185,16 +190,13 @@ export function RegisterPage() {
                   Пожалуйста, сначала активируй бота кнопкой Start в Telegram, затем нажми «Продолжить» на предыдущем шаге или «Отправить код снова» ниже.
                 </p>
                 {deepLink ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="mt-2"
-                    leftIcon={<FiExternalLink />}
-                    onClick={() => window.open(deepLink ?? TELEGRAM_BOT_URL, "_blank", "noopener,noreferrer")}
+                  <a
+                    href={telegramOpenHref(deepLink)}
+                    className="mt-2 inline-flex min-h-11 min-w-[44px] items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-steam-text shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20"
                   >
+                    <FiExternalLink className="text-base" aria-hidden />
                     Открыть бота в Telegram
-                  </Button>
+                  </a>
                 ) : null}
               </div>
             ) : null}

@@ -6,7 +6,7 @@ export function Toasts() {
   const { toasts, remove } = useToasts();
   const reduce = useReducedMotion();
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[60] grid gap-2">
+    <div className="pointer-events-none fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-[3000] grid max-w-[min(100vw-2rem,380px)] gap-2">
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.button

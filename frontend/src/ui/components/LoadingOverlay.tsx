@@ -8,7 +8,7 @@ export function LoadingOverlay() {
     <AnimatePresence>
       {active > 0 ? (
         <motion.div
-          className="pointer-events-none fixed inset-0 z-[55] grid place-items-center bg-black/35 backdrop-blur-[2px]"
+          className="pointer-events-none fixed inset-0 z-[2100] grid place-items-center bg-black/35 backdrop-blur-[2px]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
