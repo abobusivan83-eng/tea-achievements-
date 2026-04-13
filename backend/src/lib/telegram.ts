@@ -5,7 +5,9 @@ import { env } from "./env.js";
 
 export class TelegramNotConfiguredError extends Error {
   constructor() {
-    super("Telegram не настроен: задайте TELEGRAM_BOT_TOKEN и TELEGRAM_BOT_USERNAME в переменных окружения.");
+    super(
+      "Telegram не настроен: задайте TELEGRAM_BOT_TOKEN (токен от @BotFather) и TELEGRAM_BOT_USERNAME (ник бота без @, как в t.me/…). На Render: Environment → добавь обе переменные → redeploy.",
+    );
     this.name = "TelegramNotConfiguredError";
   }
 }
