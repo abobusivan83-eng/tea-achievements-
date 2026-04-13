@@ -7,9 +7,12 @@ export type JwtUser = {
   role: "USER" | "ADMIN" | "CREATOR";
 };
 
-export function signToken(payload: JwtUser) {
-  // Минимальный payload: sub (user id) и role для UI; права на сервере всегда перепроверяются.
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: "7d" });
+const JWT_EXPIRES_SESSION = "7d";
+const JWT_EXPIRES_REMEMBER = "30d";
+
+export function signToken(payload: JwtUser, options?: { rememberMe?: boolean }) {
+  const expiresIn = options?.rememberMe ? JWT_EXPIRES_REMEMBER : JWT_EXPIRES_SESSION;
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn });
 }
 
 export function verifyToken(token: string): JwtUser {

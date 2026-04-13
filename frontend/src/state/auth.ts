@@ -1,16 +1,17 @@
 import { create } from "zustand";
 import { apiFetch, apiJson } from "../lib/api";
+import { setStoredLoginEmail } from "../lib/authStorage";
 import type { Me, Role } from "../lib/types";
 
 type AuthState = {
   token: string | null;
   me: Me | null;
   isReady: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   /** Отправка кода на почту (шаг 1 регистрации). */
   registerRequest: (nickname: string, email: string, password: string) => Promise<void>;
   /** Подтверждение кода из 4 цифр (шаг 2). */
-  registerVerify: (email: string, code: string) => Promise<void>;
+  registerVerify: (email: string, code: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
   hydrate: () => Promise<void>;
   isAdmin: () => boolean;
@@ -23,11 +24,12 @@ export const useAuth = create<AuthState>((set, get) => ({
   me: null,
   isReady: false,
 
-  async login(email, password) {
+  async login(email, password, rememberMe) {
     const resp = await apiJson<{ token: string; user: { id: string; nickname: string; email: string; role: Role } }>(
       "/api/auth/login",
-      { email, password },
+      { email, password, rememberMe: Boolean(rememberMe) },
     );
+    setStoredLoginEmail(email);
     localStorage.setItem("token", resp.token);
     set({ token: resp.token });
     await get().hydrate();
@@ -37,11 +39,12 @@ export const useAuth = create<AuthState>((set, get) => ({
     await apiJson<{ sent: boolean; email: string }>("/api/auth/register/request", { nickname, email, password });
   },
 
-  async registerVerify(email, code) {
+  async registerVerify(email, code, rememberMe) {
     const resp = await apiJson<{ token: string; user: { id: string; nickname: string; email: string; role: Role } }>(
       "/api/auth/register/verify",
-      { email, code },
+      { email, code, rememberMe: Boolean(rememberMe) },
     );
+    setStoredLoginEmail(email);
     localStorage.setItem("token", resp.token);
     set({ token: resp.token });
     await get().hydrate();

@@ -37,9 +37,9 @@ const EnvSchema = z.object({
   }, z.coerce.boolean().default(false)),
   STAGING_ACCESS_TOKEN: z.string().min(12).optional(),
   STAGING_IP_WHITELIST: z.string().optional(),
-  /** Resend API (HTTPS, без SMTP-портов). Пустая строка = не задано. */
-  RESEND_API_KEY: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
-  /** Адрес отправителя в Resend (домен должен быть верифицирован в панели Resend). Формат: `Имя <noreply@домен>`. */
+  /** MailerSend API: https://www.mailersend.com/help/managing-api-tokens */
+  MAILERSEND_API_KEY: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+  /** Отправитель: `Имя <email@верифицированный-домен>` или только email. */
   SMTP_FROM: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
 });
 

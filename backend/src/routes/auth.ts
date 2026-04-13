@@ -22,6 +22,7 @@ const RegisterSchema = z.object({
 const RegisterVerifySchema = z.object({
   email: z.string().email(),
   code: z.string().regex(/^\d{4}$/, "Нужен код из 4 цифр"),
+  rememberMe: z.boolean().optional(),
 });
 
 function normalizeEmail(email: string) {
@@ -76,7 +77,7 @@ authRouter.post("/register/request", async (req, res) => {
     return fail(
       res,
       502,
-      "Не удалось отправить письмо. Проверьте RESEND_API_KEY и SMTP_FROM в Resend, домен отправителя и папку «Спам».",
+      "Не удалось отправить письмо. Проверьте MAILERSEND_API_KEY и SMTP_FROM в MailerSend, домен отправителя и папку «Спам».",
     );
   }
 
@@ -116,7 +117,7 @@ authRouter.post("/register/verify", async (req, res) => {
 
   await prisma.registrationOtp.delete({ where: { id: pending.id } }).catch(() => {});
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const token = signToken({ sub: user.id, role: user.role }, { rememberMe: parsed.data.rememberMe === true });
   const publicId = await computeUserPublicId(prisma as any, user.id);
   return ok(res, { token, user: { ...user, publicId } });
 });
@@ -124,6 +125,7 @@ authRouter.post("/register/verify", async (req, res) => {
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  rememberMe: z.boolean().optional(),
 });
 
 authRouter.post("/login", async (req, res) => {
@@ -140,7 +142,7 @@ authRouter.post("/login", async (req, res) => {
   const match = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!match) return fail(res, 401, "Invalid credentials");
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const token = signToken({ sub: user.id, role: user.role }, { rememberMe: parsed.data.rememberMe === true });
   const publicId = await computeUserPublicId(prisma as any, user.id);
   return ok(res, {
     token,

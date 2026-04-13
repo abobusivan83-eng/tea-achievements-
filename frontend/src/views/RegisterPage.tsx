@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
+import { getStoredLoginEmail, setStoredLoginEmail } from "../lib/authStorage";
 import { Button } from "../ui/components/Button";
 import { FiArrowRight, FiAward, FiShield, FiTrendingUp, FiUserPlus } from "react-icons/fi";
 import { motion } from "framer-motion";
@@ -14,8 +15,14 @@ export function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const saved = getStoredLoginEmail();
+    if (saved) setEmail(saved);
+  }, []);
 
   return (
     <div className="auth-shell auth-shell--register">
@@ -64,6 +71,7 @@ export function RegisterPage() {
               setLoading(true);
               try {
                 await registerRequest(nickname.trim(), email.trim(), password);
+                setStoredLoginEmail(email.trim());
                 setCode("");
                 setStep("code");
               } catch (e: any) {
@@ -113,6 +121,16 @@ export function RegisterPage() {
 
             {error ? <div className="auth-error">{error}</div> : null}
 
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-steam-muted select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0 rounded border border-white/20 bg-black/30 accent-steam-accent"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Запомнить меня</span>
+            </label>
+
             <Button type="submit" loading={loading} className="auth-submit auth-submit--register">
               {loading ? "Отправляем код…" : "Продолжить — код на почту"}
             </Button>
@@ -125,7 +143,7 @@ export function RegisterPage() {
               setError(null);
               setLoading(true);
               try {
-                await registerVerify(email.trim(), code.trim());
+                await registerVerify(email.trim(), code.trim(), rememberMe);
                 nav("/profile");
               } catch (e: any) {
                 setError(e?.message ?? "Ошибка подтверждения");
@@ -151,6 +169,17 @@ export function RegisterPage() {
               />
             </label>
             {error ? <div className="auth-error">{error}</div> : null}
+
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-steam-muted select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0 rounded border border-white/20 bg-black/30 accent-steam-accent"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Запомнить меня</span>
+            </label>
+
             <Button type="submit" loading={loading} className="auth-submit auth-submit--register" disabled={code.length !== 4}>
               {loading ? "Проверяем…" : "Завершить регистрацию"}
             </Button>

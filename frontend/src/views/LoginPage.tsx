@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
+import { getStoredLoginEmail } from "../lib/authStorage";
 import { Button } from "../ui/components/Button";
 import { FiArrowRight, FiLock, FiLogIn, FiShield, FiStar } from "react-icons/fi";
 import { motion } from "framer-motion";
@@ -8,10 +9,16 @@ import { motion } from "framer-motion";
 export function LoginPage() {
   const nav = useNavigate();
   const login = useAuth((s) => s.login);
-  const [email, setEmail] = useState("admin@clan.local");
-  const [password, setPassword] = useState("admin12345");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const saved = getStoredLoginEmail();
+    if (saved) setEmail(saved);
+  }, []);
 
   return (
     <div className="auth-shell">
@@ -76,7 +83,7 @@ export function LoginPage() {
             setError(null);
             setLoading(true);
             try {
-              await login(email, password);
+              await login(email, password, rememberMe);
               nav("/profile");
             } catch (e: any) {
               setError(e?.message ?? "Ошибка входа");
@@ -87,7 +94,13 @@ export function LoginPage() {
         >
           <label className="auth-field">
             <span className="auth-label">Почта</span>
-            <input className="auth-input" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              type="email"
+              className="auth-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
           </label>
 
           <label className="auth-field">
@@ -97,7 +110,18 @@ export function LoginPage() {
               className="auth-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
             />
+          </label>
+
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-steam-muted select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0 rounded border border-white/20 bg-black/30 accent-steam-accent"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+            />
+            <span>Запомнить меня</span>
           </label>
 
           {error ? <div className="auth-error">{error}</div> : null}
