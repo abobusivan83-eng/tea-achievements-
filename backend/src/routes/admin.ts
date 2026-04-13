@@ -546,7 +546,6 @@ adminRouter.get("/users", async (req: AuthedRequest, res) => {
 
 const UpdateUserSchema = z.object({
   role: z.enum(["USER", "ADMIN", "CREATOR"]).optional(),
-  blocked: z.boolean().optional(),
   nickname: z.string().min(2).max(24).optional(),
   adminNotes: z.string().max(2000).nullable().optional(),
   adminTags: z.array(z.string().min(1).max(32)).max(32).optional(),
@@ -567,7 +566,7 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
   if (!parsed.success) return fail(res, 400, "Invalid payload");
   const current = await prisma.user.findUnique({
     where: { id: req.params.id },
-    select: { xp: true, level: true, nickname: true, role: true, blocked: true },
+    select: { xp: true, level: true, nickname: true, role: true },
   });
   if (!current) return fail(res, 404, "User not found");
   if (parsed.data.role === "CREATOR") return fail(res, 403, "Роль создателя нельзя выдать через админ-панель");
@@ -584,7 +583,6 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     data: {
       role: parsed.data.role,
-      blocked: parsed.data.blocked,
       nickname: parsed.data.nickname,
       adminNotes: parsed.data.adminNotes ?? undefined,
       adminTags: parsed.data.adminTags ? parsed.data.adminTags : undefined,
@@ -599,7 +597,6 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
 
   const changes: string[] = [];
   if (parsed.data.role !== undefined && parsed.data.role !== current.role) changes.push(`роль → ${parsed.data.role}`);
-  if (parsed.data.blocked !== undefined && parsed.data.blocked !== current.blocked) changes.push(`блокировка: ${parsed.data.blocked ? "да" : "нет"}`);
   if (parsed.data.nickname !== undefined && parsed.data.nickname !== current.nickname) changes.push(`ник → ${parsed.data.nickname}`);
   if (typeof xpInput === "number" && xpInput !== current.xp) changes.push(`опыт → ${xpInput}`);
   if (typeof levelInput === "number" && levelInput !== current.level) changes.push(`уровень → ${levelInput}`);
@@ -620,6 +617,33 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
   }
 
   return ok(res, { ...updated, adminTags: (updated.adminTags as unknown as string[] | null) ?? [], badges: (updated.badgesJson as unknown as string[] | null) ?? [] });
+});
+
+adminRouter.delete("/users/:id", async (req: AuthedRequest, res) => {
+  if (!adminOnly(req, res)) return;
+  const id = req.params.id;
+  if (id === req.user!.id) return fail(res, 400, "Нельзя удалить свой аккаунт");
+
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, nickname: true, role: true, email: true },
+  });
+  if (!target) return fail(res, 404, "User not found");
+  if (target.role === "CREATOR") return fail(res, 403, "Нельзя удалить учётную запись создателя");
+
+  await prisma.user.delete({ where: { id: target.id } });
+
+  if (req.user?.id) {
+    await logAdminAction(prisma, {
+      adminId: req.user.id,
+      action: "user.delete",
+      summary: `Удалён пользователь «${target.nickname}» (${target.email})`,
+      targetUserId: target.id,
+      targetNickname: target.nickname,
+    });
+  }
+
+  return ok(res, { deleted: true });
 });
 
 adminRouter.post("/users/:id/coins", async (req: AuthedRequest, res) => {

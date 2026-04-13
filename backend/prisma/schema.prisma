@@ -46,12 +46,24 @@ enum ShopItemType {
   BADGE
 }
 
+/// Временная запись до подтверждения email (код из 4 цифр).
+model RegistrationOtp {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  nickname     String
+  passwordHash String
+  codeHash     String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
 model User {
   id           String   @id @default(uuid())
   nickname     String
   email        String   @unique
   passwordHash String
-  /// USER по умолчанию; первый зарегистрированный аккаунт получает CREATOR в POST /api/auth/register.
   role         Role     @default(USER)
   blocked      Boolean  @default(false)
 

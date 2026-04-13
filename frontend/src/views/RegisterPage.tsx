@@ -7,10 +7,13 @@ import { motion } from "framer-motion";
 
 export function RegisterPage() {
   const nav = useNavigate();
-  const register = useAuth((s) => s.register);
+  const registerRequest = useAuth((s) => s.registerRequest);
+  const registerVerify = useAuth((s) => s.registerVerify);
+  const [step, setStep] = useState<"form" | "code">("form");
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -52,66 +55,138 @@ export function RegisterPage() {
           </div>
         </div>
 
-        <form
-          className="mt-6 grid gap-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setError(null);
-            setLoading(true);
-            try {
-              await register(nickname.trim(), email.trim(), password);
-              nav("/profile");
-            } catch (e: any) {
-              setError(e?.message ?? "Ошибка регистрации");
-            } finally {
-              setLoading(false);
-            }
-          }}
-        >
-          <label className="auth-field">
-            <span className="auth-label">Никнейм</span>
-            <input
-              className="auth-input"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="Например, Salamanca"
-              minLength={2}
-              maxLength={24}
-              required
-            />
-          </label>
+        {step === "form" ? (
+          <form
+            className="mt-6 grid gap-4"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError(null);
+              setLoading(true);
+              try {
+                await registerRequest(nickname.trim(), email.trim(), password);
+                setCode("");
+                setStep("code");
+              } catch (e: any) {
+                setError(e?.message ?? "Ошибка регистрации");
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            <label className="auth-field">
+              <span className="auth-label">Никнейм</span>
+              <input
+                className="auth-input"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="Например, Salamanca"
+                minLength={2}
+                maxLength={24}
+                required
+              />
+            </label>
 
-          <label className="auth-field">
-            <span className="auth-label">Почта</span>
-            <input
-              type="email"
-              className="auth-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@email.com"
-              required
-            />
-          </label>
+            <label className="auth-field">
+              <span className="auth-label">Почта</span>
+              <input
+                type="email"
+                className="auth-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@email.com"
+                required
+              />
+            </label>
 
-          <label className="auth-field">
-            <span className="auth-label">Пароль</span>
-            <input
-              type="password"
-              className="auth-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
-              maxLength={72}
-              required
-            />
-          </label>
+            <label className="auth-field">
+              <span className="auth-label">Пароль</span>
+              <input
+                type="password"
+                className="auth-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={6}
+                maxLength={72}
+                required
+              />
+            </label>
 
-          {error ? <div className="auth-error">{error}</div> : null}
+            {error ? <div className="auth-error">{error}</div> : null}
 
-          <Button type="submit" loading={loading} className="auth-submit auth-submit--register">
-            {loading ? "Создаём…" : "Создать аккаунт"}
-          </Button>
-        </form>
+            <Button type="submit" loading={loading} className="auth-submit auth-submit--register">
+              {loading ? "Отправляем код…" : "Продолжить — код на почту"}
+            </Button>
+          </form>
+        ) : (
+          <form
+            className="mt-6 grid gap-4"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError(null);
+              setLoading(true);
+              try {
+                await registerVerify(email.trim(), code.trim());
+                nav("/profile");
+              } catch (e: any) {
+                setError(e?.message ?? "Ошибка подтверждения");
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            <p className="text-sm text-steam-muted">
+              Мы отправили код из 4 цифр на <span className="text-steam-text">{email.trim()}</span>. Введите его ниже.
+            </p>
+            <label className="auth-field">
+              <span className="auth-label">Код из письма</span>
+              <input
+                className="auth-input font-mono tracking-widest"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="0000"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={4}
+                required
+              />
+            </label>
+            {error ? <div className="auth-error">{error}</div> : null}
+            <Button type="submit" loading={loading} className="auth-submit auth-submit--register" disabled={code.length !== 4}>
+              {loading ? "Проверяем…" : "Завершить регистрацию"}
+            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setStep("form");
+                  setCode("");
+                  setError(null);
+                }}
+              >
+                Назад
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                loading={loading}
+                onClick={async () => {
+                  setError(null);
+                  setLoading(true);
+                  try {
+                    await registerRequest(nickname.trim(), email.trim(), password);
+                  } catch (e: any) {
+                    setError(e?.message ?? "Не удалось отправить код повторно");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                Отправить код снова
+              </Button>
+            </div>
+          </form>
+        )}
 
         <div className="auth-footer">
           <span className="text-steam-muted">Уже есть аккаунт?</span>

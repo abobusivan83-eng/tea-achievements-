@@ -7,7 +7,10 @@ type AuthState = {
   me: Me | null;
   isReady: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (nickname: string, email: string, password: string) => Promise<void>;
+  /** Отправка кода на почту (шаг 1 регистрации). */
+  registerRequest: (nickname: string, email: string, password: string) => Promise<void>;
+  /** Подтверждение кода из 4 цифр (шаг 2). */
+  registerVerify: (email: string, code: string) => Promise<void>;
   logout: () => void;
   hydrate: () => Promise<void>;
   isAdmin: () => boolean;
@@ -30,10 +33,14 @@ export const useAuth = create<AuthState>((set, get) => ({
     await get().hydrate();
   },
 
-  async register(nickname, email, password) {
+  async registerRequest(nickname, email, password) {
+    await apiJson<{ sent: boolean; email: string }>("/api/auth/register/request", { nickname, email, password });
+  },
+
+  async registerVerify(email, code) {
     const resp = await apiJson<{ token: string; user: { id: string; nickname: string; email: string; role: Role } }>(
-      "/api/auth/register",
-      { nickname, email, password },
+      "/api/auth/register/verify",
+      { email, code },
     );
     localStorage.setItem("token", resp.token);
     set({ token: resp.token });

@@ -37,6 +37,13 @@ const EnvSchema = z.object({
   }, z.coerce.boolean().default(false)),
   STAGING_ACCESS_TOKEN: z.string().min(12).optional(),
   STAGING_IP_WHITELIST: z.string().optional(),
+  /** Если не задан — код регистрации пишется в лог сервера (dev). */
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_SECURE: z.coerce.boolean().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().min(1).optional(),
 });
 
 const parsed = EnvSchema.parse(process.env);

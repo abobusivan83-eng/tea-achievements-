@@ -197,6 +197,8 @@ export function AdminPage() {
   const [xpDraft, setXpDraft] = useState<number>(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<AdminAchievement | null>(null);
+  const [userDeleteOpen, setUserDeleteOpen] = useState(false);
+  const [userDeleteTarget, setUserDeleteTarget] = useState<AdminUserRow | null>(null);
   const selectClass =
     "rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base";
   const inputClass =
@@ -777,7 +779,7 @@ export function AdminPage() {
                     <div className="truncate text-sm font-semibold">
                       {u.nickname}{" "}
                       <span className="text-xs font-normal text-steam-muted">
-                        ({u.role}) {u.blocked ? "— blocked" : ""}
+                        ({u.role}){u.blocked ? " — заблокирован" : ""}
                       </span>
                     </div>
                     <div className="truncate font-mono text-[11px] text-steam-muted">#{u.publicId ?? "—"} • {u.id}</div>
@@ -808,14 +810,16 @@ export function AdminPage() {
                       {u.role === "CREATOR" ? <option value="CREATOR">CREATOR</option> : null}
                     </select>
                     <Button
-                      variant={u.blocked ? "ghost" : "danger"}
+                      variant="danger"
                       size="sm"
-                      onClick={async () => {
-                        await apiJson(`/api/admin/users/${u.id}`, { blocked: !u.blocked }, "PATCH");
-                        await refreshUsers();
+                      disabled={u.id === me?.id || u.role === "CREATOR"}
+                      title={u.id === me?.id ? "Нельзя удалить свой аккаунт" : u.role === "CREATOR" ? "Нельзя удалить создателя" : undefined}
+                      onClick={() => {
+                        setUserDeleteTarget(u);
+                        setUserDeleteOpen(true);
                       }}
                     >
-                      {u.blocked ? "Разблокировать" : "Заблокировать"}
+                      Удалить аккаунт
                     </Button>
                   </div>
                 </div>
@@ -1850,6 +1854,40 @@ export function AdminPage() {
           } finally {
             setConfirmOpen(false);
             setConfirmTarget(null);
+          }
+        }}
+      />
+
+      <ConfirmModal
+        open={userDeleteOpen}
+        title="Удаление аккаунта"
+        message={
+          userDeleteTarget
+            ? `Пользователь «${userDeleteTarget.nickname}» (${userDeleteTarget.email}) будет удалён из базы вместе со связанными данными. Это действие необратимо.`
+            : ""
+        }
+        danger
+        confirmText="Удалить навсегда"
+        onCancel={() => {
+          setUserDeleteOpen(false);
+          setUserDeleteTarget(null);
+        }}
+        onConfirm={async () => {
+          if (!userDeleteTarget) return;
+          try {
+            await apiDelete(`/api/admin/users/${userDeleteTarget.id}`);
+            toast({ kind: "success", title: "Аккаунт удалён" });
+            if (selectedUser?.id === userDeleteTarget.id) {
+              setUserDetailsOpen(false);
+              setSelectedUser(null);
+            }
+            await refreshUsers();
+          } catch (e: any) {
+            setError(e?.message ?? "Ошибка удаления");
+            toast({ kind: "error", title: "Не удалось удалить аккаунт", message: e?.message ?? "Ошибка" });
+          } finally {
+            setUserDeleteOpen(false);
+            setUserDeleteTarget(null);
           }
         }}
       />
