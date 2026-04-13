@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import type { LeaderboardRow } from "../../lib/types";
@@ -8,7 +9,7 @@ import { Button } from "./Button";
 
 const DESKTOP_GRID = "xl:grid-cols-[84px_minmax(0,2.3fr)_148px_148px_148px_128px]";
 
-export function RatingList(props: {
+function RatingListInner(props: {
   rows: LeaderboardRow[];
   onSelect: (r: LeaderboardRow) => void;
   onOpenProfile?: (r: LeaderboardRow) => void;
@@ -69,6 +70,7 @@ export function RatingList(props: {
               whileHover={{ y: -2, scale: 1.004 }}
               whileTap={{ scale: 0.995 }}
               transition={{ type: "spring", stiffness: 520, damping: 34 }}
+              style={{ willChange: "transform" }}
               className={clsx(
                 "group relative overflow-hidden rounded-[24px] border px-4 py-4 text-left shadow-[0_12px_30px_rgba(0,0,0,0.24)] transition-all duration-300 hover:border-white/15 hover:shadow-[0_18px_36px_rgba(0,0,0,0.32)]",
                 accentClass,
@@ -131,7 +133,9 @@ export function RatingList(props: {
   );
 }
 
-function MetricCard(props: {
+export const RatingList = memo(RatingListInner);
+
+const MetricCard = memo(function MetricCard(props: {
   label: string;
   value: string;
   sublabel: string;
@@ -152,4 +156,4 @@ function MetricCard(props: {
       <div className="mt-1 text-[11px] text-steam-muted">{props.sublabel}</div>
     </div>
   );
-}
+});

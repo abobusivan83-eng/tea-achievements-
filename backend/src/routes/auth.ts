@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { prisma } from "../lib/prisma.js";
@@ -59,6 +59,15 @@ function normalizeTelegramUsername(s: string | undefined) {
   return s.trim().replace(/^@/, "").toLowerCase();
 }
 
+const loginUserSelect = {
+  id: true,
+  nickname: true,
+  email: true,
+  role: true,
+  passwordHash: true,
+  blocked: true,
+} satisfies Prisma.UserSelect;
+
 async function findUserForLogin(raw: string) {
   const t = raw.trim();
   if (!t) return null;
@@ -68,22 +77,26 @@ async function findUserForLogin(raw: string) {
     const uname = t.slice(1).toLowerCase();
     return prisma.user.findFirst({
       where: { telegramUsername: { equals: uname, mode: "insensitive" } },
+      select: loginUserSelect,
     });
   }
   if (t.includes("@")) {
     return prisma.user.findFirst({
       where: { email: { equals: lower, mode: "insensitive" } },
+      select: loginUserSelect,
     });
   }
   if (/^\d+$/.test(t)) {
     const syn = telegramSyntheticEmail(t);
     return prisma.user.findFirst({
       where: { OR: [{ telegramChatId: t }, { email: syn }] },
+      select: loginUserSelect,
     });
   }
   const uname = t.toLowerCase();
   return prisma.user.findFirst({
     where: { telegramUsername: { equals: uname, mode: "insensitive" } },
+    select: loginUserSelect,
   });
 }
 
@@ -96,6 +109,7 @@ authRouter.post("/register/request", async (req, res) => {
 
   const clash = await prisma.user.findFirst({
     where: { telegramUsername: { equals: tgUser, mode: "insensitive" } },
+    select: { id: true },
   });
   if (clash) return fail(res, 409, "Этот Telegram-ник уже занят");
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import type { LeaderboardRow } from "../lib/types";
@@ -36,7 +36,7 @@ export function LeaderboardPage() {
       }
     }
     run();
-    const id = setInterval(run, 8000);
+    const id = setInterval(run, 12_000);
     return () => {
       mounted = false;
       clearInterval(id);
@@ -65,6 +65,13 @@ export function LeaderboardPage() {
       points: rows.reduce((sum, r) => sum + r.totalPoints, 0),
     };
   }, [rows]);
+
+  const handleOpenProfile = useCallback(
+    (r: LeaderboardRow) => {
+      nav(`/profile/${r.id}`);
+    },
+    [nav],
+  );
 
   return (
     <div className="grid gap-5">
@@ -142,7 +149,7 @@ export function LeaderboardPage() {
         </div>
       </div>
 
-      <RatingList rows={filtered} onSelect={setSelected} onOpenProfile={(r) => nav(`/profile/${r.id}`)} />
+      <RatingList rows={filtered} onSelect={setSelected} onOpenProfile={handleOpenProfile} />
 
       <Modal
         open={Boolean(selected)}

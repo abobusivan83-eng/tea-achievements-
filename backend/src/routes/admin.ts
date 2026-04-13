@@ -14,6 +14,7 @@ import { MAX_LEVEL, levelFromXp, xpForLevel } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
 import { awardAchievementToUser, revokeAchievementFromUser } from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
+import { invalidateShopItemsCache } from "../lib/cache.js";
 
 export const adminRouter = Router();
 
@@ -440,6 +441,18 @@ adminRouter.get("/shop/items", async (req: AuthedRequest, res) => {
   const items = await prisma.shopItem.findMany({
     orderBy: [{ type: "asc" }, { price: "asc" }, { createdAt: "desc" }],
     take: 500,
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      key: true,
+      price: true,
+      rarity: true,
+      description: true,
+      icon: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
   return ok(res, items);
 });
@@ -451,6 +464,7 @@ adminRouter.post("/shop/items", async (req: AuthedRequest, res) => {
   const created = await prisma.shopItem.create({
     data: parsed.data as Prisma.ShopItemCreateInput,
   });
+  invalidateShopItemsCache();
   return ok(res, created);
 });
 
@@ -462,6 +476,7 @@ adminRouter.patch("/shop/items/:id", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     data: parsed.data,
   });
+  invalidateShopItemsCache();
   return ok(res, updated);
 });
 
@@ -470,6 +485,7 @@ adminRouter.delete("/shop/items/:id", async (req: AuthedRequest, res) => {
   const exists = await prisma.shopItem.findUnique({ where: { id: req.params.id }, select: { id: true } });
   if (!exists) return fail(res, 404, "Item not found");
   await prisma.shopItem.delete({ where: { id: req.params.id } });
+  invalidateShopItemsCache();
   return ok(res, { deleted: true });
 });
 

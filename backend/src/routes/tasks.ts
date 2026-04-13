@@ -42,7 +42,21 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
     where: taskListWhere(req.user!.id, now),
     orderBy: [{ isEvent: "desc" }, { createdAt: "desc" }],
     take: 200,
-    include: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      conditions: true,
+      rewardCoins: true,
+      isActive: true,
+      isEvent: true,
+      startsAt: true,
+      endsAt: true,
+      styleTag: true,
+      achievementId: true,
+      createdById: true,
+      createdAt: true,
+      updatedAt: true,
       achievement: {
         select: {
           id: true,

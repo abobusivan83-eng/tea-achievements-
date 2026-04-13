@@ -2,9 +2,11 @@ import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import compression from "compression";
 import morgan from "morgan";
 import helmet from "helmet";
 import { env } from "./lib/env.js";
+import { logger } from "./lib/logger.js";
 import { mapErrorToResponse } from "./lib/mapErrorResponse.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
@@ -17,6 +19,7 @@ import { giftsRouter } from "./routes/gifts.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { fail, ok } from "./lib/http.js";
 import { startTelegramLongPolling } from "./lib/telegram.js";
+import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 
 const app = express();
@@ -26,6 +29,16 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+
+app.use(
+  compression({
+    threshold: 512,
+    filter: (req, res) => {
+      if (req.path.startsWith(`/${env.UPLOAD_DIR}`)) return false;
+      return compression.filter(req, res);
+    },
   }),
 );
 
@@ -76,12 +89,16 @@ app.use("/api/tasks", tasksRouter);
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const mapped = mapErrorToResponse(err);
   const line = `${req.method} ${req.originalUrl}`;
+  const errMeta =
+    err instanceof Error
+      ? { message: err.message, stack: err.stack, status: mapped.status }
+      : { err: String(err), status: mapped.status };
   if (mapped.logAsError) {
-    console.error(`[${new Date().toISOString()}] ${line}`, err instanceof Error ? err.stack ?? err.message : err);
+    logger.error(`HTTP ${line}`, errMeta);
   } else if (mapped.status >= 500) {
-    console.error(`[${new Date().toISOString()}] ${line}`, err);
+    logger.error(`HTTP ${line}`, errMeta);
   } else {
-    console.warn(`[${new Date().toISOString()}] ${line} → ${mapped.status} ${mapped.message}`);
+    logger.warn(`HTTP ${line}`, { status: mapped.status, message: mapped.message });
   }
   return fail(res, mapped.status, mapped.message);
 });
@@ -95,4 +112,5 @@ app.listen(port, () => {
     );
   }
   startTelegramLongPolling();
+  startRegistrationOtpCleanup();
 });

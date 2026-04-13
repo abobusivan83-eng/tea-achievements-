@@ -72,3 +72,7 @@ export const env = {
   PUBLIC_BASE_URL: parsed.PUBLIC_BASE_URL ?? parsed.API_URL ?? autoBase,
 };
 
+/** Тип распарсенных переменных окружения (без вычисляемых API_URL / PUBLIC_BASE_URL). */
+export type EnvFromProcess = z.infer<typeof EnvSchema>;
+export type AppEnv = typeof env;
+

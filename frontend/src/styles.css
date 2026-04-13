@@ -6,6 +6,8 @@
   color-scheme: dark;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
     "Segoe UI Emoji";
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 html {
@@ -63,7 +65,12 @@ body {
   border-bottom: 2px solid var(--steam-blue);
   box-shadow: 0 2px 20px rgba(102, 192, 244, 0.30);
   animation: navbarGlow 3s ease-in-out infinite;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(4px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .navbar {
+    backdrop-filter: none;
+  }
 }
 @keyframes navbarGlow {
   0%, 100% { box-shadow: 0 2px 20px rgba(102, 192, 244, 0.30); }
@@ -1785,8 +1792,13 @@ body {
   border-radius: 18px;
   padding: 14px 16px;
   background: rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(6px);
   box-shadow: 0 14px 28px rgba(0,0,0,0.24);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .shop-stat-card {
+    backdrop-filter: none;
+  }
 }
 .shop-stat-card__label {
   font-size: 11px;
@@ -1937,7 +1949,13 @@ body {
   overflow: hidden;
   border-radius: 28px;
   border: 1px solid rgba(255,255,255,0.09);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .auth-hero-panel,
+  .auth-form-panel {
+    backdrop-filter: none;
+  }
 }
 .auth-hero-panel {
   padding: 32px;

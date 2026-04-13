@@ -2,6 +2,7 @@ import { randomInt } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma.js";
 import { env } from "./env.js";
+import { logger } from "./logger.js";
 
 export class TelegramNotConfiguredError extends Error {
   constructor() {
@@ -82,7 +83,10 @@ export async function handleTelegramStartLink(linkToken: string, chatId: string)
     return;
   }
 
-  const existingUser = await prisma.user.findUnique({ where: { telegramChatId: chatId } });
+  const existingUser = await prisma.user.findUnique({
+    where: { telegramChatId: chatId },
+    select: { id: true },
+  });
   if (existingUser) {
     await telegramSendMessage(chatId, "Этот Telegram уже привязан к аккаунту. Войди на сайте.");
     return;
@@ -118,7 +122,10 @@ async function trySendPendingRegistrationCode(usernameLower: string, chatId: str
   });
   if (!pending) return false;
 
-  const existingUser = await prisma.user.findUnique({ where: { telegramChatId: chatId } });
+  const existingUser = await prisma.user.findUnique({
+    where: { telegramChatId: chatId },
+    select: { id: true },
+  });
   if (existingUser) return false;
 
   await issueCodeAndNotify(chatId, pending.id);
@@ -131,9 +138,7 @@ let pollingStarted = false;
 export function startTelegramLongPolling() {
   if (pollingStarted) return;
   if (!env.TELEGRAM_BOT_TOKEN?.trim()) {
-    if (env.APP_ENV === "development") {
-      console.warn("[telegram] TELEGRAM_BOT_TOKEN не задан — long polling отключён.");
-    }
+    logger.warn("[telegram] TELEGRAM_BOT_TOKEN не задан — long polling отключён.");
     return;
   }
   pollingStarted = true;
@@ -158,8 +163,9 @@ export function startTelegramLongPolling() {
       };
 
       if (!data.ok || !data.result) {
+        logger.warn("[telegram] getUpdates not ok", { ok: data.ok });
         await new Promise((r) => setTimeout(r, 3000));
-        void loop();
+        setTimeout(() => void loop(), 0);
         return;
       }
 
@@ -179,7 +185,7 @@ export function startTelegramLongPolling() {
               update: { chatId: chatIdStr },
             });
           } catch (e) {
-            console.error("[telegram] TelegramChatLookup upsert:", e);
+            logger.error("[telegram] TelegramChatLookup upsert", { err: e instanceof Error ? e.message : String(e) });
           }
         }
 
@@ -191,7 +197,7 @@ export function startTelegramLongPolling() {
           try {
             await handleTelegramStartLink(startToken, chatIdStr);
           } catch (e) {
-            console.error("[telegram] handleTelegramStartLink:", e);
+            logger.error("[telegram] handleTelegramStartLink", { err: e instanceof Error ? e.stack ?? e.message : String(e) });
           }
           continue;
         }
@@ -201,7 +207,9 @@ export function startTelegramLongPolling() {
           try {
             issuedByUsername = await trySendPendingRegistrationCode(from.username.trim().toLowerCase(), chatIdStr);
           } catch (e) {
-            console.error("[telegram] trySendPendingRegistrationCode:", e);
+            logger.error("[telegram] trySendPendingRegistrationCode", {
+              err: e instanceof Error ? e.message : String(e),
+            });
           }
         }
 
@@ -212,15 +220,15 @@ export function startTelegramLongPolling() {
               "Готово! Вернись на сайт и нажми «Продолжить», чтобы получить код.",
             );
           } catch (e) {
-            console.error("[telegram] /start reply:", e);
+            logger.error("[telegram] /start reply", { err: e instanceof Error ? e.message : String(e) });
           }
         }
       }
     } catch (e) {
-      console.error("[telegram] getUpdates:", e);
+      logger.error("[telegram] getUpdates", { err: e instanceof Error ? e.stack ?? e.message : String(e) });
       await new Promise((r) => setTimeout(r, 4000));
     }
-    void loop();
+    setTimeout(() => void loop(), 0);
   };
 
   void loop();

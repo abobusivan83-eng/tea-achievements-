@@ -3,8 +3,9 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { getCoinBonus, getUserCoins } from "../lib/coins.js";
+import { getCoinBonus } from "../lib/coins.js";
 import { parseJsonStringArray } from "../lib/cosmeticsAccess.js";
+import { getCachedShopItems, invalidateShopItemsCache, setCachedShopItems } from "../lib/cache.js";
 
 export const shopRouter = Router();
 shopRouter.use(requireAuth);
@@ -15,11 +16,15 @@ function mergeUniqueStrings(prev: unknown, nextKey: string): string[] {
 }
 
 shopRouter.get("/items", async (_req, res) => {
+  const cached = getCachedShopItems();
+  if (cached) return ok(res, cached);
+
   const items = await prisma.shopItem.findMany({
     orderBy: [{ price: "asc" }, { rarity: "asc" }],
     take: 500,
     select: { id: true, name: true, type: true, key: true, price: true, rarity: true, description: true, icon: true },
   });
+  setCachedShopItems(items);
   return ok(res, items);
 });
 
@@ -58,10 +63,16 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
   const parsed = BuySchema.safeParse(req.body);
   if (!parsed.success) return fail(res, 400, "Invalid payload");
 
-  const item = await prisma.shopItem.findUnique({ where: { id: parsed.data.itemId } });
+  const item = await prisma.shopItem.findUnique({
+    where: { id: parsed.data.itemId },
+    select: { id: true, name: true, price: true, type: true, key: true, icon: true },
+  });
   if (!item) return fail(res, 404, "Item not found");
 
-  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true },
+  });
   if (!user) return fail(res, 404, "User not found");
 
   const already = await prisma.shopPurchase.findUnique({
@@ -124,5 +135,6 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
     throw e;
   }
 
+  invalidateShopItemsCache();
   return ok(res, { purchased: true });
 });
