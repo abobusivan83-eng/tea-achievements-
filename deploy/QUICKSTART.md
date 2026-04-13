@@ -11,7 +11,7 @@
 - **⚠️ Render:** диск **не постоянный** — файлы в **`/uploads`** могут пропасть после сна сервиса или деплоя. Для бесплатного этапа оставлено как есть; позже — S3 / Supabase Storage.
 - **Prisma:** в модели **User** есть **`avatarUrl`**, **`bannerUrl`** (и legacy **`avatarPath`**, **`bannerPath`**).
 - **Frontend:** **`VITE_API_URL`** в прод-сборке; в **dev** без переменной используется `http://localhost:4000`; при пустом URL в production — запросы на **тот же origin** (если фронт и API на одном домене).
-- **Render:** корневой **`render.yaml`**: **`rootDir: backend`**, ветки **`develop`** (staging) и **`main`** (production), build с **`prisma generate`**, **`migrate deploy`**, start **`npm start`** (внутри: `db push`, `promote:creator`, затем **`node dist/src/server.js`**).
+- **Render:** корневой **`render.yaml`**: **`rootDir: backend`**, ветки **`develop`** (staging) и **`main`** (production), build с **`prisma generate`**, **`migrate deploy`**, start **`npm start`** (внутри: `db push`, затем **`node dist/src/server.js`**).
 - **Vercel:** **`frontend/vercel.json`** — SPA **rewrites** на `index.html`.
 - **Staging:** пропуск **OPTIONS** (CORS preflight) и **`/api/health`** для middleware ЗБТ.
 

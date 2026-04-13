@@ -10,14 +10,13 @@
     "postinstall": "prisma generate",
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "npx prisma db push && npm run promote:creator && node dist/src/server.js",
+    "start": "npx prisma db push && node dist/src/server.js",
     "start:staging": "node --env-file=.env.staging dist/src/server.js",
     "start:production": "node --env-file=.env.production dist/src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed": "tsx prisma/seed.ts",
-    "promote:creator": "tsx prisma/promoteFirstCreator.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
@@ -31,7 +30,6 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.0",
     "prisma": "^6.6.0",
-    "tsx": "^4.19.3",
     "zod": "^3.24.3"
   },
   "engines": {
@@ -45,6 +43,7 @@
     "@types/morgan": "^1.9.10",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.19.17",
+    "tsx": "^4.19.3",
     "typescript": "^5.9.3"
   }
 }
