@@ -86,8 +86,9 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   return fail(res, mapped.status, mapped.message);
 });
 
-app.listen(env.PORT, () => {
-  console.log(`API listening on ${env.API_URL} [${env.APP_ENV}]`);
+const port = Number(process.env.PORT) || 3000;
+app.listen(port, () => {
+  console.log(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
   if (process.env.RENDER === "true") {
     console.warn(
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",

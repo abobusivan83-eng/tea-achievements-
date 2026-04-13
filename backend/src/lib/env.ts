@@ -25,7 +25,14 @@ const EnvSchema = z.object({
   APP_ENV: z.enum(["development", "staging", "production"]).default(appEnv),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
-  PORT: z.coerce.number().int().positive().default(4000),
+  /** Render задаёт PORT; иначе 3000 (как в process.env.PORT || 3000). */
+  PORT: z
+    .union([z.string(), z.undefined()])
+    .transform((s) => {
+      if (s === undefined || s === "") return 3000;
+      const n = Number(s);
+      return Number.isFinite(n) && n > 0 ? n : 3000;
+    }),
   API_URL: z.string().url().optional(),
   PUBLIC_BASE_URL: z.string().url().optional(),
   FRONTEND_ORIGIN: z.string().min(1).default("http://localhost:3000"),

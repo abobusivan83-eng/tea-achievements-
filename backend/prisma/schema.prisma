@@ -49,7 +49,7 @@ enum ShopItemType {
 /// Временная запись до подтверждения через Telegram (код из 4 цифр).
 model RegistrationOtp {
   id               String   @id @default(uuid())
-  linkToken        String   @unique
+  linkToken        String?  @unique
   telegramChatId   String?
   telegramUsername String?
   nickname         String
