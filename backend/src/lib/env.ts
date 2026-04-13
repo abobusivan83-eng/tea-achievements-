@@ -37,27 +37,10 @@ const EnvSchema = z.object({
   }, z.coerce.boolean().default(false)),
   STAGING_ACCESS_TOKEN: z.string().min(12).optional(),
   STAGING_IP_WHITELIST: z.string().optional(),
-  /** Пустая строка в панели хостинга трактуется как «не задано». */
-  SMTP_HOST: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
-  SMTP_PORT: z.preprocess((v) => (v === "" || v === undefined ? undefined : v), z.coerce.number().int().positive().optional()),
-  SMTP_SECURE: z.preprocess((v) => {
-    if (v === "" || v === undefined) return undefined;
-    if (typeof v === "string") {
-      const s = v.trim().toLowerCase();
-      if (s === "true" || s === "1" || s === "yes") return true;
-      if (s === "false" || s === "0" || s === "no") return false;
-    }
-    return v;
-  }, z.boolean().optional()),
-  SMTP_USER: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().optional()),
-  SMTP_PASS: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().optional()),
+  /** Resend API (HTTPS, без SMTP-портов). Пустая строка = не задано. */
+  RESEND_API_KEY: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+  /** Адрес отправителя в Resend (домен должен быть верифицирован в панели Resend). Формат: `Имя <noreply@домен>`. */
   SMTP_FROM: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
-  /** Логировать SMTP-трафик (только для отладки). */
-  SMTP_DEBUG: z.preprocess((v) => {
-    if (v === "" || v === undefined) return false;
-    if (typeof v === "string") return ["1", "true", "yes"].includes(v.trim().toLowerCase());
-    return Boolean(v);
-  }, z.boolean().default(false)),
 });
 
 const parsed = EnvSchema.parse(process.env);

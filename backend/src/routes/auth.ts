@@ -76,7 +76,7 @@ authRouter.post("/register/request", async (req, res) => {
     return fail(
       res,
       502,
-      "Не удалось отправить письмо. Проверьте SMTP в Render (хост, порт, логин, пароль, From) и папку «Спам».",
+      "Не удалось отправить письмо. Проверьте RESEND_API_KEY и SMTP_FROM в Resend, домен отправителя и папку «Спам».",
     );
   }
 

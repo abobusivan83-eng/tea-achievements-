@@ -1,10 +1,12 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { env } from "./env.js";
 
-/** В production/staging без SMTP регистрация по почте должна явно сообщать об ошибке, а не «успех без письма». */
+/** В production/staging без Resend регистрация по почте должна явно сообщать об ошибке. */
 export class MailNotConfiguredError extends Error {
   constructor() {
-    super("SMTP не настроен: в Render → Environment задайте SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS и SMTP_FROM.");
+    super(
+      "Почта не настроена: в Render → Environment задайте RESEND_API_KEY и SMTP_FROM (верифицированный адрес в Resend).",
+    );
     this.name = "MailNotConfiguredError";
   }
 }
@@ -15,31 +17,6 @@ function escapeHtml(s: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function buildTransportOptions() {
-  const host = env.SMTP_HOST!;
-  const port = env.SMTP_PORT ?? (env.SMTP_SECURE ? 465 : 587);
-  /** Порт 465 — обычно SSL с первого байта; 587 — STARTTLS после приветствия. */
-  const secure = env.SMTP_SECURE ?? port === 465;
-  const useStartTls = !secure && port === 587;
-
-  return {
-    host,
-    port,
-    secure,
-    requireTLS: useStartTls,
-    auth:
-      env.SMTP_USER != null && env.SMTP_USER !== ""
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASS ?? "" }
-        : undefined,
-    connectionTimeout: 20_000,
-    greetingTimeout: 20_000,
-    socketTimeout: 25_000,
-    tls: { minVersion: "TLSv1.2" as const },
-    debug: env.SMTP_DEBUG,
-    logger: env.SMTP_DEBUG,
-  };
 }
 
 function registrationEmailHtml(code: string, nickname: string): string {
@@ -70,7 +47,7 @@ function registrationEmailHtml(code: string, nickname: string): string {
         </tr>
         <tr>
           <td style="padding:24px 28px 8px;">
-            <p style="margin:0 0 12px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;color:#7a8fa3;">Ваш код (действует <strong style="color:#b8d4ea;">15 минут</strong>)</p>
+            <p style="margin:0 0 12px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;color:#7a8fa3;">Ваш код подтверждения (действует <strong style="color:#b8d4ea;">15 минут</strong>)</p>
             <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto;"><tr>${digitCells}</tr></table>
           </td>
         </tr>
@@ -94,7 +71,7 @@ function registrationEmailText(code: string, nickname: string) {
     "",
     `Здравствуйте, ${nickname}!`,
     "",
-    `Ваш код: ${code}`,
+    `Ваш код подтверждения: ${code}`,
     "Код действует 15 минут.",
     "",
     "Если вы не запрашивали регистрацию, проигнорируйте это письмо.",
@@ -105,21 +82,20 @@ function registrationEmailText(code: string, nickname: string) {
 export function formatMailSendError(err: unknown): string {
   if (err && typeof err === "object") {
     const o = err as Record<string, unknown>;
-    const code = typeof o.code === "string" ? o.code : "";
-    const cmd = typeof o.command === "string" ? o.command : "";
-    const resp = typeof o.response === "string" ? o.response.slice(0, 200) : "";
+    const name = typeof o.name === "string" ? o.name : "";
     const msg = err instanceof Error ? err.message : String(err);
-    return [code, cmd, resp, msg].filter(Boolean).join(" | ").slice(0, 500);
+    const status = typeof o.statusCode === "number" ? String(o.statusCode) : "";
+    return [name, status, msg].filter(Boolean).join(" | ").slice(0, 500);
   }
   return String(err);
 }
 
-export function isSmtpConfigured(): boolean {
-  return Boolean(env.SMTP_HOST && env.SMTP_HOST.trim().length > 0);
+export function isResendConfigured(): boolean {
+  return Boolean(env.RESEND_API_KEY?.trim() && env.SMTP_FROM?.trim());
 }
 
 export async function sendRegistrationCode(to: string, code: string, nickname: string) {
-  if (!isSmtpConfigured()) {
+  if (!isResendConfigured()) {
     if (env.APP_ENV === "development") {
       console.warn(`[mail:dev] Код регистрации для ${to} (${nickname}): ${code}`);
       return;
@@ -127,21 +103,21 @@ export async function sendRegistrationCode(to: string, code: string, nickname: s
     throw new MailNotConfiguredError();
   }
 
-  const from = env.SMTP_FROM ?? env.SMTP_USER;
-  if (!from || !from.trim()) {
-    throw new Error("Задайте SMTP_FROM или SMTP_USER как адрес отправителя (From).");
-  }
+  const from = env.SMTP_FROM!.trim();
+  const resend = new Resend(env.RESEND_API_KEY!);
 
-  const transporter = nodemailer.createTransport(buildTransportOptions());
-
-  await transporter.sendMail({
-    from: from.trim(),
-    to,
-    subject: "Код для регистрации — Чайные достижения",
+  const { error } = await resend.emails.send({
+    from,
+    to: [to],
+    subject: "Код подтверждения регистрации — Чайные достижения",
     text: registrationEmailText(code, nickname),
     html: registrationEmailHtml(code, nickname),
     headers: {
       "X-Entity-Ref-ID": "registration-otp",
     },
   });
+
+  if (error) {
+    throw new Error(error.message ?? "Resend: не удалось отправить письмо");
+  }
 }
