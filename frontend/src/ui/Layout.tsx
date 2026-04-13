@@ -8,12 +8,10 @@ import {
   FiCheckSquare,
   FiGift,
   FiHome,
-  FiMenu,
   FiShield,
   FiShoppingBag,
   FiTrendingUp,
   FiUser,
-  FiX,
 } from "react-icons/fi";
 import { Toasts } from "./Toasts";
 import { LoadingOverlay } from "./components/LoadingOverlay";
@@ -44,7 +42,6 @@ export function Layout(props: { children: ReactNode }) {
   const [reportDesc, setReportDesc] = useState("");
   const [reportFiles, setReportFiles] = useState<File[]>([]);
   const [giftUnread, setGiftUnread] = useState(0);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const play = useSound((s) => s.play);
   const toast = useToasts((s) => s.push);
 
@@ -166,10 +163,6 @@ export function Layout(props: { children: ReactNode }) {
     });
   }, [notificationsOpen, me]);
 
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [loc.pathname]);
-
   const scene: SceneId =
     loc.pathname.startsWith("/profile")
       ? "profile"
@@ -191,259 +184,130 @@ export function Layout(props: { children: ReactNode }) {
     <Scene id={scene}>
       <Toasts />
       <LoadingOverlay />
-      <header className="navbar flex flex-col">
+      <header className="navbar">
         <div className="nav-container">
-          <Link to="/" className="nav-brand flex min-w-0 flex-1 items-center gap-2 lg:flex-initial">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 shadow-steam">
+          <Link to="/" className="nav-brand flex items-center gap-2">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 shadow-steam">
               <FiHome />
             </span>
-            <span className="min-w-0 truncate leading-none max-lg:text-[15px]">Чайные достижения</span>
-            <span className="hidden shrink-0 text-xs font-normal text-steam-muted md:inline">клановая система прогресса</span>
+            <span className="leading-none">Чайные достижения</span>
+            <span className="text-xs font-normal text-steam-muted">клановая система прогресса</span>
           </Link>
 
-          <button
-            type="button"
-            className="nav-mobile-toggle lg:hidden"
-            aria-expanded={mobileNavOpen}
-            aria-label={mobileNavOpen ? "Закрыть меню" : "Открыть меню"}
-            onClick={() => {
-              play("click");
-              setMobileNavOpen((v) => !v);
-            }}
-          >
-            {mobileNavOpen ? <FiX className="h-6 w-6" /> : <FiMenu className="h-6 w-6" />}
-          </button>
-
-          <div className="nav-desktop-wrap hidden lg:flex lg:min-w-0 lg:flex-1 lg:items-center lg:justify-end lg:gap-3">
-            <nav className="nav-links">
-              <NavItem to="/profile" icon={<FiUser />}>
-                Профиль
-              </NavItem>
-              <NavItem to="/shop" icon={<FiShoppingBag />}>
-                Магазин
-              </NavItem>
-              <NavLink
-                to="/gifts"
-                onMouseEnter={() => play("hover")}
-                onClick={() => play("tab")}
-                className={({ isActive }) => clsx("nav-link group relative inline-flex items-center gap-2", isActive && "active")}
-              >
-                <span className="text-base opacity-90">
-                  <FiGift />
-                </span>
-                <span className="relative z-10 inline-flex items-center gap-2">
-                  Подарки
-                  {giftUnread > 0 ? (
-                    <span className="nav-badge">{giftUnread > 99 ? "99+" : giftUnread}</span>
-                  ) : null}
-                </span>
-              </NavLink>
-              <NavItem to="/tasks" icon={<FiCheckSquare />}>
-                Задания
-              </NavItem>
-              <NavItem to="/achievements" icon={<FiAward />}>
-                Достижения
-              </NavItem>
-              <NavItem to="/leaderboard" icon={<FiTrendingUp />}>
-                Рейтинг
-              </NavItem>
-              {me ? (
-                <button
-                  type="button"
-                  className="nav-link ml-auto"
-                  onMouseEnter={() => play("hover")}
-                  onClick={() => {
-                    play("click");
-                    logout();
-                    nav("/login");
-                  }}
-                >
-                  Выйти
-                </button>
-              ) : null}
-              {me ? (
-                <button
-                  type="button"
-                  className="nav-link relative"
-                  onMouseEnter={() => play("hover")}
-                  onClick={() => {
-                    play("tab");
-                    setNotificationsOpen(true);
-                  }}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <FiBell />
-                    <span>Уведомления</span>
-                  </span>
-                  {unreadCount > 0 ? <span className="nav-badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
-                </button>
-              ) : null}
-              {isStaff() ? (
-                <NavItem to="/admin" icon={<FiShield />}>
-                  {me?.role === "CREATOR" ? "Создатель" : "Админ"}
-                </NavItem>
-              ) : null}
-            </nav>
-
-            <div className="nav-actions">
+          <nav className="nav-links">
+            <NavItem to="/profile" icon={<FiUser />}>
+              Профиль
+            </NavItem>
+            <NavItem to="/shop" icon={<FiShoppingBag />}>
+              Магазин
+            </NavItem>
+            <NavLink
+              to="/gifts"
+              onMouseEnter={() => play("hover")}
+              onClick={() => play("tab")}
+              className={({ isActive }) => clsx("nav-link group relative inline-flex items-center gap-2", isActive && "active")}
+            >
+              <span className="text-base opacity-90">
+                <FiGift />
+              </span>
+              <span className="relative z-10 inline-flex items-center gap-2">
+                Подарки
+                {giftUnread > 0 ? (
+                  <span className="nav-badge">{giftUnread > 99 ? "99+" : giftUnread}</span>
+                ) : null}
+              </span>
+            </NavLink>
+            <NavItem to="/tasks" icon={<FiCheckSquare />}>
+              Задания
+            </NavItem>
+            <NavItem to="/achievements" icon={<FiAward />}>
+              Достижения
+            </NavItem>
+            <NavItem to="/leaderboard" icon={<FiTrendingUp />}>
+              Рейтинг
+            </NavItem>
+            {me ? (
               <button
-                className="btn-suggestion"
                 type="button"
+                className="nav-link ml-auto"
                 onMouseEnter={() => play("hover")}
                 onClick={() => {
                   play("click");
-                  setSuggestOpen(true);
+                  logout();
+                  nav("/login");
                 }}
               >
-                Идея
+                Выйти
               </button>
+            ) : null}
+            {me ? (
               <button
-                className="btn-report"
                 type="button"
+                className="nav-link relative"
                 onMouseEnter={() => play("hover")}
-                onClick={() => {
-                  play("click");
-                  setReportOpen(true);
-                }}
-              >
-                Жалоба
-              </button>
-              {isStaff() ? (
-                <button
-                  className="btn-logs"
-                  type="button"
-                  onMouseEnter={() => play("hover")}
-                  onClick={() => {
-                    play("tab");
-                    setLogsOpen((v) => !v);
-                  }}
-                >
-                  Логи
-                </button>
-              ) : null}
-              {me ? (
-                <span className="hidden text-sm text-steam-muted sm:inline">
-                  {me.nickname}{" "}
-                  {me.role === "ADMIN" ? "(admin)" : me.role === "CREATOR" ? "(creator)" : ""}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        {mobileNavOpen ? (
-          <div className="nav-mobile-panel lg:hidden" id="nav-mobile-menu">
-            <nav className="nav-mobile-links" aria-label="Основное меню">
-              <NavItem to="/profile" icon={<FiUser />} onNavigate={() => setMobileNavOpen(false)}>
-                Профиль
-              </NavItem>
-              <NavItem to="/shop" icon={<FiShoppingBag />} onNavigate={() => setMobileNavOpen(false)}>
-                Магазин
-              </NavItem>
-              <NavLink
-                to="/gifts"
                 onClick={() => {
                   play("tab");
-                  setMobileNavOpen(false);
+                  setNotificationsOpen(true);
                 }}
-                className={({ isActive }) => clsx("nav-mobile-link", isActive && "active")}
               >
-                <span className="text-lg opacity-90">
-                  <FiGift />
-                </span>
-                <span className="flex flex-1 items-center justify-between gap-2">
-                  Подарки
-                  {giftUnread > 0 ? (
-                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{giftUnread > 99 ? "99+" : giftUnread}</span>
-                  ) : null}
-                </span>
-              </NavLink>
-              <NavItem to="/tasks" icon={<FiCheckSquare />} onNavigate={() => setMobileNavOpen(false)}>
-                Задания
-              </NavItem>
-              <NavItem to="/achievements" icon={<FiAward />} onNavigate={() => setMobileNavOpen(false)}>
-                Достижения
-              </NavItem>
-              <NavItem to="/leaderboard" icon={<FiTrendingUp />} onNavigate={() => setMobileNavOpen(false)}>
-                Рейтинг
-              </NavItem>
-              {isStaff() ? (
-                <NavItem to="/admin" icon={<FiShield />} onNavigate={() => setMobileNavOpen(false)}>
-                  {me?.role === "CREATOR" ? "Создатель" : "Админ"}
-                </NavItem>
-              ) : null}
-            </nav>
-            <div className="nav-mobile-actions">
-              {me ? (
-                <button
-                  type="button"
-                  className="nav-mobile-action-btn nav-mobile-action-btn--bell"
-                  onClick={() => {
-                    play("tab");
-                    setMobileNavOpen(false);
-                    setNotificationsOpen(true);
-                  }}
-                >
-                  <FiBell className="text-lg" />
+                <span className="inline-flex items-center gap-2">
+                  <FiBell />
                   <span>Уведомления</span>
-                  {unreadCount > 0 ? (
-                    <span className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold">{unreadCount > 99 ? "99+" : unreadCount}</span>
-                  ) : null}
-                </button>
-              ) : null}
+                </span>
+                {unreadCount > 0 ? <span className="nav-badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
+              </button>
+            ) : null}
+            {isStaff() ? (
+              <NavItem to="/admin" icon={<FiShield />}>
+                {me?.role === "CREATOR" ? "Создатель" : "Админ"}
+              </NavItem>
+            ) : null}
+          </nav>
+
+          <div className="nav-actions">
+            <button
+              className="btn-suggestion"
+              type="button"
+              onMouseEnter={() => play("hover")}
+              onClick={() => {
+                play("click");
+                setSuggestOpen(true);
+              }}
+            >
+              Идея
+            </button>
+            <button
+              className="btn-report"
+              type="button"
+              onMouseEnter={() => play("hover")}
+              onClick={() => {
+                play("click");
+                setReportOpen(true);
+              }}
+            >
+              Жалоба
+            </button>
+            {isStaff() ? (
               <button
+                className="btn-logs"
                 type="button"
-                className="nav-mobile-action-btn nav-mobile-action-btn--idea"
+                onMouseEnter={() => play("hover")}
                 onClick={() => {
-                  play("click");
-                  setMobileNavOpen(false);
-                  setSuggestOpen(true);
+                  play("tab");
+                  setLogsOpen((v) => !v);
                 }}
               >
-                Идея
+                Логи
               </button>
-              <button
-                type="button"
-                className="nav-mobile-action-btn nav-mobile-action-btn--report"
-                onClick={() => {
-                  play("click");
-                  setMobileNavOpen(false);
-                  setReportOpen(true);
-                }}
-              >
-                Жалоба
-              </button>
-              {isStaff() ? (
-                <button
-                  type="button"
-                  className="nav-mobile-action-btn nav-mobile-action-btn--logs"
-                  onClick={() => {
-                    play("tab");
-                    setMobileNavOpen(false);
-                    setLogsOpen(true);
-                  }}
-                >
-                  Журнал действий
-                </button>
-              ) : null}
-              {me ? (
-                <button
-                  type="button"
-                  className="nav-mobile-action-btn nav-mobile-action-btn--logout"
-                  onClick={() => {
-                    play("click");
-                    setMobileNavOpen(false);
-                    logout();
-                    nav("/login");
-                  }}
-                >
-                  Выйти
-                </button>
-              ) : null}
-            </div>
-            {me ? <div className="nav-mobile-user px-4 py-2 text-center text-xs text-steam-muted">{me.nickname}</div> : null}
+            ) : null}
+            {me ? (
+              <span className="hidden text-sm text-steam-muted sm:inline">
+                {me.nickname}{" "}
+                {me.role === "ADMIN" ? "(admin)" : me.role === "CREATOR" ? "(creator)" : ""}
+              </span>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </header>
 
       {isStaff() ? (
@@ -602,9 +466,9 @@ export function Layout(props: { children: ReactNode }) {
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6 pb-[max(1rem,env(safe-area-inset-bottom))]">{props.children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6">{props.children}</main>
 
-      <footer className="mx-auto max-w-6xl px-3 py-8 text-xs text-steam-muted sm:px-4 sm:py-10">
+      <footer className="mx-auto max-w-6xl px-4 py-10 text-xs text-steam-muted">
         Чайные достижения. Закрытое бета-тестирование клановой системы достижений на базе Express, Prisma и Vite.
       </footer>
 
@@ -791,25 +655,21 @@ function supportStatusLabel(status: Suggestion["status"] | Report["status"]) {
   }
 }
 
-function NavItem(props: { to: string; icon?: ReactNode; children: ReactNode; onNavigate?: () => void }) {
+function NavItem(props: { to: string; icon?: ReactNode; children: ReactNode }) {
   const play = useSound((s) => s.play);
   return (
     <NavLink
       to={props.to}
       onMouseEnter={() => play("hover")}
-      onClick={() => {
-        play("tab");
-        props.onNavigate?.();
-      }}
-      className={({ isActive }) =>
-        clsx(
-          props.onNavigate ? "nav-mobile-link" : "nav-link group relative inline-flex items-center gap-2",
-          isActive && "active",
-        )
-      }
+      onClick={() => play("tab")}
+      className={({ isActive }) => clsx("nav-link group relative inline-flex items-center gap-2", isActive && "active")}
     >
-      {props.icon ? <span className={props.onNavigate ? "text-lg opacity-90" : "text-base opacity-90"}>{props.icon}</span> : null}
-      <span className={props.onNavigate ? "font-semibold" : "relative z-10"}>{props.children}</span>
+      {() => (
+        <>
+          {props.icon ? <span className="text-base opacity-90">{props.icon}</span> : null}
+          <span className="relative z-10">{props.children}</span>
+        </>
+      )}
     </NavLink>
   );
 }
