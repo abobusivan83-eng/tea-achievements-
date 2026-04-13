@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
+import { PrismaClientInitializationError } from "@prisma/client/runtime/library";
 
 export type MappedError = {
   status: number;
@@ -44,8 +45,24 @@ export function mapErrorToResponse(err: unknown): MappedError {
     };
   }
 
+  if (err instanceof PrismaClientInitializationError) {
+    return {
+      status: 503,
+      message: "Database temporarily unavailable. Try again later.",
+      logAsError: true,
+    };
+  }
+
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     switch (err.code) {
+      case "P1001":
+      case "P1008":
+      case "P1017":
+        return {
+          status: 503,
+          message: "Database temporarily unavailable. Try again later.",
+          logAsError: true,
+        };
       case "P2002":
         return { status: 409, message: "Record already exists", logAsError: false };
       case "P2025":
