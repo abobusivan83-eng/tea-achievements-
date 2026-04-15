@@ -79,6 +79,14 @@ function toDateTimeLocalValue(value: string | null | undefined) {
   return local.toISOString().slice(0, 16);
 }
 
+function isVideoMedia(url: string) {
+  const clean = url.split("?")[0].toLowerCase();
+  return (
+    clean.includes("/video/upload/") ||
+    /\.(mp4|webm|mov|m4v|mkv|avi|ogg)$/i.test(clean)
+  );
+}
+
 function toAdminAchievementCardModel(a: AdminAchievement): Achievement {
   return {
     id: a.id,
@@ -1483,7 +1491,7 @@ export function AdminPage() {
                               onClick={() => openViewer(s.evidence, i)}
                               className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs"
                             >
-                              Файл {i + 1}
+                              {isVideoMedia(file) ? `Видео ${i + 1}` : `Фото ${i + 1}`}
                             </button>
                           ))}
                         </div>
@@ -1541,6 +1549,20 @@ export function AdminPage() {
                         <span className="text-xs text-steam-muted">{supportStatusLabel(s.status)}</span>
                       </div>
                       <div className="mt-1 text-sm text-steam-muted">{s.message}</div>
+                      {s.evidence?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {s.evidence.map((file, i) => (
+                            <button
+                              key={file}
+                              type="button"
+                              onClick={() => openViewer(s.evidence, i)}
+                              className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs"
+                            >
+                              {isVideoMedia(file) ? `Видео ${i + 1}` : `Фото ${i + 1}`}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                       {s.adminResponse ? (
                         <div className="mt-2 rounded-lg border border-steam-accent/20 bg-steam-accent/10 p-2 text-sm">
                           {s.adminResponse}
@@ -2032,7 +2054,15 @@ export function AdminPage() {
         {viewerImages.length ? (
           <div className="grid gap-3">
             <div className="overflow-hidden rounded-xl border border-white/10 bg-black/35">
-              <img src={viewerImages[viewerIndex]} className="max-h-[70vh] w-full object-contain" />
+              {isVideoMedia(viewerImages[viewerIndex]) ? (
+                <video
+                  src={viewerImages[viewerIndex]}
+                  controls
+                  className="max-h-[70vh] w-full bg-black object-contain"
+                />
+              ) : (
+                <img src={viewerImages[viewerIndex]} className="max-h-[70vh] w-full object-contain" />
+              )}
             </div>
             <div className="flex items-center justify-between">
               <Button variant="ghost" onClick={() => setViewerIndex((x) => (x - 1 + viewerImages.length) % viewerImages.length)}>

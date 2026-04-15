@@ -2,6 +2,8 @@ import fs from "fs";
 import multer from "multer";
 import path from "path";
 import type { RequestHandler } from "express";
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { env } from "../lib/env.js";
 import type { AuthedRequest } from "./auth.js";
 import { isAllowedImageMime } from "../lib/allowedImageMime.js";
@@ -91,3 +93,67 @@ export const upload = multer({
     cb(null, true);
   },
 });
+
+let cloudinaryReady = false;
+
+function ensureCloudinaryConfigured() {
+  if (cloudinaryReady) return true;
+  if (env.CLOUDINARY_URL) {
+    cloudinary.config({ cloudinary_url: env.CLOUDINARY_URL });
+    cloudinaryReady = true;
+    return true;
+  }
+  if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
+    cloudinary.config({
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+    cloudinaryReady = true;
+    return true;
+  }
+  return false;
+}
+
+function taskSubmissionCloudinaryStorage() {
+  return new CloudinaryStorage({
+    cloudinary,
+    params: async (_req, file) => {
+      const ext = path.extname(file.originalname || "").toLowerCase();
+      return {
+        folder: "clan-salamanca/task-submissions",
+        resource_type: "auto",
+        allowed_formats: ["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm", "mkv"],
+        public_id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext ? `-${ext.slice(1)}` : ""}`,
+      };
+    },
+  });
+}
+
+const TASK_MEDIA_LIMIT_BYTES = 100 * 1024 * 1024;
+
+export const taskSubmissionUpload: RequestHandler = (req, res, next) => {
+  if (!ensureCloudinaryConfigured()) {
+    return next(new Error("Cloudinary is not configured"));
+  }
+  const uploader = multer({
+    storage: taskSubmissionCloudinaryStorage(),
+    limits: { fileSize: TASK_MEDIA_LIMIT_BYTES, files: 8 },
+    fileFilter(_req, file, cb) {
+      if (!/^image\//.test(file.mimetype) && !/^video\//.test(file.mimetype)) {
+        return cb(new Error("Only image or video files are allowed"));
+      }
+      cb(null, true);
+    },
+  }).array("files", 8);
+
+  uploader(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") return next(new Error("Media file is too large (max. 100 MB)"));
+      return next(new Error(`Upload failed: ${err.message}`));
+    }
+    return next(err);
+  });
+};

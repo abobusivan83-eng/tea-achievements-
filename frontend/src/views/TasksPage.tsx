@@ -12,6 +12,7 @@ import { useToasts } from "../state/toasts";
 import { getStoredAuthToken } from "../lib/authStorage";
 
 type TasksTab = "available" | "completed";
+const MAX_TASK_MEDIA_BYTES = 100 * 1024 * 1024;
 
 function isCompletedForUser(t: TaskItem) {
   return t.mySubmission?.status === "RESOLVED";
@@ -27,6 +28,8 @@ export function TasksPage() {
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const toast = useToasts((s) => s.push);
   const reduce = useReducedMotion();
 
@@ -82,11 +85,15 @@ export function TasksPage() {
         setFormTaskId(null);
         setMessage("");
         setFiles([]);
+        setUploadProgress(0);
+        setUploadStatus(null);
         return null;
       }
       setFormTaskId(null);
       setMessage("");
       setFiles([]);
+      setUploadProgress(0);
+      setUploadStatus(null);
       return taskId;
     });
   }
@@ -102,11 +109,30 @@ export function TasksPage() {
     files.forEach((f) => form.append("files", f));
 
     setSubmitting(true);
+    setUploadProgress(0);
+    setUploadStatus("Загрузка видео в облако...");
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/submit`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: form,
+      const res = await new Promise<Response>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${API_BASE_URL}/api/tasks/${taskId}/submit`);
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const pct = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(Math.max(1, Math.min(100, pct)));
+        };
+        xhr.onerror = () => reject(new Error("Ошибка сети при загрузке файла"));
+        xhr.onload = () => {
+          const status = xhr.status;
+          const text = xhr.responseText ?? "";
+          resolve(
+            new Response(text, {
+              status,
+              headers: { "Content-Type": xhr.getResponseHeader("Content-Type") ?? "application/json" },
+            }),
+          );
+        };
+        xhr.send(form);
       });
       const json = (await res.json().catch(() => null)) as
         | { ok: true; data: unknown }
@@ -118,6 +144,8 @@ export function TasksPage() {
       toast({ kind: "success", title: "Отправка принята" });
       setMessage("");
       setFiles([]);
+      setUploadProgress(100);
+      setUploadStatus("Загрузка завершена");
       setFormTaskId(null);
       setExpandedId(null);
       await refresh();
@@ -125,7 +153,22 @@ export function TasksPage() {
       toast({ kind: "error", title: "Не удалось отправить", message: e?.message ?? "Ошибка" });
     } finally {
       setSubmitting(false);
+      setTimeout(() => {
+        setUploadProgress(0);
+        setUploadStatus(null);
+      }, 400);
     }
+  }
+
+  function handleFilesChange(nextFiles: File[]) {
+    const tooHeavyVideo = nextFiles.find((file) => /^video\//.test(file.type) && file.size > MAX_TASK_MEDIA_BYTES);
+    if (tooHeavyVideo) {
+      toast({ kind: "error", title: "Видео слишком тяжелое (макс. 100 МБ)" });
+      return;
+    }
+    setFiles(nextFiles);
+    setUploadProgress(0);
+    setUploadStatus(null);
   }
 
   const tabHint =
@@ -172,8 +215,10 @@ export function TasksPage() {
                 message={message}
                 onMessageChange={setMessage}
                 files={files}
-                onFilesChange={setFiles}
+                onFilesChange={handleFilesChange}
                 submitting={submitting}
+                uploadProgress={uploadProgress}
+                uploadStatus={uploadStatus}
                 onSubmit={() => submit(t.id)}
               />
             </motion.div>

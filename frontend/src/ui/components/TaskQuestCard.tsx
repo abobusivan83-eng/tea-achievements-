@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import type { Rarity, SupportStatus, TaskItem } from "../../lib/types";
@@ -78,6 +79,14 @@ function kindLabel(k: TaskKind) {
   }
 }
 
+function formatDuration(seconds: number | null | undefined) {
+  if (!seconds || !Number.isFinite(seconds)) return "00:00";
+  const total = Math.max(0, Math.round(seconds));
+  const mm = String(Math.floor(total / 60)).padStart(2, "0");
+  const ss = String(total % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
 export type TaskQuestCardVariant = "available" | "completed";
 
 export function TaskQuestCard(props: {
@@ -92,6 +101,8 @@ export function TaskQuestCard(props: {
   files: File[];
   onFilesChange: (files: File[]) => void;
   submitting: boolean;
+  uploadProgress: number;
+  uploadStatus: string | null;
   onSubmit: () => void;
 }) {
   const variant = props.variant ?? "available";
@@ -111,6 +122,22 @@ export function TaskQuestCard(props: {
       (sub.status !== "PENDING" && sub.status !== "REVIEWED" && sub.status !== "RESOLVED"));
 
   const hoverLift = resolved ? -5 : kind === "event" ? -4 : -2;
+  const previewItems = useMemo(
+    () =>
+      props.files.map((file) => ({
+        file,
+        url: URL.createObjectURL(file),
+        isVideo: /^video\//.test(file.type),
+      })),
+    [props.files],
+  );
+  const [videoDurationByUrl, setVideoDurationByUrl] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    return () => {
+      previewItems.forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, [previewItems]);
 
   return (
     <motion.div
@@ -301,12 +328,12 @@ export function TaskQuestCard(props: {
                       />
                     </label>
                     <label className="grid gap-1 text-sm">
-                      <span className="text-steam-muted">Фото или видео (до 8 файлов)</span>
+                      <span className="text-steam-muted">Фото или видео (до 8 файлов, до 100 МБ на файл)</span>
                       <span className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10">
                         <FiUpload />
                         <input
                           type="file"
-                          accept="image/*,video/*"
+                          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
                           multiple
                           className="hidden"
                           onChange={(e) => props.onFilesChange(Array.from(e.target.files ?? []).slice(0, 8))}
@@ -316,13 +343,57 @@ export function TaskQuestCard(props: {
                       {props.files.length ? (
                         <span className="text-xs text-steam-muted">Выбрано: {props.files.length}</span>
                       ) : null}
+                      {previewItems.length ? (
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {previewItems.map((item) => (
+                            <div key={item.url} className="overflow-hidden rounded-lg border border-white/10 bg-black/30">
+                              <div className="relative">
+                                {item.isVideo ? (
+                                  <video
+                                    src={item.url}
+                                    className="h-28 w-full bg-black object-cover"
+                                    muted
+                                    preload="metadata"
+                                    onLoadedMetadata={(e) => {
+                                      const duration = e.currentTarget.duration;
+                                      setVideoDurationByUrl((prev) => ({ ...prev, [item.url]: duration }));
+                                    }}
+                                  />
+                                ) : (
+                                  <img src={item.url} alt={item.file.name} className="h-28 w-full object-cover" />
+                                )}
+                                <div className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
+                                  {item.isVideo ? "Видео" : "Фото"}
+                                </div>
+                                {item.isVideo ? (
+                                  <div className="absolute bottom-1.5 right-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
+                                    {formatDuration(videoDurationByUrl[item.url])}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="truncate px-2 py-1.5 text-[11px] text-steam-muted" title={item.file.name}>
+                                {item.file.name}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {props.uploadStatus ? <span className="text-xs text-steam-muted">{props.uploadStatus}</span> : null}
+                      {props.submitting ? (
+                        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-steam-accent transition-[width] duration-150"
+                            style={{ width: `${Math.max(2, props.uploadProgress)}%` }}
+                          />
+                        </div>
+                      ) : null}
                     </label>
                     <div className="flex justify-end">
                       <Button
                         loading={props.submitting}
                         variant="primary"
                         onClick={() => props.onSubmit()}
-                        disabled={props.message.trim().length < 10}
+                        disabled={props.message.trim().length < 10 || props.submitting}
                       >
                         Отправить
                       </Button>

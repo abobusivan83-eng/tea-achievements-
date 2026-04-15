@@ -51,6 +51,10 @@ const EnvSchema = z.object({
   SLOW_REQUEST_MS: z.coerce.number().int().min(50).max(60_000).default(800),
   REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(20_000),
   PRISMA_SLOW_QUERY_MS: z.coerce.number().int().min(10).max(60_000).default(300),
+  CLOUDINARY_URL: z.string().min(1).optional(),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+  CLOUDINARY_API_KEY: z.string().min(1).optional(),
+  CLOUDINARY_API_SECRET: z.string().min(1).optional(),
 });
 
 const parsed = EnvSchema.parse(process.env);

@@ -1,24 +1,15 @@
-import path from "path";
 import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { upload } from "../middleware/uploads.js";
-import { env } from "../lib/env.js";
+import { taskSubmissionUpload } from "../middleware/uploads.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { getCachedTasksList, invalidateSupportUnreadCountCache, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
-
-function toRelUploadPath(absPath: string) {
-  const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
-  const rel = path.relative(process.cwd(), absPath);
-  if (rel.startsWith(env.UPLOAD_DIR)) return rel.replaceAll("\\", "/");
-  return path.relative(process.cwd(), path.join(uploadRoot, path.basename(absPath))).replaceAll("\\", "/");
-}
 
 function taskListWhere(userId: string, now: Date): Prisma.TaskWhereInput {
   return {
@@ -136,7 +127,7 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
   return ok(res, payload);
 });
 
-tasksRouter.post("/:taskId/submit", upload.array("files", 8), async (req: AuthedRequest, res) => {
+tasksRouter.post("/:taskId/submit", taskSubmissionUpload, async (req: AuthedRequest, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) return fail(res, 400, "Invalid task id");
 
@@ -166,8 +157,11 @@ tasksRouter.post("/:taskId/submit", upload.array("files", 8), async (req: Authed
   }
 
   const files = (req as Express.Request & { files?: Express.Multer.File[] }).files ?? [];
-  const evidencePaths = files.map((f) => toRelUploadPath(f.path));
-  const evidenceUrls = evidencePaths.map((p) => toPublicFileUrl(p));
+  const evidenceUrls = files.map((f) => {
+    if (typeof f.path === "string" && /^https?:\/\//i.test(f.path)) return f.path;
+    if (typeof f.filename === "string" && /^https?:\/\//i.test(f.filename)) return f.filename;
+    return toPublicFileUrl(f.path ?? "");
+  });
 
   const created = await prisma.taskSubmission.create({
     data: {
