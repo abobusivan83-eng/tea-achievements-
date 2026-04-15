@@ -382,6 +382,20 @@ export function AdminPage() {
     return "Ожидает";
   }
 
+  function shopRarityLabel(r: Rarity) {
+    if (r === "RARE") return "Редкая";
+    if (r === "EPIC") return "Эпическая";
+    if (r === "LEGENDARY") return "Легендарная";
+    return "Обычная";
+  }
+
+  function shopRarityTone(r: Rarity) {
+    if (r === "RARE") return "border-blue-300/30 bg-blue-400/10 text-blue-100";
+    if (r === "EPIC") return "border-purple-300/30 bg-purple-400/10 text-purple-100";
+    if (r === "LEGENDARY") return "border-amber-300/30 bg-amber-400/10 text-amber-100";
+    return "border-white/10 bg-white/5 text-steam-muted";
+  }
+
   function openTaskEditor(task: AdminTask) {
     setEditingTask(task);
     setEditTaskOpen(true);
@@ -465,7 +479,7 @@ export function AdminPage() {
                   Задания
                 </Button>
                 <Button variant={tab === "audit" ? "primary" : "ghost"} size="sm" onClick={() => setTab("audit")}>
-                  Р›РѕРіРё
+                  Действия администрации
                 </Button>
               </>
             ) : null}
@@ -1163,22 +1177,110 @@ export function AdminPage() {
               Заполнить из каталога
             </Button>
           </div>
-          <div className="mb-4 grid gap-2 md:grid-cols-4">
-            <input className={inputClass} placeholder="Название" value={shopName} onChange={(e) => setShopName(e.target.value)} />
-            <select className={selectClass} value={shopType} onChange={(e) => setShopType(e.target.value as any)}>
-              <option value="FRAME">FRAME</option>
-              <option value="BADGE">BADGE</option>
-            </select>
-            <input className={inputClass} placeholder="Ключ товара" value={shopKey} onChange={(e) => setShopKey(e.target.value)} />
-            <input className={inputClass} placeholder="Цена (монеты)" value={shopPrice} onChange={(e) => setShopPrice(Number(e.target.value) || 0)} />
-            <select className={selectClass} value={shopRarity} onChange={(e) => setShopRarity(e.target.value as Rarity)}>
-              <option value="COMMON">COMMON</option>
-              <option value="RARE">RARE</option>
-              <option value="EPIC">EPIC</option>
-              <option value="LEGENDARY">LEGENDARY</option>
-            </select>
-            <input className={inputClass} placeholder="Иконка (эмодзи или URL, необязательно)" value={shopIcon} onChange={(e) => setShopIcon(e.target.value)} />
-            <input className={`md:col-span-2 ${inputClass}`} placeholder="Описание" value={shopDesc} onChange={(e) => setShopDesc(e.target.value)} />
+          <div className="mb-4 grid gap-4">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Тип товара</div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={shopType === "FRAME" ? "primary" : "ghost"}
+                  onClick={() => {
+                    setShopType("FRAME");
+                    setShopIcon("");
+                  }}
+                >
+                  Рамка
+                </Button>
+                <Button size="sm" variant={shopType === "BADGE" ? "primary" : "ghost"} onClick={() => setShopType("BADGE")}>
+                  Значок / статус
+                </Button>
+              </div>
+            </div>
+
+            {shopType === "FRAME" ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Выбор рамки</div>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {frames.map((f) => {
+                    const active = shopKey === f.key;
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => {
+                          setShopType("FRAME");
+                          setShopKey(f.key);
+                          if (!shopName.trim()) setShopName(f.label);
+                          setShopRarity(mapCosmeticRarityToShop(f.rarity));
+                        }}
+                        className={clsx(
+                          "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+                          active ? "border-steam-accent/40 bg-steam-accent/10" : "border-white/10 bg-black/20 hover:bg-white/5",
+                        )}
+                      >
+                        <AvatarFrame frameKey={f.key} size={36} src="https://placehold.co/72x72/png?text=A" />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{f.label}</div>
+                          <div className="truncate text-xs text-steam-muted">{f.key}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid gap-2 md:grid-cols-3">
+              <input className={inputClass} placeholder="Название" value={shopName} onChange={(e) => setShopName(e.target.value)} />
+              <input className={inputClass} placeholder="Ключ товара" value={shopKey} onChange={(e) => setShopKey(e.target.value)} />
+              <input
+                className={inputClass}
+                placeholder="Цена (монеты)"
+                value={shopPrice}
+                onChange={(e) => setShopPrice(Number(e.target.value) || 0)}
+              />
+              <select className={selectClass} value={shopRarity} onChange={(e) => setShopRarity(e.target.value as Rarity)}>
+                <option value="COMMON">Обычная</option>
+                <option value="RARE">Редкая</option>
+                <option value="EPIC">Эпическая</option>
+                <option value="LEGENDARY">Легендарная</option>
+              </select>
+              {shopType === "BADGE" ? (
+                <input className={inputClass} placeholder="Иконка (эмодзи или URL)" value={shopIcon} onChange={(e) => setShopIcon(e.target.value)} />
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-steam-muted">
+                  Для рамок иконка не требуется
+                </div>
+              )}
+              <input className={inputClass} placeholder="Описание" value={shopDesc} onChange={(e) => setShopDesc(e.target.value)} />
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Предпросмотр</div>
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-3">
+                <div className="shrink-0">
+                  {shopType === "FRAME" ? (
+                    <AvatarFrame frameKey={shopKey || null} size={52} src="https://placehold.co/96x96/png?text=A" />
+                  ) : (
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-lg">
+                      {shopIcon || "🎁"}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{shopName || "Название товара"}</div>
+                  <div className="truncate text-xs text-steam-muted">{shopType} • {shopKey || "key"}</div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className={clsx("rounded-full border px-2 py-0.5 text-xs", shopRarityTone(shopRarity))}>
+                      {shopRarityLabel(shopRarity)}
+                    </span>
+                    <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-xs text-amber-100">
+                      {shopPrice || 0} 🪙
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="mb-4">
             <Button
@@ -1204,20 +1306,41 @@ export function AdminPage() {
               Добавить товар
             </Button>
           </div>
-          <div className="grid gap-2">
+          <div className="grid gap-3 md:grid-cols-2">
             {shopItems.map((it) => (
-              <div key={it.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">{it.icon ? `${it.icon} ` : ""}{it.name}</div>
-                  <div className="text-xs text-steam-muted">{it.type} • {it.key} • {it.rarity}</div>
+              <div key={it.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0">
+                    {it.type === "FRAME" ? (
+                      <AvatarFrame frameKey={it.key} size={42} src="https://placehold.co/84x84/png?text=A" />
+                    ) : (
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-base">
+                        {it.icon || "🎁"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold">{it.name}</div>
+                    <div className="truncate text-xs text-steam-muted">{it.type} • {it.key}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className={clsx("rounded-full border px-2 py-0.5 text-xs", shopRarityTone(it.rarity))}>
+                        {shopRarityLabel(it.rarity)}
+                      </span>
+                      <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-xs text-amber-100">
+                        {it.price} 🪙
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs">{it.price} 🪙</span>
-                <Button size="sm" variant="ghost" onClick={() => { setEditingShop(it); setEditShopOpen(true); }}>
-                  Изменить
-                </Button>
-                <Button size="sm" variant="danger" onClick={async () => { await apiDelete(`/api/admin/shop/items/${it.id}`); await refreshShop(); }}>
-                  Удалить
-                </Button>
+                {it.description ? <div className="mt-2 line-clamp-2 text-xs text-steam-muted">{it.description}</div> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => { setEditingShop(it); setEditShopOpen(true); }}>
+                    Изменить
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={async () => { await apiDelete(`/api/admin/shop/items/${it.id}`); await refreshShop(); }}>
+                    Удалить
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
