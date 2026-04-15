@@ -62,7 +62,12 @@ app.use(
 // НАСТРОЙКА CORS: Разрешаем доступ вашему сайту на Vercel
 app.use(
   cors({
-    origin: corsOrigins,
+    origin(origin, cb) {
+      // Allow non-browser requests (health checks, curl) without Origin.
+      if (!origin) return cb(null, true);
+      if (corsOrigins.includes(origin)) return cb(null, true);
+      return cb(null, false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id", "Idempotency-Key"],
