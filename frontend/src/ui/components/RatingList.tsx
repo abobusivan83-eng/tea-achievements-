@@ -6,6 +6,7 @@ import { resolveAvatarUrl } from "../../lib/media";
 import { Tooltip } from "./Tooltip";
 import { AvatarFrame } from "./AvatarFrame";
 import { Button } from "./Button";
+import { calculateLevelColor } from "../../lib/levelColor";
 
 const DESKTOP_GRID = "xl:grid-cols-[84px_minmax(0,2.3fr)_148px_148px_148px_128px]";
 
@@ -32,6 +33,7 @@ function RatingListInner(props: {
 
       {props.rows.map((row, idx) => {
         const level = row.level ?? 1;
+        const levelColor = calculateLevelColor(level);
         const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
         const accentClass =
           idx === 0
@@ -54,7 +56,8 @@ function RatingListInner(props: {
                   <span className="text-steam-muted">Достижения:</span> {row.achievementCount}
                 </div>
                 <div className="text-xs">
-                  <span className="text-steam-muted">Уровень:</span> {level}
+                  <span className="text-steam-muted">Уровень:</span>{" "}
+                  <span style={{ color: levelColor }}>{level}</span>
                 </div>
                 <div className="text-xs">
                   <span className="text-steam-muted">Рейтинг:</span> {row.totalPoints}
@@ -107,7 +110,7 @@ function RatingListInner(props: {
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:contents">
                   <MetricCard label="Достижения" value={String(row.achievementCount)} sublabel="выполнено" />
-                  <MetricCard label="Уровень" value={String(level)} sublabel="текущий lvl" emphasize="level" />
+                  <MetricCard label="Уровень" value={String(level)} sublabel="текущий lvl" emphasize="level" levelColor={levelColor} />
                   <MetricCard label="Рейтинг" value={String(row.totalPoints)} sublabel="за достижения" emphasize="points" />
                 </div>
 
@@ -140,12 +143,13 @@ const MetricCard = memo(function MetricCard(props: {
   value: string;
   sublabel: string;
   emphasize?: "level" | "points";
+  levelColor?: string;
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-center xl:rounded-none xl:border-0 xl:bg-transparent xl:px-0 xl:py-0">
       <div className="text-[10px] uppercase tracking-[0.16em] text-steam-muted xl:hidden">{props.label}</div>
       {props.emphasize === "level" ? (
-        <div className="inline-flex min-w-[48px] justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-lg font-semibold">
+        <div className="inline-flex min-w-[48px] justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-lg font-semibold" style={{ color: props.levelColor }}>
           {props.value}
         </div>
       ) : (

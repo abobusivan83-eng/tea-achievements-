@@ -19,6 +19,7 @@ import type { Achievement, Me, Rarity } from "../lib/types";
 import { useSound } from "../state/sound";
 import { AchievementCard } from "../ui/components/AchievementCard";
 import { DEFAULT_BANNER_URL, resolveAvatarUrl, resolveBannerUrl } from "../lib/media";
+import { calculateLevelColor } from "../lib/levelColor";
 
 type ProfileResp = {
   user: {
@@ -290,8 +291,7 @@ export function ProfilePage() {
   const xpForNext = Math.max(1, xpNext - xpBase);
   const xpPct = Math.min(1, xpInto / xpForNext);
   const statusTier = getLevelTier(level);
-  const levelColorClass =
-    statusTier === "gold" ? "text-yellow-300" : statusTier === "pink" ? "text-pink-300" : statusTier === "purple" ? "text-purple-300" : statusTier === "blue" ? "text-steam-accent" : "text-white";
+  const levelColor = calculateLevelColor(level);
   const presenceOnline = me?.id === profile.user.id ? true : !profile.user.blocked;
   const bannerBgUrl = bannerRemoteBroken ? DEFAULT_BANNER_URL : resolveBannerUrl(profile.user.bannerUrl);
 
@@ -407,7 +407,7 @@ export function ProfilePage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-steam-muted">Уровень</span>
-                      <span className={clsx("font-semibold", levelColorClass)}>{level}</span>
+                      <span className="font-semibold" style={{ color: levelColor }}>{level}</span>
                     </div>
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
                       <motion.div
@@ -943,7 +943,7 @@ function LevelRing(props: { level: number; xpPct: number; tier: "white" | "blue"
           transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1] }}
         />
       </svg>
-      <div className={clsx("absolute inset-0 grid place-items-center text-lg font-bold", props.tier === "gold" ? "text-yellow-300" : props.tier === "pink" ? "text-pink-300" : props.tier === "purple" ? "text-purple-300" : props.tier === "blue" ? "text-steam-accent" : "text-white")}>
+      <div className="absolute inset-0 grid place-items-center text-lg font-bold" style={{ color: calculateLevelColor(props.level) }}>
         {props.level}
       </div>
     </div>

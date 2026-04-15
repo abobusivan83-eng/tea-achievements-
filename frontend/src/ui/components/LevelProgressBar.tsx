@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import clsx from "clsx";
+import { calculateLevelColor } from "../../lib/levelColor";
 
 export function LevelProgressBar(props: {
   level: number;
@@ -9,6 +10,7 @@ export function LevelProgressBar(props: {
   className?: string;
 }) {
   const pct = Math.min(1, props.xpForNext ? props.xpIntoLevel / props.xpForNext : 0);
+  const levelColor = calculateLevelColor(props.level);
   const tier = props.level >= 75 ? "gold" : props.level >= 50 ? "pink" : props.level >= 25 ? "purple" : props.level >= 10 ? "blue" : "white";
   const bar = tier === "gold" ? "bg-yellow-300" : tier === "pink" ? "bg-pink-400" : tier === "purple" ? "bg-purple-400" : tier === "blue" ? "bg-steam-accent" : "bg-white/80";
   const glowClass = tier === "gold" ? "rarity-glow--legendary" : tier === "pink" || tier === "purple" ? "rarity-glow--epic" : tier === "blue" ? "rarity-glow--rare" : "rarity-glow--common";
@@ -18,7 +20,7 @@ export function LevelProgressBar(props: {
       {props.showLabel ? (
         <div className="flex items-center justify-between text-xs">
           <span className="text-steam-muted">Level</span>
-          <span className={clsx("font-semibold", tier === "gold" ? "text-yellow-300" : tier === "pink" ? "text-pink-300" : tier === "purple" ? "text-purple-300" : tier === "blue" ? "text-steam-accent" : "text-white")}>{props.level}</span>
+          <span className="font-semibold" style={{ color: levelColor }}>{props.level}</span>
         </div>
       ) : null}
       <div className="h-2 overflow-hidden rounded-full bg-white/10">

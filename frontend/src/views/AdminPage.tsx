@@ -16,6 +16,7 @@ import { badgeCatalog, frames, statusEmojiCatalog } from "../lib/cosmetics";
 import { AvatarFrame } from "../ui/components/AvatarFrame";
 import { AchievementIcon } from "../ui/components/AchievementIcon";
 import { AchievementCard } from "../ui/components/AchievementCard";
+import { calculateLevelColor } from "../lib/levelColor";
 
 type SupportSuggestionRow = {
   id: string;
@@ -865,7 +866,9 @@ export function AdminPage() {
               <div key={u.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{u.nickname}</div>
-                  <div className="text-xs text-steam-muted">Lvl {u.level ?? 1} • XP {u.xp ?? 0}</div>
+                  <div className="text-xs text-steam-muted">
+                    Lvl <span style={{ color: calculateLevelColor(u.level ?? 1) }}>{u.level ?? 1}</span> • XP {u.xp ?? 0}
+                  </div>
                 </div>
                 <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { xp: Math.max(0, (u.xp ?? 0) + xpAmount) }, "PATCH"); await refreshUsers(); }}>+Опыт</Button>
                 <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { xp: Math.max(0, (u.xp ?? 0) - xpAmount) }, "PATCH"); await refreshUsers(); }}>-Опыт</Button>
@@ -1749,6 +1752,7 @@ export function AdminPage() {
                     className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
                     value={levelDraft}
                     onChange={(e) => setLevelDraft(Number(e.target.value))}
+                    style={{ color: calculateLevelColor(levelDraft) }}
                   >
                     {Array.from({ length: 100 }).map((_, i) => (
                       <option key={i + 1} value={i + 1}>
