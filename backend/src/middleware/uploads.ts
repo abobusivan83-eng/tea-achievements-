@@ -160,6 +160,10 @@ export const taskSubmissionUpload: RequestHandler = (req, res, next) => {
       if (err.code === "LIMIT_FILE_SIZE") return next(new Error("Media file is too large (max. 100 MB)"));
       return next(new Error(`Upload failed: ${err.message}`));
     }
-    return next(err);
+    const e = err as { message?: string; error?: { message?: string }; http_code?: number; status?: number };
+    const msg = e?.message || e?.error?.message || "Cloudinary upload failed";
+    const wrapped = new Error(`Upload failed: ${msg}`) as Error & { status?: number };
+    wrapped.status = e?.http_code || e?.status;
+    return next(wrapped);
   });
 };

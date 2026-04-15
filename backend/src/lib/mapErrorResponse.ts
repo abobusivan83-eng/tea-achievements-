@@ -32,6 +32,12 @@ function isClientUploadMessage(msg: string) {
  */
 export function mapErrorToResponse(err: unknown): MappedError {
   const o = err as { status?: number; statusCode?: number; type?: string };
+  const messageFromUnknown =
+    typeof (err as any)?.message === "string"
+      ? (err as any).message
+      : typeof (err as any)?.error?.message === "string"
+        ? (err as any).error.message
+        : undefined;
   const httpCode = o.status ?? o.statusCode;
   if (httpCode === 413 || o.type === "entity.too.large") {
     return { status: 413, message: "Request body too large", logAsError: false };
@@ -97,6 +103,12 @@ export function mapErrorToResponse(err: unknown): MappedError {
       return { status: 400, message: err.message, logAsError: false };
     }
     return { status: 500, message: "Internal server error", logAsError: true };
+  }
+
+  if (messageFromUnknown) {
+    if (isClientUploadMessage(messageFromUnknown)) {
+      return { status: httpCode && httpCode >= 400 && httpCode < 500 ? httpCode : 400, message: messageFromUnknown, logAsError: false };
+    }
   }
 
   return { status: 500, message: "Internal server error", logAsError: true };
