@@ -212,17 +212,10 @@ supportRouter.post("/reports/:id/images", upload.array("files", 8), async (req: 
   return ok(res, { id: updated.id, images: next.images });
 });
 
-// Notifications: user sees global + personal; admin can see all via query param.
+// Notifications are always personal and scoped to current user.
 supportRouter.get("/notifications", async (req: AuthedRequest, res) => {
   const take = Math.min(200, Math.max(1, Number(req.query.take ?? 50)));
-  const all = String(req.query.all ?? "0") === "1";
-
-  const where =
-    all && req.user!.role === "ADMIN"
-      ? {}
-      : {
-          OR: [{ userId: null }, { userId: req.user!.id }],
-        };
+  const where = { userId: req.user!.id };
 
   const items = await prisma.notification.findMany({
     where,
@@ -235,14 +228,14 @@ supportRouter.get("/notifications", async (req: AuthedRequest, res) => {
 });
 
 supportRouter.get("/notifications/unread-count", async (req: AuthedRequest, res) => {
-  const cacheKey = req.user!.role === "ADMIN" ? "admin" : req.user!.id;
+  const cacheKey = req.user!.id;
   const cached = getCachedSupportUnreadCount(cacheKey);
   if (cached !== undefined) {
     res.setHeader("Cache-Control", "private, max-age=20");
     return ok(res, { count: cached });
   }
 
-  const where = req.user!.role === "ADMIN" ? { isRead: false } : { OR: [{ userId: null }, { userId: req.user!.id }], isRead: false };
+  const where = { userId: req.user!.id, isRead: false };
   const count = await prisma.notification.count({ where });
   setCachedSupportUnreadCount(cacheKey, count);
   res.setHeader("Cache-Control", "private, max-age=20");
@@ -255,9 +248,7 @@ supportRouter.patch("/notifications/:id/read", async (req: AuthedRequest, res) =
     select: { id: true, userId: true },
   });
   if (!item) return fail(res, 404, "Notification not found");
-  if (req.user!.role !== "ADMIN" && item.userId !== null && item.userId !== req.user!.id) {
-    return fail(res, 403, "Forbidden");
-  }
+  if (item.userId !== req.user!.id) return fail(res, 403, "Forbidden");
 
   const updated = await prisma.notification.update({
     where: { id: item.id },
@@ -271,7 +262,7 @@ supportRouter.patch("/notifications/:id/read", async (req: AuthedRequest, res) =
 supportRouter.patch("/notifications/read-all", async (req: AuthedRequest, res) => {
   await prisma.notification.updateMany({
     where: {
-      OR: [{ userId: null }, { userId: req.user!.id }],
+      userId: req.user!.id,
       isRead: false,
     },
     data: { isRead: true },

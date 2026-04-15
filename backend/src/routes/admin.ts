@@ -14,7 +14,7 @@ import { MAX_LEVEL, levelFromXp, xpForLevel } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
 import { awardAchievementToUser, revokeAchievementFromUser } from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
-import { invalidateShopItemsCache } from "../lib/cache.js";
+import { invalidateShopItemsCache, invalidateSupportUnreadCountCache } from "../lib/cache.js";
 
 export const adminRouter = Router();
 
@@ -113,6 +113,7 @@ async function createSupportNotification(params: {
       text: parts.join("\n"),
     },
   });
+  invalidateSupportUnreadCountCache(params.userId);
 }
 
 function ensureDir(p: string) {
@@ -684,6 +685,7 @@ adminRouter.post("/users/:id/coins", async (req: AuthedRequest, res) => {
       text: `Администратор ${adminDisplayName} изменил баланс монет: ${deltaStr}\n[COIN_BONUS]:${parsed.data.delta}`,
     },
   });
+  invalidateSupportUnreadCountCache(target.id);
   if (req.user?.id) {
     await logAdminAction(prisma, {
       adminId: req.user.id,
@@ -1152,6 +1154,7 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         });
       }
     });
+    invalidateSupportUnreadCountCache(existing.user.id);
   }
 
   const shouldNotify =
@@ -1170,6 +1173,7 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         text: parts.join("\n"),
       },
     });
+    invalidateSupportUnreadCountCache(existing.user.id);
   }
 
   const auditWorthy =

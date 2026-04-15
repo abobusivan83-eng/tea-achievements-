@@ -5,7 +5,13 @@ import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getUserCoins } from "../lib/coins.js";
-import { getCachedGiftsUnreadCount, invalidateGiftsUnreadCountCache, invalidateShopMeCache, setCachedGiftsUnreadCount } from "../lib/cache.js";
+import {
+  getCachedGiftsUnreadCount,
+  invalidateGiftsUnreadCountCache,
+  invalidateShopMeCache,
+  invalidateSupportUnreadCountCache,
+  setCachedGiftsUnreadCount,
+} from "../lib/cache.js";
 
 export const giftsRouter = Router();
 giftsRouter.use(requireAuth);
@@ -202,6 +208,8 @@ giftsRouter.post("/send", async (req: AuthedRequest, res) => {
     invalidateShopMeCache(from.id);
     invalidateShopMeCache(to.id);
     invalidateGiftsUnreadCountCache(to.id);
+    invalidateSupportUnreadCountCache(from.id);
+    invalidateSupportUnreadCountCache(to.id);
     return ok(res, { sent: true, giftId: result.giftId, idempotentReplay: false });
   } catch (e: unknown) {
     const msgErr = e instanceof Error ? e.message : "";

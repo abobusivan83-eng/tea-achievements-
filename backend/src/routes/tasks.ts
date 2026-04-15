@@ -8,7 +8,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { upload } from "../middleware/uploads.js";
 import { env } from "../lib/env.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
-import { getCachedTasksList, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
+import { getCachedTasksList, invalidateSupportUnreadCountCache, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
@@ -188,6 +188,16 @@ tasksRouter.post("/:taskId/submit", upload.array("files", 8), async (req: Authed
     },
   });
   invalidateTasksListCache(req.user!.id);
+  await prisma.notification.create({
+    data: {
+      type: "SUPPORT",
+      userId: req.user!.id,
+      adminName: null,
+      text: `📝 Заявка по заданию «${task.title}» отправлена и ожидает проверки администрации.`,
+      isRead: false,
+    },
+  });
+  invalidateSupportUnreadCountCache(req.user!.id);
 
   return ok(res, {
     ...created,
