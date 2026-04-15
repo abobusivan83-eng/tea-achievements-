@@ -237,11 +237,15 @@ supportRouter.get("/notifications", async (req: AuthedRequest, res) => {
 supportRouter.get("/notifications/unread-count", async (req: AuthedRequest, res) => {
   const cacheKey = req.user!.role === "ADMIN" ? "admin" : req.user!.id;
   const cached = getCachedSupportUnreadCount(cacheKey);
-  if (cached !== undefined) return ok(res, { count: cached });
+  if (cached !== undefined) {
+    res.setHeader("Cache-Control", "private, max-age=20");
+    return ok(res, { count: cached });
+  }
 
   const where = req.user!.role === "ADMIN" ? { isRead: false } : { OR: [{ userId: null }, { userId: req.user!.id }], isRead: false };
   const count = await prisma.notification.count({ where });
   setCachedSupportUnreadCount(cacheKey, count);
+  res.setHeader("Cache-Control", "private, max-age=20");
   return ok(res, { count });
 });
 

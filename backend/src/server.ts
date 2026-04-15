@@ -20,7 +20,7 @@ import { shopRouter } from "./routes/shop.js";
 import { giftsRouter } from "./routes/gifts.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { fail, ok } from "./lib/http.js";
-import { startTelegramLongPolling } from "./lib/telegram.js";
+import { isTelegramConfigured, startTelegramLongPolling } from "./lib/telegram.js";
 import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 
@@ -61,13 +61,6 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
-
-// TEMP DEBUG: log Origin of every request (remove after stabilizing production).
-app.use((req, _res, next) => {
-  // eslint-disable-next-line no-console
-  console.log("[origin]", req.method, req.originalUrl, req.headers.origin ?? "(no origin)");
-  next();
-});
 
 app.use((req, res, next) => {
   const reqId = String(req.headers["x-request-id"] ?? randomUUID());
@@ -149,7 +142,9 @@ const server = app.listen(port, () => {
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",
     );
   }
-  startTelegramLongPolling();
+  if (isTelegramConfigured()) {
+    startTelegramLongPolling();
+  }
   startRegistrationOtpCleanup();
 });
 server.keepAliveTimeout = 65_000;

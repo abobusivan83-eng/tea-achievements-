@@ -55,12 +55,16 @@ giftsRouter.get("/list", async (req: AuthedRequest, res) => {
 
 giftsRouter.get("/unread-count", async (req: AuthedRequest, res) => {
   const cached = getCachedGiftsUnreadCount(req.user!.id);
-  if (cached !== undefined) return ok(res, { count: cached });
+  if (cached !== undefined) {
+    res.setHeader("Cache-Control", "private, max-age=20");
+    return ok(res, { count: cached });
+  }
 
   const count = await prisma.gift.count({
     where: { toUserId: req.user!.id, receiverViewedAt: null },
   });
   setCachedGiftsUnreadCount(req.user!.id, count);
+  res.setHeader("Cache-Control", "private, max-age=20");
   return ok(res, { count });
 });
 
