@@ -87,6 +87,10 @@ function isVideoMedia(url: string) {
   );
 }
 
+function buildRejectReasonText(text: string) {
+  return text.trim().replace(/\s+/g, " ");
+}
+
 function toAdminAchievementCardModel(a: AdminAchievement): Achievement {
   return {
     id: a.id,
@@ -164,6 +168,10 @@ export function AdminPage() {
   const [editTaskOpen, setEditTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<AdminTask | null>(null);
   const [taskResponses, setTaskResponses] = useState<Record<string, string>>({});
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<AdminTaskSubmission | null>(null);
+  const [rejectReasonDraft, setRejectReasonDraft] = useState("");
   const [shopName, setShopName] = useState("");
   const [shopType, setShopType] = useState<"FRAME" | "BADGE">("FRAME");
   const [shopKey, setShopKey] = useState("");
@@ -1519,13 +1527,10 @@ export function AdminPage() {
                         <Button
                           size="sm"
                           variant="danger"
-                          onClick={async () => {
-                            await apiJson(
-                              `/api/admin/tasks/submissions/${s.id}`,
-                              { status: "REJECTED", isRead: true, adminResponse: taskResponses[s.id] ?? "" },
-                              "PATCH",
-                            );
-                            await refreshTasks();
+                          onClick={() => {
+                            setRejectTarget(s);
+                            setRejectReasonDraft(taskResponses[s.id] ?? "");
+                            setRejectOpen(true);
                           }}
                         >
                           Отклонить
@@ -2077,6 +2082,79 @@ export function AdminPage() {
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={rejectOpen}
+        title={rejectTarget ? `Отклонить: ${rejectTarget.task.title}` : "Отклонение задания"}
+        onClose={() => {
+          if (rejectBusy) return;
+          setRejectOpen(false);
+          setRejectTarget(null);
+          setRejectReasonDraft("");
+        }}
+      >
+        <div className="grid gap-3">
+          <div className="text-sm text-steam-muted">Укажи причину отказа — пользователь получит ее в уведомлении.</div>
+          <textarea
+            className="min-h-28 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-red-300/60"
+            value={rejectReasonDraft}
+            onChange={(e) => setRejectReasonDraft(e.target.value)}
+            placeholder="Причина отклонения"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (rejectBusy) return;
+                setRejectOpen(false);
+                setRejectTarget(null);
+                setRejectReasonDraft("");
+              }}
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="danger"
+              loading={rejectBusy}
+              disabled={!rejectTarget || buildRejectReasonText(rejectReasonDraft).length < 3}
+              onClick={async () => {
+                if (!rejectTarget) return;
+                const reason = buildRejectReasonText(rejectReasonDraft);
+                if (reason.length < 3) {
+                  toast({ kind: "error", title: "Причина должна быть не короче 3 символов" });
+                  return;
+                }
+                setRejectBusy(true);
+                try {
+                  await apiJson(
+                    `/api/admin/tasks/submissions/${rejectTarget.id}`,
+                    {
+                      status: "REJECTED",
+                      isRead: true,
+                      adminResponse: taskResponses[rejectTarget.id] ?? "",
+                      rejectionReason: reason,
+                    },
+                    "PATCH",
+                  );
+                  setTaskResponses((prev) => ({ ...prev, [rejectTarget.id]: reason }));
+                  toast({ kind: "info", title: "Задание отклонено" });
+                  setRejectOpen(false);
+                  setRejectTarget(null);
+                  setRejectReasonDraft("");
+                  await refreshTasks();
+                } catch (e: any) {
+                  setError(e?.message ?? "Ошибка отклонения");
+                  toast({ kind: "error", title: "Не удалось отклонить", message: e?.message ?? "Ошибка" });
+                } finally {
+                  setRejectBusy(false);
+                }
+              }}
+            >
+              Подтвердить отклонение
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal open={editShopOpen} title={editingShop ? `Редактировать: ${editingShop.name}` : "Редактировать товар"} onClose={() => setEditShopOpen(false)}>

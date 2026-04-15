@@ -9,7 +9,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { signToken } from "../lib/auth.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
 import { parseJsonStringArray } from "../lib/cosmeticsAccess.js";
-import { toPublicFileUrl } from "../lib/publicUrl.js";
+import { resolveStoredMediaUrl } from "../lib/storedMediaUrl.js";
 import { env } from "../lib/env.js";
 import {
   isTelegramConfigured,
@@ -278,8 +278,8 @@ authRouter.get("/me", requireAuth, async (req: AuthedRequest, res) => {
   const unlockedStatuses = parseJsonStringArray(unlockedStatusesJson);
   return ok(res, {
     ...rest,
-    avatarUrl: user.avatarUrl ?? toPublicFileUrl(user.avatarPath),
-    bannerUrl: user.bannerUrl ?? toPublicFileUrl(user.bannerPath),
+    avatarUrl: resolveStoredMediaUrl(user.avatarUrl, user.avatarPath),
+    bannerUrl: resolveStoredMediaUrl(user.bannerUrl, user.bannerPath),
     publicId,
     unlockedFrames,
     unlockedStatuses,

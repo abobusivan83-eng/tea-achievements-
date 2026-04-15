@@ -127,6 +127,7 @@ function taskSubmissionCloudinaryStorage() {
       const ext = path.extname(file.originalname || "").toLowerCase();
       return {
         folder: "clan-salamanca/task-submissions",
+        type: "upload",
         resource_type: "auto",
         allowed_formats: ["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm", "mkv"],
         public_id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext ? `-${ext.slice(1)}` : ""}`,

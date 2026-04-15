@@ -1096,6 +1096,7 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
 const UpdateTaskSubmissionSchema = z.object({
   status: SupportStatusSchema.optional(),
   adminResponse: z.string().max(2000).nullable().optional(),
+  rejectionReason: z.string().min(3).max(2000).optional(),
   isRead: z.boolean().optional(),
 });
 
@@ -1116,12 +1117,20 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
   const adminDisplayName = await getAdminDisplayName(req);
   const nextStatus = parsed.data.status ?? existing.status;
   const nextResponse = parsed.data.adminResponse !== undefined ? parsed.data.adminResponse : existing.adminResponse;
+  const rejectionReason = parsed.data.rejectionReason?.trim();
+  if (parsed.data.status === "REJECTED" && !rejectionReason) {
+    return fail(res, 400, "Укажите причину отклонения (минимум 3 символа)");
+  }
+  const mergedResponse =
+    parsed.data.status === "REJECTED" && rejectionReason
+      ? [nextResponse?.trim(), `Причина отклонения: ${rejectionReason}`].filter(Boolean).join("\n")
+      : nextResponse;
 
   const updated = await prisma.taskSubmission.update({
     where: { id: existing.id },
     data: {
       status: parsed.data.status,
-      adminResponse: parsed.data.adminResponse ?? undefined,
+      adminResponse: mergedResponse ?? undefined,
       isRead: parsed.data.isRead,
       reviewedAt: parsed.data.status ? new Date() : undefined,
       reviewedById: parsed.data.status ? req.user?.id : undefined,
@@ -1159,12 +1168,16 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
   const shouldNotify =
     (parsed.data.status !== undefined && parsed.data.status !== existing.status) ||
-    (parsed.data.adminResponse !== undefined && parsed.data.adminResponse !== existing.adminResponse);
+    (parsed.data.adminResponse !== undefined && parsed.data.adminResponse !== existing.adminResponse) ||
+    Boolean(rejectionReason);
   if (shouldNotify) {
     const parts: string[] = [`Ответ администрации по заданию «${existing.task.title}»`];
     parts.push(`Администратор: ${adminDisplayName}`);
     parts.push(`Статус: ${supportStatusLabel(nextStatus)}`);
-    if (nextResponse?.trim()) parts.push(`Ответ: ${nextResponse.trim()}`);
+    if (mergedResponse?.trim()) parts.push(`Ответ: ${mergedResponse.trim()}`);
+    if (nextStatus === "REJECTED" && rejectionReason) {
+      parts.push(`Ваше задание «${existing.task.title}» отклонено. Причина: ${rejectionReason}`);
+    }
     await prisma.notification.create({
       data: {
         type: "SUPPORT",
