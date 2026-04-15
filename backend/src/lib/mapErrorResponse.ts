@@ -11,12 +11,19 @@ export type MappedError = {
 };
 
 function isClientUploadMessage(msg: string) {
+  const lower = msg.toLowerCase();
   return (
     msg.includes("Only JPEG") ||
     msg.includes("Only image") ||
     msg.includes("too large") ||
     msg.startsWith("Upload failed:") ||
-    msg.includes("Unexpected field")
+    msg.includes("Unexpected field") ||
+    msg.includes("Cloudinary upload is not configured") ||
+    lower.includes("cloudinary") ||
+    lower.includes("api key") ||
+    lower.includes("invalid signature") ||
+    lower.includes("unauthorized") ||
+    lower.includes("must supply api_key")
   );
 }
 

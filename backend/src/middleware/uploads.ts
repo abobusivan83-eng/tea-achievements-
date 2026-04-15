@@ -99,9 +99,13 @@ let cloudinaryReady = false;
 function ensureCloudinaryConfigured() {
   if (cloudinaryReady) return true;
   if (env.CLOUDINARY_URL) {
-    cloudinary.config({ cloudinary_url: env.CLOUDINARY_URL });
-    cloudinaryReady = true;
-    return true;
+    cloudinary.config(env.CLOUDINARY_URL);
+    const cfg = cloudinary.config();
+    if (cfg.cloud_name && cfg.api_key && cfg.api_secret) {
+      cloudinaryReady = true;
+      return true;
+    }
+    return false;
   }
   if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
     cloudinary.config({
@@ -135,7 +139,9 @@ const TASK_MEDIA_LIMIT_BYTES = 100 * 1024 * 1024;
 
 export const taskSubmissionUpload: RequestHandler = (req, res, next) => {
   if (!ensureCloudinaryConfigured()) {
-    return next(new Error("Cloudinary is not configured"));
+    const err = new Error("Cloudinary upload is not configured") as Error & { status?: number };
+    err.status = 503;
+    return next(err);
   }
   const uploader = multer({
     storage: taskSubmissionCloudinaryStorage(),
