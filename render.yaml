@@ -16,7 +16,7 @@ services:
     rootDir: backend
     buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npm start
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
     envVars:
       - key: NODE_VERSION
         value: "22.12.0"
@@ -30,6 +30,14 @@ services:
         generateValue: true
       - key: FRONTEND_ORIGIN
         sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: REQUEST_TIMEOUT_MS
+        value: "20000"
+      - key: SLOW_REQUEST_MS
+        value: "800"
+      - key: PRISMA_SLOW_QUERY_MS
+        value: "300"
       - key: STAGING_ACCESS_TOKEN
         generateValue: true
 
@@ -42,7 +50,7 @@ services:
     rootDir: backend
     buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npm start
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
     envVars:
       - key: NODE_VERSION
         value: "22.12.0"
@@ -56,3 +64,11 @@ services:
         generateValue: true
       - key: FRONTEND_ORIGIN
         sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: REQUEST_TIMEOUT_MS
+        value: "20000"
+      - key: SLOW_REQUEST_MS
+        value: "800"
+      - key: PRISMA_SLOW_QUERY_MS
+        value: "300"

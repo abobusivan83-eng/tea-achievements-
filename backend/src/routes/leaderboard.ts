@@ -5,6 +5,7 @@ import { ok } from "../lib/http.js";
 import { resolveStoredMediaUrl } from "../lib/storedMediaUrl.js";
 import { levelFromXp } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
+import { getCachedLeaderboard, setCachedLeaderboard } from "../lib/cache.js";
 
 export const leaderboardRouter = Router();
 
@@ -22,6 +23,9 @@ type LeaderboardAggRow = {
 };
 
 leaderboardRouter.get("/", requireAuth, async (_req, res) => {
+  const cached = getCachedLeaderboard<ReturnType<typeof attachPublicIds>>();
+  if (cached) return ok(res, cached);
+
   const rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
     SELECT
       u.id,
@@ -65,5 +69,6 @@ leaderboardRouter.get("/", requireAuth, async (_req, res) => {
     };
   });
 
+  setCachedLeaderboard(mapped);
   return ok(res, mapped);
 });

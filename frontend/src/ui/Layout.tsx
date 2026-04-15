@@ -14,7 +14,6 @@ import {
   FiUser,
 } from "react-icons/fi";
 import { Toasts } from "./Toasts";
-import { LoadingOverlay } from "./components/LoadingOverlay";
 import { Scene, type SceneId } from "./components/Scene";
 import { apiFetch, apiJson, apiUploadMany } from "../lib/api";
 import type { AdminAuditLogRow, LeaderboardRow, Notification, Report, Suggestion } from "../lib/types";
@@ -31,6 +30,7 @@ export function Layout(props: { children: ReactNode }) {
   const [logs, setLogs] = useState<AdminAuditLogRow[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationUnread, setNotificationUnread] = useState(0);
   const [mySuggestions, setMySuggestions] = useState<Suggestion[]>([]);
   const [myReports, setMyReports] = useState<Report[]>([]);
   const [reportUsers, setReportUsers] = useState<LeaderboardRow[]>([]);
@@ -44,8 +44,9 @@ export function Layout(props: { children: ReactNode }) {
   const [giftUnread, setGiftUnread] = useState(0);
   const play = useSound((s) => s.play);
   const toast = useToasts((s) => s.push);
+  const silentApiFetch = <T,>(path: string) => apiFetch<T>(path, { silent: true });
 
-  const unreadCount = notifications.filter((item) => !item.isRead).length;
+  const unreadCount = notificationUnread;
 
   function formatNotificationText(text: string) {
     // Hide internal coin marker lines from the UI (coins are still computed on the backend).
@@ -60,18 +61,29 @@ export function Layout(props: { children: ReactNode }) {
   async function refreshNotificationCenter() {
     if (!me) return;
     const [notificationItems, suggestionItems, reportItems] = await Promise.all([
-      apiFetch<Notification[]>("/api/support/notifications?take=50"),
-      apiFetch<Suggestion[]>("/api/support/suggestions/mine"),
-      apiFetch<Report[]>("/api/support/reports/mine"),
+      silentApiFetch<Notification[]>("/api/support/notifications?take=50"),
+      silentApiFetch<Suggestion[]>("/api/support/suggestions/mine"),
+      silentApiFetch<Report[]>("/api/support/reports/mine"),
     ]);
     setNotifications(notificationItems);
+    setNotificationUnread(notificationItems.filter((item) => !item.isRead).length);
     setMySuggestions(suggestionItems);
     setMyReports(reportItems);
   }
 
   async function markNotificationRead(id: string) {
     await apiJson(`/api/support/notifications/${id}/read`, {}, "PATCH");
-    setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, isRead: true } : item)));
+    let unreadDelta = 0;
+    setNotifications((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (!item.isRead) unreadDelta = -1;
+        return { ...item, isRead: true };
+      }),
+    );
+    if (unreadDelta !== 0) {
+      setNotificationUnread((prev) => Math.max(0, prev + unreadDelta));
+    }
   }
 
   useEffect(() => {
@@ -116,16 +128,19 @@ export function Layout(props: { children: ReactNode }) {
     async function run() {
       if (!me) return;
       try {
-        const items = await apiFetch<Notification[]>("/api/support/notifications?take=50");
+        const r = await silentApiFetch<{ count: number }>("/api/support/notifications/unread-count");
         if (!mounted) return;
-        setNotifications(items);
+        setNotificationUnread(r.count ?? 0);
       } catch {
         if (!mounted) return;
-        setNotifications([]);
+        setNotificationUnread(0);
       }
     }
     run();
-    const id = window.setInterval(run, 15000);
+    const id = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void run();
+    }, 20_000);
     return () => {
       mounted = false;
       window.clearInterval(id);
@@ -135,12 +150,13 @@ export function Layout(props: { children: ReactNode }) {
   useEffect(() => {
     if (!me) {
       setGiftUnread(0);
+      setNotificationUnread(0);
       return;
     }
     let mounted = true;
     async function run() {
       try {
-        const r = await apiFetch<{ count: number }>("/api/gifts/unread-count");
+        const r = await silentApiFetch<{ count: number }>("/api/gifts/unread-count");
         if (!mounted) return;
         setGiftUnread(r.count ?? 0);
       } catch {
@@ -148,7 +164,10 @@ export function Layout(props: { children: ReactNode }) {
       }
     }
     run();
-    const id = window.setInterval(run, 15000);
+    const id = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void run();
+    }, 20_000);
     return () => {
       mounted = false;
       window.clearInterval(id);
@@ -183,7 +202,6 @@ export function Layout(props: { children: ReactNode }) {
   return (
     <Scene id={scene}>
       <Toasts />
-      <LoadingOverlay />
       <header className="navbar">
         <div className="nav-container">
           <Link to="/" className="nav-brand flex items-center gap-2">
@@ -361,6 +379,7 @@ export function Layout(props: { children: ReactNode }) {
                     try {
                       await apiJson("/api/support/notifications/read-all", {}, "PATCH");
                       await refreshNotificationCenter();
+                      setNotificationUnread(0);
                       toast({ kind: "success", title: "Уведомления отмечены как прочитанные" });
                     } catch (e: any) {
                       toast({ kind: "error", title: "Не удалось обновить уведомления", message: e?.message ?? "Ошибка" });
@@ -469,7 +488,7 @@ export function Layout(props: { children: ReactNode }) {
       <main className="mx-auto max-w-6xl px-4 py-6">{props.children}</main>
 
       <footer className="mx-auto max-w-6xl px-4 py-10 text-xs text-steam-muted">
-        Чайные достижения. Закрытое бета-тестирование клановой системы достижений на базе Express, Prisma и Vite.
+        Чайные достижения. Клановая система прогресса на базе Express, Prisma и Vite.
       </footer>
 
       {suggestOpen ? (

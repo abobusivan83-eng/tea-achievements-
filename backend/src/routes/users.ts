@@ -10,6 +10,7 @@ import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { resolveStoredMediaUrl } from "../lib/storedMediaUrl.js";
 import { levelFromXp } from "../lib/levels.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
+import { invalidateLeaderboardCache, invalidateUserProfileCache, getCachedUserProfile, setCachedUserProfile } from "../lib/cache.js";
 import {
   ADMIN_BADGE_KEYS,
   canUseFrameKey,
@@ -102,6 +103,8 @@ usersRouter.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
       unlockedStatusesJson: true,
     },
   });
+  invalidateUserProfileCache(req.user!.id);
+  invalidateLeaderboardCache();
   return ok(res, {
     ...user,
     unlockedFrames: parseJsonStringArray(user.unlockedFramesJson),
@@ -125,6 +128,7 @@ usersRouter.post(
       data: { avatarPath: relPath, avatarUrl: publicUrl },
       select: { id: true, avatarUrl: true, avatarPath: true },
     });
+    invalidateUserProfileCache(req.user!.id);
     return ok(res, { avatarUrl: resolveStoredMediaUrl(user.avatarUrl, user.avatarPath) });
   },
 );
@@ -145,6 +149,7 @@ usersRouter.post(
       data: { bannerPath: relPath, bannerUrl: publicUrl },
       select: { id: true, bannerUrl: true, bannerPath: true },
     });
+    invalidateUserProfileCache(req.user!.id);
     return ok(res, { bannerUrl: resolveStoredMediaUrl(user.bannerUrl, user.bannerPath) });
   },
 );
@@ -156,30 +161,15 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
 
   const targetId = idParsed.data;
   const viewerId = req.user!.id;
-
-  // Determine which achievements are visible to the viewer for this target user.
-  // Public achievements are visible to everyone. Private achievements are visible only if access exists for that target user.
-  const visibleAchievements = await prisma.achievement.findMany({
-    where: {
-      OR: [
-        { isPublic: true },
-        { isPublic: false, accessGrants: { some: { userId: targetId } } },
-      ],
-    },
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      rarity: true,
-      points: true,
-      iconPath: true,
-      frameKey: true,
-      isPublic: true,
-      createdAt: true,
-      awards: { where: { userId: targetId }, select: { awardedAt: true } },
-    },
-    orderBy: [{ rarity: "asc" }, { createdAt: "desc" }],
-  });
+  const canBypassBlocked = viewerId === targetId || req.user!.role === "ADMIN";
+  const cached = getCachedUserProfile<{
+    user: { blocked: boolean };
+    achievements: unknown;
+  }>(targetId);
+  if (cached) {
+    if (cached.user.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
+    return ok(res, cached);
+  }
 
   const target = await prisma.user.findUnique({
     where: { id: targetId },
@@ -201,7 +191,35 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     },
   });
   if (!target) return fail(res, 404, "User not found");
-  if (target.blocked && viewerId !== targetId && req.user!.role !== "ADMIN") return fail(res, 403, "User blocked");
+  if (target.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
+
+  // Determine which achievements are visible to the viewer for this target user.
+  // Public achievements are visible to everyone. Private achievements are visible only if access exists for that target user.
+  const [visibleAchievements, totalUsers, publicId] = await Promise.all([
+    prisma.achievement.findMany({
+      where: {
+        OR: [
+          { isPublic: true },
+          { isPublic: false, accessGrants: { some: { userId: targetId } } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        rarity: true,
+        points: true,
+        iconPath: true,
+        frameKey: true,
+        isPublic: true,
+        createdAt: true,
+        awards: { where: { userId: targetId }, select: { awardedAt: true } },
+      },
+      orderBy: [{ rarity: "asc" }, { createdAt: "desc" }],
+    }),
+    prisma.user.count(),
+    computeUserPublicId(prisma as any, target.id),
+  ]);
 
   const earned = visibleAchievements
     .filter((a) => a.awards.length > 0)
@@ -211,7 +229,6 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
       awardedAt: a.awards[0]!.awardedAt,
     }));
 
-  const totalUsers = await prisma.user.count();
   const earnedIds = earned.map((x) => x.id);
   const usageRows = earnedIds.length
     ? await prisma.userAchievement.groupBy({
@@ -230,16 +247,18 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     .filter((a) => a.awards.length === 0)
     .map((a) => ({ ...a, iconUrl: toPublicFileUrl(a.iconPath) }));
 
-  return ok(res, {
+  const payload = {
     user: {
       ...target,
-      publicId: await computeUserPublicId(prisma as any, target.id),
+      publicId,
       level: levelFromXp(target.xp).level,
       avatarUrl: resolveStoredMediaUrl(target.avatarUrl, target.avatarPath),
       bannerUrl: resolveStoredMediaUrl(target.bannerUrl, target.bannerPath),
       badges: (target.badgesJson as unknown as string[] | null) ?? [],
     },
     achievements: { earned: earnedWithShare, locked },
-  });
+  };
+  setCachedUserProfile(targetId, payload);
+  return ok(res, payload);
 });
 

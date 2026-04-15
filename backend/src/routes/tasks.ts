@@ -8,6 +8,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { upload } from "../middleware/uploads.js";
 import { env } from "../lib/env.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
+import { getCachedTasksList, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
@@ -37,6 +38,9 @@ function taskListWhere(userId: string, now: Date): Prisma.TaskWhereInput {
 
 // List is shared by all users; `submissions` are filtered by req.user so completion is per account.
 tasksRouter.get("/", async (req: AuthedRequest, res) => {
+  const cached = getCachedTasksList<unknown[]>(req.user!.id);
+  if (cached) return ok(res, cached);
+
   const now = new Date();
   const rows = await prisma.task.findMany({
     where: taskListWhere(req.user!.id, now),
@@ -86,9 +90,7 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
     },
   });
 
-  return ok(
-    res,
-    rows.map((t) => {
+  const payload = rows.map((t) => {
       const sub = t.submissions[0] ?? null;
       return {
         id: t.id,
@@ -129,8 +131,9 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
             }
           : null,
       };
-    }),
-  );
+    });
+  setCachedTasksList(req.user!.id, payload);
+  return ok(res, payload);
 });
 
 tasksRouter.post("/:taskId/submit", upload.array("files", 8), async (req: AuthedRequest, res) => {
@@ -184,6 +187,7 @@ tasksRouter.post("/:taskId/submit", upload.array("files", 8), async (req: Authed
       evidenceJson: true,
     },
   });
+  invalidateTasksListCache(req.user!.id);
 
   return ok(res, {
     ...created,

@@ -9,6 +9,7 @@ import { Skeleton } from "../ui/components/Skeleton";
 import { TaskQuestCard, type TaskQuestCardVariant } from "../ui/components/TaskQuestCard";
 import { FiCheckCircle, FiCheckSquare } from "react-icons/fi";
 import { useToasts } from "../state/toasts";
+import { getStoredAuthToken } from "../lib/authStorage";
 
 type TasksTab = "available" | "completed";
 
@@ -95,7 +96,7 @@ export function TasksPage() {
   }
 
   async function submit(taskId: string) {
-    const token = localStorage.getItem("token");
+    const token = getStoredAuthToken();
     const form = new FormData();
     form.append("message", message.trim());
     files.forEach((f) => form.append("files", f));

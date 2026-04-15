@@ -123,7 +123,7 @@ export const badgeCatalog: BadgeDef[] = [
   { key: "strategist", label: "Стратег", icon: "♟️", rarity: "rare", description: "Для тех, кто играет с холодной головой." },
   { key: "night-ops", label: "Ночной рейд", icon: "🌙", rarity: "common", description: "Знак участника поздних клановых вылазок." },
   { key: "tea-lord", label: "Чайный лорд", icon: "🫖", rarity: "legendary", description: "Фирменный клановый знак для самых заметных участников." },
-  { key: "beta-scout", label: "Бета-скаут", icon: "🧪", rarity: "common", description: "Памятный знак участника закрытого тестирования." },
+  { key: "beta-scout", label: "Скаут клана", icon: "🧪", rarity: "common", description: "Памятный знак активного исследователя клановой системы." },
   { key: "admin-command", label: "Командование", icon: "🧿", rarity: "secret", description: "Закрытый знак админской панели.", adminOnly: true },
 ];
 

@@ -2,12 +2,14 @@ import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import { randomUUID } from "crypto";
 import compression from "compression";
 import morgan from "morgan";
 import helmet from "helmet";
 import { env } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
 import { mapErrorToResponse } from "./lib/mapErrorResponse.js";
+import { prisma } from "./lib/prisma.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
 import { achievementsRouter } from "./routes/achievements.js";
@@ -24,6 +26,11 @@ import { requireStagingAccess } from "./middleware/stagingAccess.js";
 
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
+
+const corsOrigins = (env.CORS_ORIGINS ?? env.FRONTEND_ORIGIN)
+  .split(",")
+  .map((x) => x.trim())
+  .filter(Boolean);
 
 app.use(
   helmet({
@@ -45,13 +52,10 @@ app.use(
 // НАСТРОЙКА CORS: Разрешаем доступ вашему сайту на Vercel
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://tea-achievements.vercel.app"
-    ],
+    origin: corsOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id", "Idempotency-Key"],
   }),
 );
 
@@ -62,6 +66,28 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+
+app.use((req, res, next) => {
+  const reqId = String(req.headers["x-request-id"] ?? randomUUID());
+  res.setHeader("X-Request-Id", reqId);
+  const started = Date.now();
+  req.setTimeout(env.REQUEST_TIMEOUT_MS);
+  res.setTimeout(env.REQUEST_TIMEOUT_MS);
+  res.on("finish", () => {
+    if (req.path === "/api/health" || req.path === "/api/ready") return;
+    const elapsedMs = Date.now() - started;
+    if (elapsedMs >= env.SLOW_REQUEST_MS) {
+      logger.warn("slow_http_request", {
+        reqId,
+        method: req.method,
+        path: req.originalUrl,
+        status: res.statusCode,
+        elapsedMs,
+      });
+    }
+  });
+  next();
+});
 
 // Статика загрузок
 app.use(
@@ -76,6 +102,15 @@ app.use(
 );
 
 app.get("/api/health", (_req, res) => ok(res, { status: "ok", env: env.APP_ENV, apiUrl: env.API_URL }));
+app.get("/api/ready", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return ok(res, { status: "ready" });
+  } catch (e: unknown) {
+    logger.error("readiness_failed", { err: e instanceof Error ? e.message : String(e) });
+    return fail(res, 503, "Service unavailable");
+  }
+});
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/achievements", achievementsRouter);
@@ -104,7 +139,7 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
 });
 
 const port = Number(process.env.PORT) || 3000;
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
   if (process.env.RENDER === "true") {
     console.warn(
@@ -114,3 +149,5 @@ app.listen(port, () => {
   startTelegramLongPolling();
   startRegistrationOtpCleanup();
 });
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;

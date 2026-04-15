@@ -1264,26 +1264,35 @@ export function AdminPage() {
           <div className="mb-4">
             <Button
               onClick={async () => {
-                await apiJson("/api/admin/tasks", {
-                  title: taskTitle,
-                  description: taskDesc,
-                  conditions: taskConditions,
-                  rewardCoins: taskRewardCoins,
-                  achievementId: taskAchievementId,
-                  isEvent: taskIsEvent,
-                  startsAt: taskStartsAt ? new Date(taskStartsAt).toISOString() : null,
-                  endsAt: taskEndsAt ? new Date(taskEndsAt).toISOString() : null,
-                });
-                setTaskTitle("");
-                setTaskDesc("");
-                setTaskConditions("");
-                setTaskAchievementId("");
-                setTaskRewardCoins(0);
-                setTaskIsEvent(false);
-                setTaskStartsAt("");
-                setTaskEndsAt("");
-                await refreshTasks();
-                toast({ kind: "success", title: "Задание добавлено" });
+                if (!taskAchievementId) {
+                  setError("Выберите связанное достижение для задания");
+                  return;
+                }
+                try {
+                  await apiJson("/api/admin/tasks", {
+                    title: taskTitle,
+                    description: taskDesc,
+                    conditions: taskConditions,
+                    rewardCoins: taskRewardCoins,
+                    achievementId: taskAchievementId,
+                    isEvent: taskIsEvent,
+                    startsAt: taskStartsAt ? new Date(taskStartsAt).toISOString() : null,
+                    endsAt: taskEndsAt ? new Date(taskEndsAt).toISOString() : null,
+                  });
+                  setTaskTitle("");
+                  setTaskDesc("");
+                  setTaskConditions("");
+                  setTaskAchievementId("");
+                  setTaskRewardCoins(0);
+                  setTaskIsEvent(false);
+                  setTaskStartsAt("");
+                  setTaskEndsAt("");
+                  await refreshTasks();
+                  toast({ kind: "success", title: "Задание добавлено" });
+                } catch (e: any) {
+                  setError(e?.message ?? "Ошибка создания задания");
+                  toast({ kind: "error", title: "Не удалось создать задание", message: e?.message ?? "Ошибка" });
+                }
               }}
             >
               Добавить задание

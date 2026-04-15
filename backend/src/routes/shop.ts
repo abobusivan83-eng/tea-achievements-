@@ -5,7 +5,16 @@ import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getCoinBonus } from "../lib/coins.js";
 import { parseJsonStringArray } from "../lib/cosmeticsAccess.js";
-import { getCachedShopItems, invalidateShopItemsCache, setCachedShopItems } from "../lib/cache.js";
+import {
+  getCachedShopItems,
+  getCachedShopMe,
+  invalidateLeaderboardCache,
+  invalidateShopItemsCache,
+  invalidateShopMeCache,
+  invalidateUserProfileCache,
+  setCachedShopItems,
+  setCachedShopMe,
+} from "../lib/cache.js";
 
 export const shopRouter = Router();
 shopRouter.use(requireAuth);
@@ -29,6 +38,9 @@ shopRouter.get("/items", async (_req, res) => {
 });
 
 shopRouter.get("/me", async (req: AuthedRequest, res) => {
+  const cached = getCachedShopMe<unknown>(req.user!.id);
+  if (cached) return ok(res, cached);
+
   const [purchases, bonus, userRow] = await Promise.all([
     prisma.shopPurchase.findMany({
       where: { userId: req.user!.id },
@@ -43,7 +55,7 @@ shopRouter.get("/me", async (req: AuthedRequest, res) => {
   ]);
   const spent = purchases.reduce((s, p) => s + p.item.price, 0);
   const coins = Math.max(0, bonus - spent);
-  return ok(res, {
+  const payload = {
     purchasedItemIds: purchases.map((p) => p.itemId),
     purchasedItems: purchases.map((p) => ({ id: p.itemId, key: p.item.key, type: p.item.type })),
     coins,
@@ -52,7 +64,9 @@ shopRouter.get("/me", async (req: AuthedRequest, res) => {
     bonusCoins: bonus,
     unlockedFrames: parseJsonStringArray(userRow?.unlockedFramesJson),
     unlockedStatuses: parseJsonStringArray(userRow?.unlockedStatusesJson),
-  });
+  };
+  setCachedShopMe(req.user!.id, payload);
+  return ok(res, payload);
 });
 
 const BuySchema = z.object({
@@ -136,5 +150,8 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
   }
 
   invalidateShopItemsCache();
+  invalidateShopMeCache(req.user!.id);
+  invalidateUserProfileCache(req.user!.id);
+  invalidateLeaderboardCache();
   return ok(res, { purchased: true });
 });

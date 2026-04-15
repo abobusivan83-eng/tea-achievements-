@@ -6,6 +6,7 @@ import { Button } from "../ui/components/Button";
 import { FiShoppingBag, FiStar, FiZap } from "react-icons/fi";
 import clsx from "clsx";
 import { AvatarFrame } from "../ui/components/AvatarFrame";
+import { Skeleton } from "../ui/components/Skeleton";
 
 function rarityLabel(r: Rarity) {
   switch (r) {
@@ -193,7 +194,28 @@ export function ShopPage() {
         </div>
       </Reveal>
 
-      {loading ? <div className="steam-card p-4">Загрузка…</div> : null}
+      {loading ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="steam-card p-4">
+              <div className="grid gap-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-12 w-12 rounded-xl" />
+                  <div className="grid flex-1 gap-2">
+                    <Skeleton className="h-4 w-2/3 rounded-md" />
+                    <Skeleton className="h-3 w-5/6 rounded-md" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {error ? <div className="steam-card p-4">{error}</div> : null}
 
       <div className="grid gap-5 xl:grid-cols-[1.05fr_1.15fr]">

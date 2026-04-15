@@ -7,6 +7,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { upload } from "../middleware/uploads.js";
 import { env } from "../lib/env.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
+import { getCachedSupportUnreadCount, invalidateSupportUnreadCountCache, setCachedSupportUnreadCount } from "../lib/cache.js";
 
 export const supportRouter = Router();
 
@@ -69,6 +70,7 @@ supportRouter.post("/suggestions", async (req: AuthedRequest, res) => {
       userId: null,
     },
   });
+  invalidateSupportUnreadCountCache();
 
   const parsedDesc = parseRichDescription(s.description);
   return ok(res, { ...s, description: parsedDesc.text, images: parsedDesc.images });
@@ -128,6 +130,7 @@ supportRouter.post("/reports", async (req: AuthedRequest, res) => {
       userId: null,
     },
   });
+  invalidateSupportUnreadCountCache();
 
   const parsedDesc = parseRichDescription(r.description);
   return ok(res, { ...r, description: parsedDesc.text, images: parsedDesc.images });
@@ -231,6 +234,17 @@ supportRouter.get("/notifications", async (req: AuthedRequest, res) => {
   return ok(res, items);
 });
 
+supportRouter.get("/notifications/unread-count", async (req: AuthedRequest, res) => {
+  const cacheKey = req.user!.role === "ADMIN" ? "admin" : req.user!.id;
+  const cached = getCachedSupportUnreadCount(cacheKey);
+  if (cached !== undefined) return ok(res, { count: cached });
+
+  const where = req.user!.role === "ADMIN" ? { isRead: false } : { OR: [{ userId: null }, { userId: req.user!.id }], isRead: false };
+  const count = await prisma.notification.count({ where });
+  setCachedSupportUnreadCount(cacheKey, count);
+  return ok(res, { count });
+});
+
 supportRouter.patch("/notifications/:id/read", async (req: AuthedRequest, res) => {
   const item = await prisma.notification.findUnique({
     where: { id: req.params.id },
@@ -246,6 +260,7 @@ supportRouter.patch("/notifications/:id/read", async (req: AuthedRequest, res) =
     data: { isRead: true },
     select: { id: true, isRead: true },
   });
+  invalidateSupportUnreadCountCache();
   return ok(res, updated);
 });
 
@@ -257,6 +272,7 @@ supportRouter.patch("/notifications/read-all", async (req: AuthedRequest, res) =
     },
     data: { isRead: true },
   });
+  invalidateSupportUnreadCountCache();
   return ok(res, { updated: true });
 });
 

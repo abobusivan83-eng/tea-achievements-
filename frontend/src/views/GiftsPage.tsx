@@ -5,6 +5,7 @@ import { Reveal } from "../ui/components/Reveal";
 import { Button } from "../ui/components/Button";
 import { FiGift } from "react-icons/fi";
 import { useAuth } from "../state/auth";
+import { Skeleton } from "../ui/components/Skeleton";
 
 export function GiftsPage() {
   const me = useAuth((s) => s.me);
@@ -17,6 +18,7 @@ export function GiftsPage() {
   const [outbox, setOutbox] = useState<GiftOutboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sendBusy, setSendBusy] = useState(false);
   const markedViewedRef = useRef(false);
 
   async function refresh() {
@@ -80,7 +82,33 @@ export function GiftsPage() {
         </div>
       </Reveal>
 
-      {loading ? <div className="steam-card p-4">Загрузка…</div> : null}
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="steam-card p-4">
+            <div className="grid gap-3">
+              <Skeleton className="h-4 w-40 rounded-md" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-10 w-32 rounded-lg" />
+            </div>
+          </div>
+          <div className="steam-card p-4">
+            <div className="grid gap-3">
+              <Skeleton className="h-4 w-28 rounded-md" />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="grid gap-2">
+                    <Skeleton className="h-4 w-2/3 rounded-md" />
+                    <Skeleton className="h-3 w-full rounded-md" />
+                    <Skeleton className="h-3 w-1/2 rounded-md" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {error ? <div className="steam-card p-4">{error}</div> : null}
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -132,16 +160,30 @@ export function GiftsPage() {
             <div className="flex justify-end">
               <Button
                 variant="primary"
+                loading={sendBusy}
+                disabled={!toUserId || xpAmount < 1 || sendBusy}
                 onClick={async () => {
-                  const idem = crypto.randomUUID();
-                  await apiJson(
-                    "/api/gifts/send",
-                    { toUserId, xpAmount, message },
-                    "POST",
-                    { "Idempotency-Key": idem },
-                  );
-                  setMessage("");
-                  await refresh();
+                  if (!toUserId) {
+                    setError("Выберите получателя подарка");
+                    return;
+                  }
+                  setError(null);
+                  setSendBusy(true);
+                  try {
+                    const idem = crypto.randomUUID();
+                    await apiJson(
+                      "/api/gifts/send",
+                      { toUserId, xpAmount, message },
+                      "POST",
+                      { "Idempotency-Key": idem },
+                    );
+                    setMessage("");
+                    await refresh();
+                  } catch (e: any) {
+                    setError(e?.message ?? "Не удалось отправить подарок");
+                  } finally {
+                    setSendBusy(false);
+                  }
                 }}
               >
                 🎁 Отправить

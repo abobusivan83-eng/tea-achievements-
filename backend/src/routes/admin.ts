@@ -968,6 +968,16 @@ adminRouter.post("/tasks", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
   const parsed = CreateTaskSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
+  const startsAt = parsed.data.startsAt ? new Date(parsed.data.startsAt) : null;
+  const endsAt = parsed.data.endsAt ? new Date(parsed.data.endsAt) : null;
+  if (startsAt && endsAt && startsAt > endsAt) {
+    return fail(res, 400, "Дата окончания не может быть раньше даты начала");
+  }
+  const achievementExists = await prisma.achievement.findUnique({
+    where: { id: parsed.data.achievementId },
+    select: { id: true },
+  });
+  if (!achievementExists) return fail(res, 400, "Связанное достижение не найдено");
   const created = await prisma.task.create({
     data: {
       title: parsed.data.title,
@@ -977,8 +987,8 @@ adminRouter.post("/tasks", async (req: AuthedRequest, res) => {
       achievementId: parsed.data.achievementId,
       isActive: parsed.data.isActive ?? true,
       isEvent: parsed.data.isEvent ?? false,
-      startsAt: parsed.data.startsAt ? new Date(parsed.data.startsAt) : null,
-      endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : null,
+      startsAt,
+      endsAt,
       styleTag: parsed.data.styleTag ?? null,
       createdById: req.user?.id ?? null,
     },

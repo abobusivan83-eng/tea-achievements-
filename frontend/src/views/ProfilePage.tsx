@@ -93,7 +93,10 @@ export function ProfilePage() {
   useEffect(() => {
     let isMounted = true;
     async function run() {
-      if (!profileUserId) return;
+      if (!profileUserId) {
+        if (isMounted) setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
@@ -105,9 +108,11 @@ export function ProfilePage() {
         setBadges(data.user.badges);
         setStatusEmoji(data.user.statusEmoji ?? null);
       } catch (e: any) {
-        setError(e?.message ?? "Ошибка загрузки профиля");
+        if (isMounted) {
+          setError(e?.message ?? "Ошибка загрузки профиля");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     run();
@@ -123,13 +128,13 @@ export function ProfilePage() {
     async function refresh() {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
-        const data = await apiFetch<ProfileResp>(`/api/users/${profileUserId}`);
+        const data = await apiFetch<ProfileResp>(`/api/users/${profileUserId}`, { silent: true });
         if (!cancelled) setProfile(data);
       } catch {
         /* оставляем предыдущее состояние */
       }
     }
-    const interval = window.setInterval(refresh, 6_000);
+    const interval = window.setInterval(refresh, 12_000);
     const onVis = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -893,10 +898,10 @@ export function ProfilePage() {
         </Reveal>
 
         <Reveal className="steam-card p-4" delay={0.06}>
-          <div className="text-sm font-semibold">Режим ЗБТ</div>
+          <div className="text-sm font-semibold">Обратная связь</div>
           <div className="mt-2 text-sm text-steam-muted">
-            Сейчас сайт готовится к закрытому бета-тестированию. Во время ЗБТ особенно полезно отправлять предложения и
-            жалобы, чтобы администрация могла быстро улучшать систему перед полноценным запуском.
+            Отправляйте предложения и жалобы через меню в шапке. Так администрация быстрее улучшает баланс, задания и
+            стабильность платформы для всего клана.
           </div>
         </Reveal>
       </div>

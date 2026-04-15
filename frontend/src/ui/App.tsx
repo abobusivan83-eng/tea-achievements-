@@ -3,36 +3,19 @@ import { useEffect } from "react";
 import { useAuth } from "../state/auth";
 import { Layout } from "./Layout";
 import { Protected, AdminOnly, PublicOnly } from "./Protected";
-import { Suspense, lazy } from "react";
 import { Scene } from "./components/Scene";
 import { AnimatePresence } from "framer-motion";
 import { PageTransition } from "./components/PageTransition";
-import { Skeleton } from "./components/Skeleton";
-
-const LoginPage = lazy(() => import("../views/LoginPage").then((m) => ({ default: m.LoginPage })));
-const RegisterPage = lazy(() => import("../views/RegisterPage").then((m) => ({ default: m.RegisterPage })));
-const ProfilePage = lazy(() => import("../views/ProfilePage").then((m) => ({ default: m.ProfilePage })));
-const AchievementsPage = lazy(() => import("../views/AchievementsPage").then((m) => ({ default: m.AchievementsPage })));
-const LeaderboardPage = lazy(() => import("../views/LeaderboardPage").then((m) => ({ default: m.LeaderboardPage })));
-const ShopPage = lazy(() => import("../views/ShopPage").then((m) => ({ default: m.ShopPage })));
-const GiftsPage = lazy(() => import("../views/GiftsPage").then((m) => ({ default: m.GiftsPage })));
-const TasksPage = lazy(() => import("../views/TasksPage").then((m) => ({ default: m.TasksPage })));
-const AdminPage = lazy(() => import("../views/AdminPage").then((m) => ({ default: m.AdminPage })));
-const NotFoundPage = lazy(() => import("../views/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
-
-function RouteFallback() {
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="steam-card p-4">
-        <div className="grid gap-3">
-          <Skeleton className="h-5 w-44 rounded-md" />
-          <Skeleton className="h-3 w-72 rounded-md" />
-          <Skeleton className="h-3 w-64 rounded-md" />
-        </div>
-      </div>
-    </div>
-  );
-}
+import { LoginPage } from "../views/LoginPage";
+import { RegisterPage } from "../views/RegisterPage";
+import { ProfilePage } from "../views/ProfilePage";
+import { AchievementsPage } from "../views/AchievementsPage";
+import { LeaderboardPage } from "../views/LeaderboardPage";
+import { ShopPage } from "../views/ShopPage";
+import { GiftsPage } from "../views/GiftsPage";
+import { TasksPage } from "../views/TasksPage";
+import { AdminPage } from "../views/AdminPage";
+import { NotFoundPage } from "../views/NotFoundPage";
 
 export function App() {
   const hydrate = useAuth((s) => s.hydrate);
@@ -54,9 +37,7 @@ export function App() {
             <PublicOnly>
               <PageTransition>
                 <Scene id="auth">
-                  <Suspense fallback={<RouteFallback />}>
-                    <LoginPage />
-                  </Suspense>
+                  <LoginPage />
                 </Scene>
               </PageTransition>
             </PublicOnly>
@@ -68,9 +49,7 @@ export function App() {
             <PublicOnly>
               <PageTransition>
                 <Scene id="auth">
-                  <Suspense fallback={<RouteFallback />}>
-                    <RegisterPage />
-                  </Suspense>
+                  <RegisterPage />
                 </Scene>
               </PageTransition>
             </PublicOnly>
@@ -96,9 +75,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <ProfilePage />
-                  </Suspense>
+                  <ProfilePage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -110,9 +87,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <ProfilePage />
-                  </Suspense>
+                  <ProfilePage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -125,9 +100,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <AchievementsPage />
-                  </Suspense>
+                  <AchievementsPage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -140,9 +113,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <LeaderboardPage />
-                  </Suspense>
+                  <LeaderboardPage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -155,9 +126,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <ShopPage />
-                  </Suspense>
+                  <ShopPage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -170,9 +139,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <GiftsPage />
-                  </Suspense>
+                  <GiftsPage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -185,9 +152,7 @@ export function App() {
             <Protected>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <TasksPage />
-                  </Suspense>
+                  <TasksPage />
                 </PageTransition>
               </Layout>
             </Protected>
@@ -200,9 +165,7 @@ export function App() {
             <AdminOnly>
               <Layout>
                 <PageTransition>
-                  <Suspense fallback={<RouteFallback />}>
-                    <AdminPage />
-                  </Suspense>
+                  <AdminPage />
                 </PageTransition>
               </Layout>
             </AdminOnly>
@@ -215,15 +178,11 @@ export function App() {
             <PageTransition>
               {isReady && me ? (
                 <Layout>
-                  <Suspense fallback={<RouteFallback />}>
-                    <NotFoundPage />
-                  </Suspense>
+                  <NotFoundPage />
                 </Layout>
               ) : (
                 <Scene id="default">
-                  <Suspense fallback={<RouteFallback />}>
-                    <NotFoundPage />
-                  </Suspense>
+                  <NotFoundPage />
                 </Scene>
               )}
             </PageTransition>

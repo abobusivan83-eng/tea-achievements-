@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getUserCoins } from "../lib/coins.js";
+import { getCachedGiftsUnreadCount, invalidateGiftsUnreadCountCache, invalidateShopMeCache, setCachedGiftsUnreadCount } from "../lib/cache.js";
 
 export const giftsRouter = Router();
 giftsRouter.use(requireAuth);
@@ -53,9 +54,13 @@ giftsRouter.get("/list", async (req: AuthedRequest, res) => {
 });
 
 giftsRouter.get("/unread-count", async (req: AuthedRequest, res) => {
+  const cached = getCachedGiftsUnreadCount(req.user!.id);
+  if (cached !== undefined) return ok(res, { count: cached });
+
   const count = await prisma.gift.count({
     where: { toUserId: req.user!.id, receiverViewedAt: null },
   });
+  setCachedGiftsUnreadCount(req.user!.id, count);
   return ok(res, { count });
 });
 
@@ -181,26 +186,34 @@ giftsRouter.post("/send", async (req: AuthedRequest, res) => {
         return { kind: "created" as const, giftId: gift.id };
       },
       {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        maxWait: 5000,
-        timeout: 12_000,
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        maxWait: 3500,
+        timeout: 10_000,
       },
     );
 
     if (result.kind === "replay") {
       return ok(res, { sent: true, giftId: result.giftId, idempotentReplay: true });
     }
+    invalidateShopMeCache(from.id);
+    invalidateShopMeCache(to.id);
+    invalidateGiftsUnreadCountCache(to.id);
     return ok(res, { sent: true, giftId: result.giftId, idempotentReplay: false });
   } catch (e: unknown) {
     const msgErr = e instanceof Error ? e.message : "";
     if (msgErr === "INSUFFICIENT") return fail(res, 400, "Not enough coins");
     if (msgErr === "RATE_LIMIT") return fail(res, 429, "Too many gifts, try again shortly");
+    if (msgErr === "Transaction already closed") return fail(res, 503, "Service busy, please retry");
     if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2034") {
       const replay = await prisma.giftSendRequest.findUnique({
         where: { senderId_idempotencyKey: { senderId: req.user!.id, idempotencyKey } },
         select: { giftId: true },
       });
       if (replay) return ok(res, { sent: true, giftId: replay.giftId, idempotentReplay: true });
+      return fail(res, 503, "Gift processing busy, retry request");
+    }
+    if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2028") {
+      return fail(res, 503, "Gift processing timeout, retry request");
     }
     throw e;
   }
@@ -230,6 +243,7 @@ giftsRouter.post("/read", async (req: AuthedRequest, res) => {
         data: { isRead: true },
       });
     });
+    invalidateGiftsUnreadCountCache(uid);
     return ok(res, { ok: true });
   }
 
@@ -253,5 +267,6 @@ giftsRouter.post("/read", async (req: AuthedRequest, res) => {
     });
   });
 
+  invalidateGiftsUnreadCountCache(uid);
   return ok(res, { ok: true });
 });

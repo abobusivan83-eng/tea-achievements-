@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { apiFetch, apiJson } from "../lib/api";
-import { setStoredTelegramLogin } from "../lib/authStorage";
+import { clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken, setStoredTelegramLogin } from "../lib/authStorage";
 import type { Me, Role } from "../lib/types";
 
 export type RegisterRequestResponse = {
@@ -26,7 +26,7 @@ type AuthState = {
 };
 
 export const useAuth = create<AuthState>((set, get) => ({
-  token: localStorage.getItem("token"),
+  token: getStoredAuthToken(),
   me: null,
   isReady: false,
 
@@ -36,7 +36,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       { login, password, rememberMe: Boolean(rememberMe) },
     );
     setStoredTelegramLogin(login);
-    localStorage.setItem("token", resp.token);
+    setStoredAuthToken(resp.token, Boolean(rememberMe));
     set({ token: resp.token });
     await get().hydrate();
   },
@@ -54,24 +54,24 @@ export const useAuth = create<AuthState>((set, get) => ({
       "/api/auth/register/verify",
       { linkToken, code, rememberMe: Boolean(rememberMe) },
     );
-    localStorage.setItem("token", resp.token);
+    setStoredAuthToken(resp.token, Boolean(rememberMe));
     set({ token: resp.token });
     await get().hydrate();
   },
 
   logout() {
-    localStorage.removeItem("token");
+    clearStoredAuthToken();
     set({ token: null, me: null, isReady: true });
   },
 
   async hydrate() {
-    const token = localStorage.getItem("token");
+    const token = getStoredAuthToken();
     if (!token) return set({ token: null, me: null, isReady: true });
     try {
       const me = await apiFetch<Me>("/api/auth/me");
       set({ token, me, isReady: true });
     } catch {
-      localStorage.removeItem("token");
+      clearStoredAuthToken();
       set({ token: null, me: null, isReady: true });
     }
   },

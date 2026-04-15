@@ -22,21 +22,26 @@ export function LeaderboardPage() {
 
   useEffect(() => {
     let mounted = true;
-    async function run() {
-      setLoading(true);
+    async function run(background = false) {
+      if (!background) {
+        setLoading(true);
+      }
       setError(null);
       try {
-        const data = await apiFetch<LeaderboardRow[]>("/api/leaderboard");
+        const data = await apiFetch<LeaderboardRow[]>("/api/leaderboard", { silent: background });
         if (!mounted) return;
         setRows(data);
       } catch (e: any) {
         setError(e?.message ?? "Ошибка загрузки рейтинга");
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted && !background) setLoading(false);
       }
     }
     run();
-    const id = setInterval(run, 12_000);
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void run(true);
+    }, 20_000);
     return () => {
       mounted = false;
       clearInterval(id);

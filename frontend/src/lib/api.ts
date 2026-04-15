@@ -1,5 +1,6 @@
 import { API_BASE_URL, STAGING_ACCESS_TOKEN } from "./config";
 import { useLoading } from "../state/loading";
+import { getStoredAuthToken } from "./authStorage";
 
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error: { message: string } };
@@ -12,19 +13,26 @@ export class ApiError extends Error {
 }
 
 function getToken() {
-  return localStorage.getItem("token");
+  return getStoredAuthToken();
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+type ApiFetchOptions = RequestInit & {
+  silent?: boolean;
+};
+
+export async function apiFetch<T>(path: string, init?: ApiFetchOptions): Promise<T> {
   const token = getToken();
-  useLoading.getState().start();
+  const { silent, ...requestInit } = init ?? {};
+  if (!silent) {
+    useLoading.getState().start();
+  }
   try {
     let res: Response;
     try {
       res = await fetch(`${API_BASE_URL}${path}`, {
-        ...init,
+        ...requestInit,
         headers: {
-          ...(init?.headers ?? {}),
+          ...(requestInit.headers ?? {}),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(STAGING_ACCESS_TOKEN ? { "x-staging-access-token": STAGING_ACCESS_TOKEN } : {}),
         },
@@ -53,7 +61,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
     return (json as ApiOk<T>).data;
   } finally {
-    useLoading.getState().end();
+    if (!silent) {
+      useLoading.getState().end();
+    }
   }
 }
 

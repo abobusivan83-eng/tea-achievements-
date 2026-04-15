@@ -36,6 +36,7 @@ const EnvSchema = z.object({
   API_URL: z.string().url().optional(),
   PUBLIC_BASE_URL: z.string().url().optional(),
   FRONTEND_ORIGIN: z.string().min(1).default("http://localhost:3000"),
+  CORS_ORIGINS: z.string().optional(),
   UPLOAD_DIR: z.string().min(1).default("uploads"),
   TRUST_PROXY: z.preprocess((val) => {
     if (val !== undefined && val !== "") return val;
@@ -47,6 +48,9 @@ const EnvSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
   /** Имя бота без @ (для ссылки t.me/...). */
   TELEGRAM_BOT_USERNAME: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+  SLOW_REQUEST_MS: z.coerce.number().int().min(50).max(60_000).default(800),
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(20_000),
+  PRISMA_SLOW_QUERY_MS: z.coerce.number().int().min(10).max(60_000).default(300),
 });
 
 const parsed = EnvSchema.parse(process.env);
