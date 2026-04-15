@@ -1,5 +1,4 @@
 const viteApi = import.meta.env.VITE_API_URL as string | undefined;
-const viteBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
 function normalizeBaseUrl(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
@@ -9,17 +8,15 @@ function normalizeBaseUrl(raw: string | undefined): string | undefined {
 }
 
 /**
- * Пустая строка после сборки = запросы на тот же origin (nginx проксирует /api и /uploads).
- * В dev Vite `import.meta.env.DEV` указывает на отдельный backend на :4000.
+ * В продакшене API URL задаётся строго через VITE_API_URL.
+ * Если переменная не задана — это ошибка конфигурации деплоя.
  */
-export const API_BASE_URL =
-  normalizeBaseUrl(viteApi) !== undefined && normalizeBaseUrl(viteApi) !== ""
-    ? (normalizeBaseUrl(viteApi) as string)
-    : normalizeBaseUrl(viteBase) !== undefined && normalizeBaseUrl(viteBase) !== ""
-      ? (normalizeBaseUrl(viteBase) as string)
-      : import.meta.env.DEV
-        ? "http://localhost:4000"
-        : "";
+export const API_BASE_URL = (() => {
+  const normalized = normalizeBaseUrl(viteApi);
+  if (normalized !== undefined && normalized !== "") return normalized as string;
+  if (import.meta.env.DEV) return "http://localhost:4000";
+  throw new Error("VITE_API_URL is required in production build");
+})();
 
 export const STAGING_ACCESS_TOKEN =
   import.meta.env.VITE_STAGING_ACCESS_TOKEN ?? "";

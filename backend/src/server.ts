@@ -27,20 +27,7 @@ import { requireStagingAccess } from "./middleware/stagingAccess.js";
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
 
-const corsOrigins = Array.from(
-  new Set(
-    [
-      "https://tea-achievements.vercel.app",
-      "http://localhost:5173",
-      env.FRONTEND_ORIGIN,
-      env.CORS_ORIGINS,
-      process.env.CORS_ORIGINS,
-    ]
-      .flatMap((v) => String(v ?? "").split(","))
-      .map((x) => x.trim())
-      .filter(Boolean),
-  ),
-);
+const corsOrigins = ["https://tea-achievements.vercel.app", "http://localhost:5173"];
 
 app.use(
   helmet({
@@ -62,14 +49,9 @@ app.use(
 // НАСТРОЙКА CORS: Разрешаем доступ вашему сайту на Vercel
 app.use(
   cors({
-    origin(origin, cb) {
-      // Allow non-browser requests (health checks, curl) without Origin.
-      if (!origin) return cb(null, true);
-      if (corsOrigins.includes(origin)) return cb(null, true);
-      return cb(null, false);
-    },
+    origin: corsOrigins,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id", "Idempotency-Key"],
   }),
 );
@@ -81,6 +63,13 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+
+// TEMP DEBUG: log Origin of every request (remove after stabilizing production).
+app.use((req, _res, next) => {
+  // eslint-disable-next-line no-console
+  console.log("[origin]", req.method, req.originalUrl, req.headers.origin ?? "(no origin)");
+  next();
+});
 
 app.use((req, res, next) => {
   const reqId = String(req.headers["x-request-id"] ?? randomUUID());
