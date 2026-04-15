@@ -27,10 +27,20 @@ import { requireStagingAccess } from "./middleware/stagingAccess.js";
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
 
-const corsOrigins = (env.CORS_ORIGINS ?? env.FRONTEND_ORIGIN)
-  .split(",")
-  .map((x) => x.trim())
-  .filter(Boolean);
+const corsOrigins = Array.from(
+  new Set(
+    [
+      "https://tea-achievements.vercel.app",
+      "http://localhost:5173",
+      env.FRONTEND_ORIGIN,
+      env.CORS_ORIGINS,
+      process.env.CORS_ORIGINS,
+    ]
+      .flatMap((v) => String(v ?? "").split(","))
+      .map((x) => x.trim())
+      .filter(Boolean),
+  ),
+);
 
 app.use(
   helmet({
@@ -101,6 +111,7 @@ app.use(
   }),
 );
 
+app.get("/", (_req, res) => res.send("Tea Cabinet API is alive!"));
 app.get("/api/health", (_req, res) => ok(res, { status: "ok", env: env.APP_ENV, apiUrl: env.API_URL }));
 app.get("/api/ready", async (_req, res) => {
   try {
