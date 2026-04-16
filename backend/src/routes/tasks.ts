@@ -11,18 +11,34 @@ import { getCachedTasksList, invalidateSupportUnreadCountCache, invalidateTasksL
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
 
-function taskListWhere(userId: string, now: Date): Prisma.TaskWhereInput {
+type TaskScheduleStatus = "UPCOMING" | "ACTIVE" | "EXPIRED";
+
+function scheduleStatusFromTime(startsAt: Date | null, endsAt: Date | null, now: Date): TaskScheduleStatus {
+  if (startsAt && now < startsAt) return "UPCOMING";
+  if (endsAt && now > endsAt) return "EXPIRED";
+  return "ACTIVE";
+}
+
+function taskListWhere(userId: string): Prisma.TaskWhereInput {
+  // List should contain scheduled tasks too; lock/unlock is handled by frontend.
   return {
     isActive: true,
     achievement: {
       OR: [{ isPublic: true }, { accessGrants: { some: { userId } } }],
     },
-    OR: [
-      { isEvent: false },
-      {
-        isEvent: true,
-        AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
-      },
+  };
+}
+
+function taskActiveWhere(userId: string, now: Date): Prisma.TaskWhereInput {
+  // For submissions we must ensure the task is currently ACTIVE by schedule.
+  return {
+    isActive: true,
+    achievement: {
+      OR: [{ isPublic: true }, { accessGrants: { some: { userId } } }],
+    },
+    AND: [
+      { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+      { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
     ],
   };
 }
@@ -34,7 +50,7 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
 
   const now = new Date();
   const rows = await prisma.task.findMany({
-    where: taskListWhere(req.user!.id, now),
+    where: taskListWhere(req.user!.id),
     orderBy: [{ isEvent: "desc" }, { createdAt: "desc" }],
     take: 200,
     select: {
@@ -121,6 +137,7 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
               reviewedByNickname: sub.reviewedBy?.nickname ?? null,
             }
           : null,
+        scheduleStatus: scheduleStatusFromTime(t.startsAt, t.endsAt, now),
       };
     });
   setCachedTasksList(req.user!.id, payload);
@@ -137,7 +154,7 @@ tasksRouter.post("/:taskId/submit", taskSubmissionUpload, async (req: AuthedRequ
 
   const now = new Date();
   const task = await prisma.task.findFirst({
-    where: { AND: [{ id: taskId }, taskListWhere(req.user!.id, now)] },
+    where: { AND: [{ id: taskId }, taskActiveWhere(req.user!.id, now)] },
     select: { id: true, title: true },
   });
   if (!task) return fail(res, 404, "Task not found or not available");

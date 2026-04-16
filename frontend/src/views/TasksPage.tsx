@@ -23,6 +23,7 @@ export function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TasksTab>("available");
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [formTaskId, setFormTaskId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -77,6 +78,12 @@ export function TasksPage() {
     return () => {
       mounted = false;
     };
+  }, []);
+
+  // Keep time-based task locks/countdowns fresh without page reload.
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 5000);
+    return () => window.clearInterval(id);
   }, []);
 
   function toggleExpand(taskId: string) {
@@ -208,6 +215,7 @@ export function TasksPage() {
               <TaskQuestCard
                 task={t}
                 variant={variant}
+                nowMs={nowMs}
                 expanded={expandedId === t.id}
                 showForm={formTaskId === t.id && expandedId === t.id}
                 onToggleExpand={() => toggleExpand(t.id)}

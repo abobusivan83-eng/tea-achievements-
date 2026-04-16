@@ -5,7 +5,7 @@ import type { Rarity, SupportStatus, TaskItem } from "../../lib/types";
 import { rarityGlowClass } from "../rarityStyles";
 import { Button } from "./Button";
 import { AchievementIcon } from "./AchievementIcon";
-import { FiAward, FiChevronDown, FiClock, FiUpload } from "react-icons/fi";
+import { FiAward, FiChevronDown, FiClock, FiLock, FiUpload } from "react-icons/fi";
 
 function statusLabel(s: SupportStatus) {
   switch (s) {
@@ -89,11 +89,36 @@ function formatDuration(seconds: number | null | undefined) {
 
 export type TaskQuestCardVariant = "available" | "completed";
 
+type TaskScheduleStatus = "UPCOMING" | "ACTIVE" | "EXPIRED";
+
+function scheduleStatusFromTime(startsAt: string | null, endsAt: string | null, nowMs: number): TaskScheduleStatus {
+  const s = startsAt ? new Date(startsAt).getTime() : null;
+  const e = endsAt ? new Date(endsAt).getTime() : null;
+  if (s !== null && nowMs < s) return "UPCOMING";
+  if (e !== null && nowMs > e) return "EXPIRED";
+  return "ACTIVE";
+}
+
+function formatUpcomingText(startsAt: string | null, nowMs: number) {
+  if (!startsAt) return "Ожидайте начала";
+  const s = new Date(startsAt).getTime();
+  const delta = s - nowMs;
+  if (!Number.isFinite(delta) || delta <= 0) return `Старт: ${new Date(startsAt).toLocaleString()}`;
+  const totalSeconds = Math.floor(delta / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `Откроется: ${new Date(startsAt).toLocaleString()}`;
+  return `Откроется через: ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function TaskQuestCard(props: {
   task: TaskItem;
   variant?: TaskQuestCardVariant;
   expanded: boolean;
   showForm: boolean;
+  nowMs: number;
   onToggleExpand: () => void;
   onOpenForm: () => void;
   message: string;
@@ -115,8 +140,14 @@ export function TaskQuestCard(props: {
   const rClass = rarityClassFrom(rarity);
   const glow = rarityGlowClass(rarity ?? "COMMON", resolved);
   const kind = taskKind(t);
+  const scheduleStatus = scheduleStatusFromTime(t.startsAt, t.endsAt, props.nowMs);
+  const scheduleLocked = scheduleStatus !== "ACTIVE";
+  const overlayAllowed = props.variant === "available" && scheduleLocked && !resolved;
+  const scheduleLockText =
+    scheduleStatus === "UPCOMING" ? formatUpcomingText(t.startsAt, props.nowMs) : scheduleStatus === "EXPIRED" ? "Ивент завершен" : "";
   const canSubmit =
     variant === "available" &&
+    scheduleStatus === "ACTIVE" &&
     (!sub ||
       sub.status === "REJECTED" ||
       (sub.status !== "PENDING" && sub.status !== "REVIEWED" && sub.status !== "RESOLVED"));
@@ -148,13 +179,23 @@ export function TaskQuestCard(props: {
       className={clsx(
         "achievement-card task-card group relative",
         rClass,
-        !resolved && "is-locked",
+        overlayAllowed && "is-locked",
         glow,
         kind === "event" && "task-card--event",
         kind === "timed" && "task-card--timed",
         kind === "permanent" && "task-card--permanent",
       )}
     >
+      {overlayAllowed ? (
+        <div className="pointer-events-none absolute inset-0 rounded-[12px] bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+          <div className="text-center px-3">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 text-steam-accent shadow-[0_0_16px_rgba(102,192,244,0.18)]">
+              <FiLock className="h-6 w-6" />
+            </div>
+            <div className="mt-3 text-sm font-extrabold text-steam-text">{scheduleLockText}</div>
+          </div>
+        </div>
+      ) : null}
       {kind === "event" ? <div className="task-card__event-halo" aria-hidden /> : null}
 
       {!reduce && kind === "event" ? (
@@ -302,6 +343,10 @@ export function TaskQuestCard(props: {
                 <Button size="sm" variant="primary" onClick={(e) => { e.stopPropagation(); props.onOpenForm(); }}>
                   {props.showForm ? "Скрыть форму" : sub ? "Отправить снова" : "Отправить доказательства"}
                 </Button>
+              ) : scheduleStatus === "UPCOMING" ? (
+                <span className="text-xs text-steam-muted">{scheduleLockText}</span>
+              ) : scheduleStatus === "EXPIRED" ? (
+                <span className="text-xs text-steam-muted">Ивент завершен</span>
               ) : (
                 <span className="text-xs text-steam-muted">Ожидайте решения по текущей отправке.</span>
               )}
