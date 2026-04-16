@@ -71,8 +71,15 @@ export async function apiDelete<T>(path: string) {
   return apiFetch<T>(path, { method: "DELETE" });
 }
 
-export async function apiJson<T>(path: string, body: unknown, method: string = "POST", extraHeaders?: Record<string, string>) {
+export async function apiJson<T>(
+  path: string,
+  body: unknown,
+  method: string = "POST",
+  extraHeaders?: Record<string, string>,
+  options?: ApiFetchOptions,
+) {
   return apiFetch<T>(path, {
+    ...(options ?? {}),
     method,
     headers: { "Content-Type": "application/json", ...(extraHeaders ?? {}) },
     body: JSON.stringify(body),

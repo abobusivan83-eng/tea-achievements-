@@ -159,7 +159,13 @@ export function ShopPage() {
     setError(null);
     setBuyBusyId(item.id);
     try {
-      await apiJson("/api/shop/buy", { itemId: item.id });
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
+      try {
+        await apiJson("/api/shop/buy", { itemId: item.id }, "POST", undefined, { signal: controller.signal, silent: true });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
 
       // Refresh from the server to ensure balance/ownership is always consistent.
       const meResp = await apiFetch<{ purchasedItemIds: string[]; coins: number }>("/api/shop/me");

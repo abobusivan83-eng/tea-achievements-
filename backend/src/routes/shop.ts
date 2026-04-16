@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -95,56 +96,74 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
   if (already) return ok(res, { purchased: true, already: true });
 
   try {
-    await prisma.$transaction(async (tx) => {
-      const [spentRows, bonus] = await Promise.all([
-        tx.shopPurchase.findMany({
-          where: { userId: req.user!.id },
-          select: { item: { select: { price: true } } },
-        }),
-        getCoinBonus(tx, req.user!.id),
-      ]);
-      const spent = spentRows.reduce((s, p) => s + p.item.price, 0);
-      if (bonus - spent < item.price) {
-        throw new Error("Not enough coins");
-      }
-      await tx.shopPurchase.create({ data: { userId: req.user!.id, itemId: item.id } });
+    await prisma.$transaction(
+      async (tx) => {
+        const [spentRows, bonus] = await Promise.all([
+          tx.shopPurchase.findMany({
+            where: { userId: req.user!.id },
+            select: { item: { select: { price: true } } },
+          }),
+          getCoinBonus(tx, req.user!.id),
+        ]);
 
-      const fresh = await tx.user.findUnique({
-        where: { id: req.user!.id },
-        select: { unlockedFramesJson: true, unlockedStatusesJson: true },
-      });
-
-      if (item.type === "FRAME") {
-        const nextFrames = mergeUniqueStrings(fresh?.unlockedFramesJson, item.key);
-        await tx.user.update({
-          where: { id: req.user!.id },
-          data: { frameKey: item.key, unlockedFramesJson: nextFrames },
-        });
-      } else if (item.type === "BADGE") {
-        if (item.key.startsWith("status:")) {
-          const catalogKey = item.key.slice("status:".length);
-          const nextStatuses = mergeUniqueStrings(fresh?.unlockedStatusesJson, catalogKey);
-          const data: { statusEmoji?: string; unlockedStatusesJson: string[] } = { unlockedStatusesJson: nextStatuses };
-          if (item.icon) data.statusEmoji = item.icon;
-          await tx.user.update({ where: { id: req.user!.id }, data });
-        } else {
-          const currentUser = await tx.user.findUnique({ where: { id: req.user!.id }, select: { badgesJson: true } });
-          const prev = (currentUser?.badgesJson as unknown as string[] | null) ?? [];
-          const next = prev.includes(item.key) ? prev : [...prev, item.key];
-          await tx.user.update({ where: { id: req.user!.id }, data: { badgesJson: next as any } });
+        const spent = spentRows.reduce((s, p) => s + p.item.price, 0);
+        if (bonus - spent < item.price) {
+          throw new Error("Not enough coins");
         }
-      }
 
-      await tx.notification.create({
-        data: {
-          type: "SHOP",
-          text: `🛒 Куплено: ${item.name} (-${item.price} монет)`,
-          userId: req.user!.id,
-          adminName: null,
-        },
-      });
-    });
+        await tx.shopPurchase.create({ data: { userId: req.user!.id, itemId: item.id } });
+
+        const fresh = await tx.user.findUnique({
+          where: { id: req.user!.id },
+          select: { unlockedFramesJson: true, unlockedStatusesJson: true },
+        });
+
+        if (item.type === "FRAME") {
+          const nextFrames = mergeUniqueStrings(fresh?.unlockedFramesJson, item.key);
+          await tx.user.update({
+            where: { id: req.user!.id },
+            data: { frameKey: item.key, unlockedFramesJson: nextFrames },
+          });
+        } else if (item.type === "BADGE") {
+          if (item.key.startsWith("status:")) {
+            const catalogKey = item.key.slice("status:".length);
+            const nextStatuses = mergeUniqueStrings(fresh?.unlockedStatusesJson, catalogKey);
+            const data: { statusEmoji?: string; unlockedStatusesJson: string[] } = { unlockedStatusesJson: nextStatuses };
+            if (item.icon) data.statusEmoji = item.icon;
+            await tx.user.update({ where: { id: req.user!.id }, data });
+          } else {
+            const currentUser = await tx.user.findUnique({ where: { id: req.user!.id }, select: { badgesJson: true } });
+            const prev = (currentUser?.badgesJson as unknown as string[] | null) ?? [];
+            const next = prev.includes(item.key) ? prev : [...prev, item.key];
+            await tx.user.update({ where: { id: req.user!.id }, data: { badgesJson: next as any } });
+          }
+        }
+
+        await tx.notification.create({
+          data: {
+            type: "SHOP",
+            text: `🛒 Куплено: ${item.name} (-${item.price} монет)`,
+            userId: req.user!.id,
+            adminName: null,
+          },
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        maxWait: 3500,
+        timeout: 10_000,
+      },
+    );
   } catch (e: any) {
+    console.error("shop_buy_failed", {
+      userId: req.user?.id,
+      itemId: item.id,
+      itemPrice: item.price,
+      itemType: item.type,
+      errMessage: e?.message ?? String(e),
+      prismaCode: e?.code ?? null,
+      prismaMeta: e?.meta ?? null,
+    });
     if (e?.message === "Not enough coins") return fail(res, 400, "Not enough coins");
     throw e;
   }
