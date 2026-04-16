@@ -41,8 +41,8 @@ function ShopItemIcon(props: { icon: string | null; name: string }) {
   return <span className="text-lg">{props.icon}</span>;
 }
 
-function ProductCard(props: { item: ShopItem; owned: boolean; onBuy: () => Promise<void> }) {
-  const { item, owned, onBuy } = props;
+function ProductCard(props: { item: ShopItem; owned: boolean; buying: boolean; onBuy: () => Promise<void> }) {
+  const { item, owned, buying, onBuy } = props;
   const isFrame = item.type === "FRAME";
   const isStatus = item.type === "BADGE" && item.key.startsWith("status:");
   const rarityKey = String(item.rarity ?? "COMMON").toLowerCase();
@@ -97,7 +97,8 @@ function ProductCard(props: { item: ShopItem; owned: boolean; onBuy: () => Promi
           <Button
             size="sm"
             variant={owned ? "ghost" : "primary"}
-            disabled={owned}
+            loading={buying}
+            disabled={owned || buying}
             className={clsx("shop-buy-button w-full md:w-[132px]", owned && "shop-buy-button--owned")}
             onClick={onBuy}
           >
@@ -115,6 +116,7 @@ export function ShopPage() {
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [buyBusyId, setBuyBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -154,9 +156,20 @@ export function ShopPage() {
   );
 
   async function handleBuy(item: ShopItem) {
-    await apiJson("/api/shop/buy", { itemId: item.id });
-    setPurchasedIds((prev) => new Set(prev).add(item.id));
-    setCoins((x) => Math.max(0, x - item.price));
+    setError(null);
+    setBuyBusyId(item.id);
+    try {
+      await apiJson("/api/shop/buy", { itemId: item.id });
+
+      // Refresh from the server to ensure balance/ownership is always consistent.
+      const meResp = await apiFetch<{ purchasedItemIds: string[]; coins: number }>("/api/shop/me");
+      setPurchasedIds(new Set(meResp.purchasedItemIds));
+      setCoins(meResp.coins ?? 0);
+    } catch (e: any) {
+      setError(e?.message ?? "Не удалось купить");
+    } finally {
+      setBuyBusyId(null);
+    }
   }
 
   return (
@@ -226,7 +239,13 @@ export function ShopPage() {
           </div>
           <div className="grid gap-3">
             {frames.map((item) => (
-              <ProductCard key={item.id} item={item} owned={purchasedIds.has(item.id)} onBuy={() => handleBuy(item)} />
+              <ProductCard
+                key={item.id}
+                item={item}
+                owned={purchasedIds.has(item.id)}
+                buying={buyBusyId === item.id}
+                onBuy={() => handleBuy(item)}
+              />
             ))}
             {!frames.length && !loading ? <div className="text-sm text-steam-muted">Рамки пока не добавлены.</div> : null}
           </div>
@@ -239,7 +258,13 @@ export function ShopPage() {
           </div>
           <div className="grid gap-3">
             {badges.map((item) => (
-              <ProductCard key={item.id} item={item} owned={purchasedIds.has(item.id)} onBuy={() => handleBuy(item)} />
+              <ProductCard
+                key={item.id}
+                item={item}
+                owned={purchasedIds.has(item.id)}
+                buying={buyBusyId === item.id}
+                onBuy={() => handleBuy(item)}
+              />
             ))}
             {!badges.length && !loading ? <div className="text-sm text-steam-muted">Значки пока не добавлены.</div> : null}
           </div>
@@ -253,7 +278,13 @@ export function ShopPage() {
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           {statusEmojis.map((item) => (
-            <ProductCard key={item.id} item={item} owned={purchasedIds.has(item.id)} onBuy={() => handleBuy(item)} />
+            <ProductCard
+              key={item.id}
+              item={item}
+              owned={purchasedIds.has(item.id)}
+              buying={buyBusyId === item.id}
+              onBuy={() => handleBuy(item)}
+            />
           ))}
           {!statusEmojis.length && !loading ? <div className="text-sm text-steam-muted">Статусы пока не добавлены.</div> : null}
         </div>
