@@ -124,6 +124,8 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
           await tx.user.update({
             where: { id: req.user!.id },
             data: { frameKey: item.key, unlockedFramesJson: nextFrames },
+            // Avoid selecting all columns (e.g. may fail if migration is not applied yet).
+            select: { id: true },
           });
         } else if (item.type === "BADGE") {
           if (item.key.startsWith("status:")) {
@@ -131,12 +133,12 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
             const nextStatuses = mergeUniqueStrings(fresh?.unlockedStatusesJson, catalogKey);
             const data: { statusEmoji?: string; unlockedStatusesJson: string[] } = { unlockedStatusesJson: nextStatuses };
             if (item.icon) data.statusEmoji = item.icon;
-            await tx.user.update({ where: { id: req.user!.id }, data });
+            await tx.user.update({ where: { id: req.user!.id }, data, select: { id: true } });
           } else {
             const currentUser = await tx.user.findUnique({ where: { id: req.user!.id }, select: { badgesJson: true } });
             const prev = (currentUser?.badgesJson as unknown as string[] | null) ?? [];
             const next = prev.includes(item.key) ? prev : [...prev, item.key];
-            await tx.user.update({ where: { id: req.user!.id }, data: { badgesJson: next as any } });
+            await tx.user.update({ where: { id: req.user!.id }, data: { badgesJson: next as any }, select: { id: true } });
           }
         }
 
