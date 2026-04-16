@@ -225,15 +225,11 @@ export function Layout(props: { children: ReactNode }) {
               onClick={() => play("tab")}
               className={({ isActive }) => clsx("nav-link group relative inline-flex items-center gap-2", isActive && "active")}
             >
-              <span className="text-base opacity-90">
+              <span className="relative z-10 inline-flex items-center text-base opacity-90">
                 <FiGift />
+                {giftUnread > 0 ? <span className="nav-badge">{giftUnread > 99 ? "99+" : giftUnread}</span> : null}
               </span>
-              <span className="relative z-10 inline-flex items-center gap-2">
-                Подарки
-                {giftUnread > 0 ? (
-                  <span className="nav-badge">{giftUnread > 99 ? "99+" : giftUnread}</span>
-                ) : null}
-              </span>
+              <span className="z-10">Подарки</span>
             </NavLink>
             <NavItem to="/tasks" icon={<FiCheckSquare />}>
               Задания

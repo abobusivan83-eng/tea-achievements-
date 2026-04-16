@@ -156,7 +156,7 @@ giftsRouter.post("/send", async (req: AuthedRequest, res) => {
         await tx.notification.create({
           data: {
             type: "SHOP",
-            text: `[COIN_BONUS]:+${parsed.data.xpAmount}`,
+            text: `[COIN_BONUS]:${parsed.data.xpAmount}`,
             userId: to.id,
             adminName: null,
           },

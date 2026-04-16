@@ -28,6 +28,7 @@ type ProfileResp = {
     nickname: string;
     role: "USER" | "ADMIN" | "CREATOR";
     blocked: boolean;
+    lastActiveAt?: string | null;
     level?: number;
     xp?: number;
     avatarUrl: string | null;
@@ -292,7 +293,11 @@ export function ProfilePage() {
   const xpPct = Math.min(1, xpInto / xpForNext);
   const statusTier = getLevelTier(level);
   const levelColor = calculateLevelColor(level);
-  const presenceOnline = me?.id === profile.user.id ? true : !profile.user.blocked;
+  const lastActiveAtMs = profile.user.lastActiveAt ? +new Date(profile.user.lastActiveAt) : null;
+  // "В сети", если последняя активность была недавно.
+  // Точность зависит от частоты heartbeat-запросов и порога.
+  const presenceOnline =
+    me?.id === profile.user.id ? true : lastActiveAtMs ? Date.now() - lastActiveAtMs < 60_000 : false;
   const bannerBgUrl = bannerRemoteBroken ? DEFAULT_BANNER_URL : resolveBannerUrl(profile.user.bannerUrl);
 
   return (

@@ -6,7 +6,11 @@ type Db = Pick<
 >;
 
 export function parseCoinBonusDelta(text: string): number {
-  const matches = [...text.matchAll(/\[COIN_BONUS\]:(-?\d+)/g)];
+  // Поддерживаем формат:
+  // - [COIN_BONUS]:123
+  // - [COIN_BONUS]:-123
+  // - [COIN_BONUS]:+123
+  const matches = [...text.matchAll(/\[COIN_BONUS\]:([+-]?\d+)/g)];
   if (!matches.length) return 0;
   return matches.reduce((sum, m) => sum + (Number(m[1]) || 0), 0);
 }

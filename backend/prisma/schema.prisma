@@ -79,6 +79,8 @@ model User {
   passwordHash String
   role         Role     @default(USER)
   blocked      Boolean  @default(false)
+  /// Последняя активность пользователя (heartbeat). Используется для онлайн/оффлайн статуса.
+  lastActiveAt DateTime?
 
   level Int @default(1)
   xp    Int @default(0)

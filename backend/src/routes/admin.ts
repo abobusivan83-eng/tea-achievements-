@@ -980,21 +980,52 @@ adminRouter.post("/tasks", async (req: AuthedRequest, res) => {
     select: { id: true },
   });
   if (!achievementExists) return fail(res, 400, "Связанное достижение не найдено");
-  const created = await prisma.task.create({
-    data: {
+  // В схеме Prisma у `Task` поле `achievementId` помечено как `@unique`,
+  // поэтому попытка создать второе задание для того же достижения приводит к `P2002`.
+  const existingForAchievement = await prisma.task.findUnique({
+    where: { achievementId: parsed.data.achievementId },
+    select: { id: true, title: true },
+  });
+  if (existingForAchievement) {
+    return fail(res, 409, `Задание для достижения уже существует: «${existingForAchievement.title}»`);
+  }
+
+  let created: Awaited<ReturnType<typeof prisma.task.create>>;
+  try {
+    created = await prisma.task.create({
+      data: {
+        title: parsed.data.title,
+        description: parsed.data.description,
+        conditions: parsed.data.conditions,
+        rewardCoins: parsed.data.rewardCoins ?? 0,
+        achievementId: parsed.data.achievementId,
+        isActive: parsed.data.isActive ?? true,
+        isEvent: parsed.data.isEvent ?? false,
+        startsAt,
+        endsAt,
+        styleTag: parsed.data.styleTag ?? null,
+        createdById: req.user?.id ?? null,
+      },
+    });
+  } catch (err: unknown) {
+    const anyErr = err as any;
+    console.error("task_create_failed", {
+      userId: req.user?.id ?? null,
       title: parsed.data.title,
-      description: parsed.data.description,
-      conditions: parsed.data.conditions,
-      rewardCoins: parsed.data.rewardCoins ?? 0,
       achievementId: parsed.data.achievementId,
+      rewardCoins: parsed.data.rewardCoins ?? 0,
       isActive: parsed.data.isActive ?? true,
       isEvent: parsed.data.isEvent ?? false,
-      startsAt,
-      endsAt,
+      startsAt: startsAt?.toISOString() ?? null,
+      endsAt: endsAt?.toISOString() ?? null,
       styleTag: parsed.data.styleTag ?? null,
-      createdById: req.user?.id ?? null,
-    },
-  });
+      prismaCode: anyErr?.code,
+      prismaMeta: anyErr?.meta ?? null,
+      prismaMetaTarget: anyErr?.meta?.target ?? null,
+      errMessage: anyErr?.message ?? String(anyErr),
+    });
+    throw err;
+  }
   if (req.user?.id) {
     await logAdminAction(prisma, {
       adminId: req.user.id,
