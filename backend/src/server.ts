@@ -10,6 +10,7 @@ import { env } from "./lib/env.js";
 import { logger } from "./lib/logger.js";
 import { mapErrorToResponse } from "./lib/mapErrorResponse.js";
 import { prisma } from "./lib/prisma.js";
+import { logAdminAction } from "./lib/adminAudit.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
 import { achievementsRouter } from "./routes/achievements.js";
@@ -117,6 +118,26 @@ app.use("/api/shop", shopRouter);
 app.use("/api/gifts", giftsRouter);
 app.use("/api/tasks", tasksRouter);
 
+let cachedAuditActorId: string | null = null;
+let cachedAuditActorPromise: Promise<string> | null = null;
+
+async function getAuditActorId() {
+  if (cachedAuditActorId) return cachedAuditActorId;
+  if (!cachedAuditActorPromise) {
+    cachedAuditActorPromise = prisma.user
+      .findFirst({
+        where: { role: { in: ["ADMIN", "CREATOR"] } },
+        select: { id: true },
+      })
+      .then((u) => {
+        cachedAuditActorId = u?.id ?? null;
+        if (!cachedAuditActorId) throw new Error("No admin/creator user found to write audit logs");
+        return cachedAuditActorId;
+      });
+  }
+  return cachedAuditActorPromise;
+}
+
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const mapped = mapErrorToResponse(err);
   const line = `${req.method} ${req.originalUrl}`;
@@ -131,6 +152,37 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   } else {
     logger.warn(`HTTP ${line}`, { status: mapped.status, message: mapped.message });
   }
+
+  // Админ-аудит для фикса: пишем в `AdminAuditLog`, даже если ошибку получил не админ.
+  // Логирование делаем "best-effort", чтобы не ломать обработку ошибки.
+  if (mapped.logAsError || mapped.status >= 500) {
+    const anyErr = err as any;
+    const reqId = String(req.headers["x-request-id"] ?? "");
+    void (async () => {
+      try {
+        const adminId = await getAuditActorId();
+        await logAdminAction(prisma, {
+          adminId,
+          action: "http.error",
+          summary: `Ошибка HTTP ${mapped.status}: ${mapped.message}`,
+            targetUserId: anyErr?.reqUserId ?? (req as any)?.user?.id ?? null,
+          meta: {
+            requestId: reqId || undefined,
+            method: req.method,
+            path: req.originalUrl,
+            mapped,
+            errMessage: anyErr?.message ?? (err instanceof Error ? err.message : String(err)),
+            errStack: err instanceof Error ? err.stack : undefined,
+            prismaCode: typeof anyErr?.code === "string" ? anyErr.code : null,
+            prismaMeta: anyErr?.meta ?? null,
+          },
+        });
+      } catch {
+        // ignore
+      }
+    })();
+  }
+
   return fail(res, mapped.status, mapped.message);
 });
 

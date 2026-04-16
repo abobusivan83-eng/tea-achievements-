@@ -6,6 +6,7 @@ import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getCoinBonus } from "../lib/coins.js";
 import { parseJsonStringArray } from "../lib/cosmeticsAccess.js";
+import { logAdminAction } from "../lib/adminAudit.js";
 import {
   getCachedShopItems,
   getCachedShopMe,
@@ -164,8 +165,47 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
       prismaCode: e?.code ?? null,
       prismaMeta: e?.meta ?? null,
     });
+
+    // Also write into admin audit logs for debugging production issues.
+    // We intentionally log who attempted the purchase and what Prisma returned.
+    try {
+      if (req.user?.id) {
+        await logAdminAction(prisma, {
+          adminId: req.user.id,
+          action: "shop.buy_failed",
+          summary: `Ошибка покупки в магазине: ${item.name}`,
+          targetUserId: req.user.id,
+          meta: {
+            itemId: item.id,
+            itemPrice: item.price,
+            itemType: item.type,
+            errMessage: e?.message ?? String(e),
+            prismaCode: e?.code ?? null,
+            prismaMeta: e?.meta ?? null,
+          },
+        });
+      }
+    } catch {
+      // Never hide the original shop error if audit logging fails.
+    }
+
     if (e?.message === "Not enough coins") return fail(res, 400, "Not enough coins");
-    throw e;
+    // To make debugging purchases easier on the client, return Prisma error code when possible.
+    // Keep responses compatible with existing frontend logic (it only shows `error.message`).
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      switch (e.code) {
+        case "P2002":
+          return fail(res, 409, `Record already exists (${e.code})`);
+        case "P2025":
+          return fail(res, 404, `Not found (${e.code})`);
+        case "P2003":
+          return fail(res, 400, `Invalid reference (${e.code})`);
+        default:
+          return fail(res, 500, `Database error (${e.code})`);
+      }
+    }
+    if (typeof e?.code === "string") return fail(res, 500, `Database error (${e.code})`);
+    return fail(res, 500, "Database error");
   }
 
   invalidateShopItemsCache();
