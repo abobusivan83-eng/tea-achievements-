@@ -1,16 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
-import path from "path";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { avatarUpload, bannerUpload } from "../middleware/uploads.js";
-import { env } from "../lib/env.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { resolveStoredMediaUrl } from "../lib/storedMediaUrl.js";
 import { levelFromXp } from "../lib/levels.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
 import { invalidateLeaderboardCache, invalidateUserProfileCache, getCachedUserProfile, setCachedUserProfile } from "../lib/cache.js";
+import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import {
   ADMIN_BADGE_KEYS,
   canUseFrameKey,
@@ -19,14 +18,6 @@ import {
 } from "../lib/cosmeticsAccess.js";
 
 export const usersRouter = Router();
-
-function toRelUploadPath(absPath: string) {
-  const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
-  const rel = path.relative(process.cwd(), absPath);
-  // Ensure it always starts with uploads/
-  if (rel.startsWith(env.UPLOAD_DIR)) return rel.replaceAll("\\", "/");
-  return path.relative(process.cwd(), path.join(uploadRoot, path.basename(absPath))).replaceAll("\\", "/");
-}
 
 const UpdateProfileSchema = z.object({
   nickname: z.string().min(2).max(24).optional(),
@@ -119,13 +110,16 @@ usersRouter.post(
   avatarUpload,
   async (req: AuthedRequest, res) => {
     const file = (req as any).file as Express.Multer.File | undefined;
-    if (!file) return fail(res, 400, "No file");
-
-    const relPath = toRelUploadPath(file.path);
-    const publicUrl = toPublicFileUrl(relPath);
+    if (!file?.buffer) return fail(res, 400, "No file");
+    const publicUrl = await uploadImageToMediaStorage({
+      buffer: file.buffer,
+      folder: "avatars",
+      publicIdPrefix: `avatar-${req.user!.id}`,
+      preset: { width: 400, height: 400, quality: 82, fit: "cover" },
+    });
     const user = await prisma.user.update({
       where: { id: req.user!.id },
-      data: { avatarPath: relPath, avatarUrl: publicUrl },
+      data: { avatarPath: null, avatarUrl: publicUrl },
       select: { id: true, avatarUrl: true, avatarPath: true },
     });
     invalidateUserProfileCache(req.user!.id);
@@ -140,13 +134,16 @@ usersRouter.post(
   bannerUpload,
   async (req: AuthedRequest, res) => {
     const file = (req as any).file as Express.Multer.File | undefined;
-    if (!file) return fail(res, 400, "No file");
-
-    const relPath = toRelUploadPath(file.path);
-    const publicUrl = toPublicFileUrl(relPath);
+    if (!file?.buffer) return fail(res, 400, "No file");
+    const publicUrl = await uploadImageToMediaStorage({
+      buffer: file.buffer,
+      folder: "banners",
+      publicIdPrefix: `banner-${req.user!.id}`,
+      preset: { width: 1600, height: 520, quality: 80, fit: "cover" },
+    });
     const user = await prisma.user.update({
       where: { id: req.user!.id },
-      data: { bannerPath: relPath, bannerUrl: publicUrl },
+      data: { bannerPath: null, bannerUrl: publicUrl },
       select: { id: true, bannerUrl: true, bannerPath: true },
     });
     invalidateUserProfileCache(req.user!.id);
@@ -168,6 +165,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   }>(targetId);
   if (cached) {
     if (cached.user.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
+    res.setHeader("Cache-Control", "private, max-age=15");
     return ok(res, cached);
   }
 
@@ -284,6 +282,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     achievements: { earned: earnedWithShare, locked },
   };
   setCachedUserProfile(targetId, payload);
+  res.setHeader("Cache-Control", "private, max-age=15");
   return ok(res, payload);
 });
 

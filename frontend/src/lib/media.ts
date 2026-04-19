@@ -30,10 +30,24 @@ export const DEFAULT_BANNER_URL = svg(`
   </svg>
 `);
 
+function isValidImageUrl(url?: string | null) {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("data:image/")) return true;
+  if (trimmed.startsWith("/uploads/")) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function resolveAvatarUrl(url?: string | null) {
-  return url ?? DEFAULT_AVATAR_URL;
+  return isValidImageUrl(url) ? (url as string) : DEFAULT_AVATAR_URL;
 }
 
 export function resolveBannerUrl(url?: string | null) {
-  return url ?? DEFAULT_BANNER_URL;
+  return isValidImageUrl(url) ? (url as string) : DEFAULT_BANNER_URL;
 }

@@ -4,9 +4,9 @@ import path from "path";
 import type { RequestHandler } from "express";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
-import { env } from "../lib/env.js";
-import type { AuthedRequest } from "./auth.js";
 import { isAllowedImageMime } from "../lib/allowedImageMime.js";
+import { uploadRootAbs } from "../lib/uploadPaths.js";
+import { ensureCloudinaryConfigured } from "../lib/mediaStorage.js";
 
 type MediaKind = "avatars" | "banners";
 
@@ -14,7 +14,7 @@ function ensureDir(dirPath: string) {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 }
 
-const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
+const uploadRoot = uploadRootAbs;
 const avatarsDir = path.join(uploadRoot, "avatars");
 const bannersDir = path.join(uploadRoot, "banners");
 /** Временная папка для иконок достижений, вложений заявок и т.п. (файлы могут переезжать в подпапки). */
@@ -25,18 +25,8 @@ ensureDir(bannersDir);
 ensureDir(miscDir);
 
 function buildStorage(kind: MediaKind) {
-  return multer.diskStorage({
-    destination(_req, _file, cb) {
-      cb(null, kind === "avatars" ? avatarsDir : bannersDir);
-    },
-    filename(req, file, cb) {
-      const authedReq = req as AuthedRequest;
-      const userId = authedReq.user?.id ?? "anonymous";
-      const ext = path.extname(file.originalname || "").toLowerCase();
-      const safeExt = /^\.[a-z0-9]{1,10}$/i.test(ext) ? ext : ".bin";
-      cb(null, `${userId}-${Date.now()}${safeExt}`);
-    },
-  });
+  void kind;
+  return multer.memoryStorage();
 }
 
 function buildUploader(kind: MediaKind) {
@@ -68,23 +58,9 @@ function withUploadErrorHandling(mw: RequestHandler): RequestHandler {
 export const avatarUpload = withUploadErrorHandling(buildUploader("avatars").single("file"));
 export const bannerUpload = withUploadErrorHandling(buildUploader("banners").single("file"));
 
-const genericStorage = multer.diskStorage({
-  destination(_req, _file, cb) {
-    cb(null, miscDir);
-  },
-  filename(req, file, cb) {
-    const authedReq = req as AuthedRequest;
-    const userId = authedReq.user?.id ?? "anonymous";
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const safeExt = /^\.[a-z0-9]{1,10}$/i.test(ext) ? ext : ".bin";
-    const unique = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    cb(null, `${unique}${safeExt}`);
-  },
-});
-
 /** Универсальная загрузка (иконки, несколько файлов к заявкам/заданиям). */
 export const upload = multer({
-  storage: genericStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024, files: 8 },
   fileFilter(_req, file, cb) {
     if (!isAllowedImageMime(file.mimetype)) {
@@ -93,32 +69,6 @@ export const upload = multer({
     cb(null, true);
   },
 });
-
-let cloudinaryReady = false;
-
-function ensureCloudinaryConfigured() {
-  if (cloudinaryReady) return true;
-  if (env.CLOUDINARY_URL) {
-    cloudinary.config(env.CLOUDINARY_URL);
-    const cfg = cloudinary.config();
-    if (cfg.cloud_name && cfg.api_key && cfg.api_secret) {
-      cloudinaryReady = true;
-      return true;
-    }
-    return false;
-  }
-  if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
-    cloudinary.config({
-      cloud_name: env.CLOUDINARY_CLOUD_NAME,
-      api_key: env.CLOUDINARY_API_KEY,
-      api_secret: env.CLOUDINARY_API_SECRET,
-      secure: true,
-    });
-    cloudinaryReady = true;
-    return true;
-  }
-  return false;
-}
 
 function taskSubmissionCloudinaryStorage() {
   return new CloudinaryStorage({

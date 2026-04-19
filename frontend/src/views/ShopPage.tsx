@@ -36,7 +36,15 @@ function isImageIcon(icon: string | null | undefined) {
 function ShopItemIcon(props: { icon: string | null; name: string }) {
   if (!props.icon) return <span className="text-lg">🎁</span>;
   if (isImageIcon(props.icon)) {
-    return <img src={props.icon} alt={props.name} className="h-8 w-8 rounded-md border border-white/10 object-cover" />;
+    return (
+      <img
+        src={props.icon}
+        alt={props.name}
+        loading="lazy"
+        decoding="async"
+        className="h-8 w-8 rounded-md border border-white/10 object-cover"
+      />
+    );
   }
   return <span className="text-lg">{props.icon}</span>;
 }

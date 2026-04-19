@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/api";
 import type { Achievement, Rarity } from "../lib/types";
 import clsx from "clsx";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "../ui/components/Button";
 import { FiFilter, FiSearch } from "react-icons/fi";
 import { AchievementCard } from "../ui/components/AchievementCard";
@@ -10,10 +11,6 @@ import { Reveal } from "../ui/components/Reveal";
 import { Skeleton } from "../ui/components/Skeleton";
 
 export function AchievementsPage() {
-  const [items, setItems] = useState<Achievement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [rarity, setRarity] = useState<Rarity | "">("");
   const [only, setOnly] = useState<"all" | "earned" | "locked">("all");
   const [sort, setSort] = useState<"new" | "rarity" | "points">("new");
@@ -29,43 +26,35 @@ export function AchievementsPage() {
   });
   const reduce = useReducedMotion();
 
-  useEffect(() => {
-    let mounted = true;
-    async function run() {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (rarity) params.set("rarity", rarity);
-        if (q.trim()) params.set("q", q.trim());
-        params.set("only", only);
-        params.set("sort", sort);
-        const data = await apiFetch<Achievement[]>(`/api/achievements?${params.toString()}`);
-        if (!mounted) return;
-        setItems(data);
+  const achievementsQuery = useQuery({
+    queryKey: ["achievements", rarity, only, sort, q.trim()],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (rarity) params.set("rarity", rarity);
+      if (q.trim()) params.set("q", q.trim());
+      params.set("only", only);
+      params.set("sort", sort);
+      return apiFetch<Achievement[]>(`/api/achievements?${params.toString()}`);
+    },
+  });
 
-        // Confetti for newly unlocked rare+ achievements
-        const newlyUnlocked = data.filter((a) => a.earned && a.awardedAt && !seenNew[a.id]);
-        const hasRare = newlyUnlocked.some(
-          (a) =>
-            a.rarity === "RARE" ||
-            a.rarity === "EPIC" ||
-            a.rarity === "LEGENDARY" ||
-            a.rarity === "EXCLUSIVE" ||
-            a.rarity === "SECRET",
-        );
-        if (hasRare) setBurstKey((x) => x + 1);
-      } catch (e: any) {
-        setError(e?.message ?? "Ошибка загрузки достижений");
-      } finally {
-        setLoading(false);
-      }
-    }
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, [rarity, only, sort, q]);
+  const items = achievementsQuery.data ?? [];
+  const loading = achievementsQuery.isLoading;
+  const error = achievementsQuery.error instanceof Error ? achievementsQuery.error.message : null;
+
+  useEffect(() => {
+    if (!items.length) return;
+    const newlyUnlocked = items.filter((a) => a.earned && a.awardedAt && !seenNew[a.id]);
+    const hasRare = newlyUnlocked.some(
+      (a) =>
+        a.rarity === "RARE" ||
+        a.rarity === "EPIC" ||
+        a.rarity === "LEGENDARY" ||
+        a.rarity === "EXCLUSIVE" ||
+        a.rarity === "SECRET",
+    );
+    if (hasRare) setBurstKey((x) => x + 1);
+  }, [items, seenNew]);
 
   useEffect(() => {
     setPage(1);

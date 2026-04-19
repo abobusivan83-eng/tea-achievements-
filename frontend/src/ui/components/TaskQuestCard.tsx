@@ -405,7 +405,13 @@ export function TaskQuestCard(props: {
                                     }}
                                   />
                                 ) : (
-                                  <img src={item.url} alt={item.file.name} className="h-28 w-full object-cover" />
+                                  <img
+                                    src={item.url}
+                                    alt={item.file.name}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="h-28 w-full object-cover"
+                                  />
                                 )}
                                 <div className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
                                   {item.isVideo ? "Видео" : "Фото"}

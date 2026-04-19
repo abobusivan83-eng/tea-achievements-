@@ -38,6 +38,7 @@ const EnvSchema = z.object({
   FRONTEND_ORIGIN: z.string().min(1).default("http://localhost:3000"),
   CORS_ORIGINS: z.string().optional(),
   UPLOAD_DIR: z.string().min(1).default("uploads"),
+  UPLOAD_ROOT_DIR: z.string().min(1).optional(),
   TRUST_PROXY: z.preprocess((val) => {
     if (val !== undefined && val !== "") return val;
     if (process.env.RENDER === "true") return "true";

@@ -1,13 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import path from "path";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { upload } from "../middleware/uploads.js";
-import { env } from "../lib/env.js";
-import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { getCachedSupportUnreadCount, invalidateSupportUnreadCountCache, setCachedSupportUnreadCount } from "../lib/cache.js";
+import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 
 export const supportRouter = Router();
 
@@ -35,13 +33,6 @@ function withImages(value: string, images: string[]) {
   const base = parseRichDescription(value).text;
   if (!images.length) return base;
   return `${base}${ATTACHMENTS_MARKER}${JSON.stringify(images)}]]`;
-}
-
-function toRelUploadPath(absPath: string) {
-  const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
-  const rel = path.relative(process.cwd(), absPath);
-  if (rel.startsWith(env.UPLOAD_DIR)) return rel.replaceAll("\\", "/");
-  return path.relative(process.cwd(), path.join(uploadRoot, path.basename(absPath))).replaceAll("\\", "/");
 }
 
 const CreateSuggestionSchema = z.object({
@@ -171,11 +162,23 @@ supportRouter.post("/suggestions/:id/images", upload.array("files", 8), async (r
   if (existing.authorId !== req.user!.id && req.user!.role !== "ADMIN") return fail(res, 403, "Forbidden");
   const files = ((req as any).files as Express.Multer.File[] | undefined) ?? [];
   if (!files.length) return fail(res, 400, "No files");
+  const uploadedUrls = await Promise.all(
+    files
+      .filter((f) => !!f.buffer)
+      .map((f, i) =>
+        uploadImageToMediaStorage({
+          buffer: f.buffer,
+          folder: "support",
+          publicIdPrefix: `suggestion-${existing.id}-${i}`,
+          preset: { width: 1600, height: 1600, quality: 80, fit: "inside" },
+        }),
+      ),
+  );
 
   const parsed = parseRichDescription(existing.description);
   const nextImages = [
     ...parsed.images,
-    ...files.map((f) => toPublicFileUrl(toRelUploadPath(f.path))).filter(Boolean),
+    ...uploadedUrls.filter(Boolean),
   ].slice(0, 12) as string[];
 
   const updated = await prisma.suggestion.update({
@@ -196,11 +199,23 @@ supportRouter.post("/reports/:id/images", upload.array("files", 8), async (req: 
   if (existing.reporterId !== req.user!.id && req.user!.role !== "ADMIN") return fail(res, 403, "Forbidden");
   const files = ((req as any).files as Express.Multer.File[] | undefined) ?? [];
   if (!files.length) return fail(res, 400, "No files");
+  const uploadedUrls = await Promise.all(
+    files
+      .filter((f) => !!f.buffer)
+      .map((f, i) =>
+        uploadImageToMediaStorage({
+          buffer: f.buffer,
+          folder: "support",
+          publicIdPrefix: `report-${existing.id}-${i}`,
+          preset: { width: 1600, height: 1600, quality: 80, fit: "inside" },
+        }),
+      ),
+  );
 
   const parsed = parseRichDescription(existing.description);
   const nextImages = [
     ...parsed.images,
-    ...files.map((f) => toPublicFileUrl(toRelUploadPath(f.path))).filter(Boolean),
+    ...uploadedUrls.filter(Boolean),
   ].slice(0, 12) as string[];
 
   const updated = await prisma.report.update({

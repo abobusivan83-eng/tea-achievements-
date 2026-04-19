@@ -13,3 +13,6 @@ backend/uploads/banners/*
 backend/uploads/misc/*
 !backend/uploads/misc/.gitkeep
 
+uploads/*
+!uploads/.gitkeep
+

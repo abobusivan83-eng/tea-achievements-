@@ -1,20 +1,18 @@
 import { Router } from "express";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import path from "path";
-import fs from "fs";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, requireStaff, type AuthedRequest } from "../middleware/auth.js";
 import type { Response } from "express";
 import { upload } from "../middleware/uploads.js";
-import { env } from "../lib/env.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { MAX_LEVEL, levelFromXp, xpForLevel } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
 import { awardAchievementToUser, revokeAchievementFromUser } from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
 import { invalidateShopItemsCache, invalidateSupportUnreadCountCache } from "../lib/cache.js";
+import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 
 export const adminRouter = Router();
 
@@ -114,15 +112,6 @@ async function createSupportNotification(params: {
     },
   });
   invalidateSupportUnreadCountCache(params.userId);
-}
-
-function ensureDir(p: string) {
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-}
-
-function toRelUploadPath(absPath: string) {
-  const rel = path.relative(process.cwd(), absPath);
-  return rel.replaceAll("\\", "/");
 }
 
 const CreateAchievementSchema = z.object({
@@ -262,16 +251,13 @@ adminRouter.delete("/achievements/:id", async (req, res) => {
 adminRouter.post("/achievements/:id/icon", upload.single("file"), async (req, res) => {
   const achievementId = req.params.id;
   const file = (req as any).file as Express.Multer.File | undefined;
-  if (!file) return fail(res, 400, "No file");
-
-  // Move file into achievements folder for tidier storage
-  const destDir = path.resolve(process.cwd(), env.UPLOAD_DIR, "achievements");
-  ensureDir(destDir);
-
-  const destPath = path.join(destDir, path.basename(file.path));
-  fs.renameSync(file.path, destPath);
-
-  const relPath = toRelUploadPath(destPath);
+  if (!file?.buffer) return fail(res, 400, "No file");
+  const relPath = await uploadImageToMediaStorage({
+    buffer: file.buffer,
+    folder: "achievements",
+    publicIdPrefix: `achievement-${achievementId}`,
+    preset: { width: 400, height: 400, quality: 84, fit: "cover" },
+  });
   const updated = await prisma.achievement.update({
     where: { id: achievementId },
     data: { iconPath: relPath },

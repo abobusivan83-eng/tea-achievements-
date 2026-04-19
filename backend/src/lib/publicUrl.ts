@@ -1,5 +1,6 @@
 import path from "path";
 import { env } from "./env.js";
+import { uploadPublicDir } from "./uploadPaths.js";
 
 export function toPublicFileUrl(filePath: string | null | undefined): string | null {
   if (!filePath) return null;
@@ -8,9 +9,9 @@ export function toPublicFileUrl(filePath: string | null | undefined): string | n
   if (/^https?:\/\//i.test(normalized)) return normalized;
   // We store relative paths like "uploads/user/<file>"
   const withoutLeadingSlash = normalized.replace(/^\/+/, "");
-  const rel = withoutLeadingSlash.startsWith(env.UPLOAD_DIR)
+  const rel = withoutLeadingSlash.startsWith(uploadPublicDir)
     ? withoutLeadingSlash
-    : path.posix.join(env.UPLOAD_DIR.replaceAll("\\", "/"), withoutLeadingSlash);
+    : path.posix.join(uploadPublicDir.replaceAll("\\", "/"), withoutLeadingSlash);
   return `${env.PUBLIC_BASE_URL}/${rel}`;
 }
 

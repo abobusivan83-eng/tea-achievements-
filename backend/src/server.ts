@@ -24,6 +24,7 @@ import { fail, ok } from "./lib/http.js";
 import { isTelegramConfigured, startTelegramLongPolling } from "./lib/telegram.js";
 import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
+import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
 
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
@@ -41,7 +42,7 @@ app.use(
   compression({
     threshold: 512,
     filter: (req, res) => {
-      if (req.path.startsWith(`/${env.UPLOAD_DIR}`)) return false;
+      if (req.path.startsWith(`/${uploadPublicDir}`)) return false;
       return compression.filter(req, res);
     },
   }),
@@ -87,12 +88,13 @@ app.use((req, res, next) => {
 
 // Статика загрузок
 app.use(
-  `/${env.UPLOAD_DIR}`,
-  express.static(path.resolve(process.cwd(), env.UPLOAD_DIR), {
-    maxAge: "7d",
+  `/${uploadPublicDir}`,
+  express.static(uploadRootAbs, {
+    maxAge: "30d",
     immutable: true,
     setHeaders(res) {
       res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
     },
   }),
 );

@@ -24,7 +24,10 @@ type LeaderboardAggRow = {
 
 leaderboardRouter.get("/", requireAuth, async (_req, res) => {
   const cached = getCachedLeaderboard<ReturnType<typeof attachPublicIds>>();
-  if (cached) return ok(res, cached);
+  if (cached) {
+    res.setHeader("Cache-Control", "private, max-age=20");
+    return ok(res, cached);
+  }
 
   const rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
     SELECT
@@ -70,5 +73,6 @@ leaderboardRouter.get("/", requireAuth, async (_req, res) => {
   });
 
   setCachedLeaderboard(mapped);
+  res.setHeader("Cache-Control", "private, max-age=20");
   return ok(res, mapped);
 });

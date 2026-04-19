@@ -171,7 +171,6 @@ export function App() {
             </AdminOnly>
           }
         />
-
         <Route
           path="*"
           element={
@@ -192,4 +191,3 @@ export function App() {
     </AnimatePresence>
   );
 }
-

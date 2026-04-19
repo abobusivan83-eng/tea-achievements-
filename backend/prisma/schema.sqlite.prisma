@@ -188,6 +188,7 @@ model UserAchievement {
 
   @@id([userId, achievementId])
   @@index([userId, awardedAt])
+  @@index([achievementId, awardedAt])
 }
 
 model Notification {

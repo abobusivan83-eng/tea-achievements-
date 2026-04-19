@@ -20,6 +20,7 @@ import { useSound } from "../state/sound";
 import { AchievementCard } from "../ui/components/AchievementCard";
 import { DEFAULT_BANNER_URL, resolveAvatarUrl, resolveBannerUrl } from "../lib/media";
 import { calculateLevelColor } from "../lib/levelColor";
+import { useQuery } from "@tanstack/react-query";
 
 type ProfileResp = {
   user: {
@@ -71,7 +72,6 @@ export function ProfilePage() {
   const soundEnabled = useSound((s) => s.enabled);
   const setSoundEnabled = useSound((s) => s.setEnabled);
   const [profile, setProfile] = useState<ProfileResp | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,36 +92,20 @@ export function ProfilePage() {
   const isOwnProfile = Boolean(me?.id && profileUserId && me.id === profileUserId);
   const isOtherUserProfile = Boolean(me?.id && profileUserId && me.id !== profileUserId);
 
+  const profileQuery = useQuery({
+    queryKey: ["profile", profileUserId],
+    queryFn: async () => apiFetch<ProfileResp>(`/api/users/${profileUserId}`),
+    enabled: Boolean(profileUserId),
+  });
+
   useEffect(() => {
-    let isMounted = true;
-    async function run() {
-      if (!profileUserId) {
-        if (isMounted) setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await apiFetch<ProfileResp>(`/api/users/${profileUserId}`);
-        if (!isMounted) return;
-        setProfile(data);
-        setNickname(data.user.nickname);
-        setFrameKey(data.user.frameKey);
-        setBadges(data.user.badges);
-        setStatusEmoji(data.user.statusEmoji ?? null);
-      } catch (e: any) {
-        if (isMounted) {
-          setError(e?.message ?? "Ошибка загрузки профиля");
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
-    run();
-    return () => {
-      isMounted = false;
-    };
-  }, [profileUserId]);
+    if (!profileQuery.data) return;
+    setProfile(profileQuery.data);
+    setNickname(profileQuery.data.user.nickname);
+    setFrameKey(profileQuery.data.user.frameKey);
+    setBadges(profileQuery.data.user.badges);
+    setStatusEmoji(profileQuery.data.user.statusEmoji ?? null);
+  }, [profileQuery.data]);
 
   // Чужой профиль: периодически подтягиваем данные с сервера (аватар/баннер видны всем без перезагрузки).
   useEffect(() => {
@@ -220,6 +204,9 @@ export function ProfilePage() {
     [isCreator],
   );
 
+  const loading = profileQuery.isLoading;
+  const queryError = profileQuery.error instanceof Error ? profileQuery.error.message : null;
+
   if (loading)
     return (
       <div className="grid gap-6">
@@ -258,7 +245,7 @@ export function ProfilePage() {
         </div>
       </div>
     );
-  if (error) return <div className="steam-card p-4">{error}</div>;
+  if (error ?? queryError) return <div className="steam-card p-4">{error ?? queryError}</div>;
   if (!profile) return null;
 
   const totalAchievements = profile.achievements.earned.length + profile.achievements.locked.length;
