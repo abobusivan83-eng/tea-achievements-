@@ -9,10 +9,16 @@ import { upload } from "../middleware/uploads.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { MAX_LEVEL, levelFromXp, xpForLevel } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
-import { awardAchievementToUser, revokeAchievementFromUser } from "../lib/achievementAwards.js";
+import {
+  awardAchievementToUser,
+  awardAchievementToUsers,
+  revokeAchievementFromUser,
+  revokeAchievementsFromUser,
+} from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
 import { invalidateShopItemsCache, invalidateSupportUnreadCountCache } from "../lib/cache.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
+import { deleteUserWithDependencies } from "../lib/userDeletion.js";
 
 export const adminRouter = Router();
 
@@ -178,9 +184,7 @@ adminRouter.post("/achievements", async (req: AuthedRequest, res) => {
       select: { id: true, title: true, rarity: true, points: true, isPublic: true },
     });
 
-    for (const userId of uniqueAwardUserIds) {
-      await awardAchievementToUser(tx, { achievementId: created.id, userId });
-    }
+    await awardAchievementToUsers(tx, { achievementId: created.id, userIds: uniqueAwardUserIds });
 
     return created;
   });
@@ -404,9 +408,10 @@ adminRouter.post("/users/:id/revoke-achievements", async (req: AuthedRequest, re
   if (!achievements.length) return fail(res, 404, "Achievements not found");
 
   await prisma.$transaction(async (tx) => {
-    for (const achievement of achievements) {
-      await revokeAchievementFromUser(tx, { achievementId: achievement.id, userId: target.id });
-    }
+    await revokeAchievementsFromUser(tx, {
+      achievementIds: achievements.map((achievement) => achievement.id),
+      userId: target.id,
+    });
   });
 
   if (req.user?.id) {
@@ -625,28 +630,39 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
 adminRouter.delete("/users/:id", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
   const id = req.params.id;
-  if (id === req.user!.id) return fail(res, 400, "Нельзя удалить свой аккаунт");
+  if (id === req.user!.id) return fail(res, 400, "?????? ??????? ???? ???????");
 
   const target = await prisma.user.findUnique({
     where: { id },
     select: { id: true, nickname: true, role: true, email: true },
   });
   if (!target) return fail(res, 404, "User not found");
-  if (target.role === "CREATOR") return fail(res, 403, "Нельзя удалить учётную запись создателя");
+  if (target.role === "CREATOR") return fail(res, 403, "?????? ??????? ??????? ?????? ?????????");
 
-  await prisma.user.delete({ where: { id: target.id } });
+  try {
+    await deleteUserWithDependencies(prisma, { userId: target.id });
 
-  if (req.user?.id) {
-    await logAdminAction(prisma, {
-      adminId: req.user.id,
-      action: "user.delete",
-      summary: `Удалён пользователь «${target.nickname}» (${target.email})`,
+    if (req.user?.id) {
+      await logAdminAction(prisma, {
+        adminId: req.user.id,
+        action: "user.delete",
+        summary: `?????? ???????????? ?${target.nickname}? (${target.email})`,
+        targetUserId: null,
+        targetNickname: target.nickname,
+      });
+    }
+
+    return ok(res, { deleted: true });
+  } catch (error) {
+    console.error("admin_delete_user_failed", {
+      actorUserId: req.user?.id ?? null,
       targetUserId: target.id,
       targetNickname: target.nickname,
+      targetEmail: target.email,
+      error,
     });
+    return fail(res, 500, "?? ??????? ??????? ????????????");
   }
-
-  return ok(res, { deleted: true });
 });
 
 adminRouter.post("/users/:id/coins", async (req: AuthedRequest, res) => {
@@ -1110,117 +1126,160 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
   );
 });
 
-const UpdateTaskSubmissionSchema = z.object({
-  status: SupportStatusSchema.optional(),
-  adminResponse: z.string().max(2000).nullable().optional(),
-  rejectionReason: z.string().min(3).max(2000).optional(),
-  isRead: z.boolean().optional(),
-});
+const TaskSubmissionIdSchema = z.string().uuid("Invalid submission id");
+
+const UpdateTaskSubmissionSchema = z
+  .object({
+    status: SupportStatusSchema.optional(),
+    adminResponse: z.string().trim().max(2000).nullable().optional(),
+    rejectionReason: z.string().trim().min(3).max(2000).optional(),
+    isRead: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.status === "REJECTED" && !data.rejectionReason?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rejectionReason"],
+        message: "??????? ??????? ?????????? (??????? 3 ???????)",
+      });
+    }
+  });
 
 adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
-  const parsed = UpdateTaskSubmissionSchema.safeParse(req.body);
-  if (!parsed.success) return fail(res, 400, "Invalid payload");
 
-  const existing = await prisma.taskSubmission.findUnique({
-    where: { id: req.params.id },
-    include: {
-      task: { select: { id: true, title: true, achievementId: true, rewardCoins: true } },
-      user: { select: { id: true, nickname: true } },
-    },
-  });
-  if (!existing) return fail(res, 404, "Submission not found");
+  const parsedSubmissionId = TaskSubmissionIdSchema.safeParse(req.params.id);
+  if (!parsedSubmissionId.success) return fail(res, 400, parsedSubmissionId.error.issues[0]?.message ?? "Invalid submission id");
+
+  const parsed = UpdateTaskSubmissionSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
 
   const adminDisplayName = await getAdminDisplayName(req);
-  const nextStatus = parsed.data.status ?? existing.status;
-  const nextResponse = parsed.data.adminResponse !== undefined ? parsed.data.adminResponse : existing.adminResponse;
-  const rejectionReason = parsed.data.rejectionReason?.trim();
-  if (parsed.data.status === "REJECTED" && !rejectionReason) {
-    return fail(res, 400, "Укажите причину отклонения (минимум 3 символа)");
-  }
-  const mergedResponse =
-    parsed.data.status === "REJECTED" && rejectionReason
-      ? [nextResponse?.trim(), `Причина отклонения: ${rejectionReason}`].filter(Boolean).join("\n")
-      : nextResponse;
 
-  const updated = await prisma.taskSubmission.update({
-    where: { id: existing.id },
-    data: {
-      status: parsed.data.status,
-      adminResponse: mergedResponse ?? undefined,
-      isRead: parsed.data.isRead,
-      reviewedAt: parsed.data.status ? new Date() : undefined,
-      reviewedById: parsed.data.status ? req.user?.id : undefined,
-    },
-  });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.taskSubmission.findUnique({
+        where: { id: parsedSubmissionId.data },
+        include: {
+          task: { select: { id: true, title: true, achievementId: true, rewardCoins: true } },
+          user: { select: { id: true, nickname: true } },
+        },
+      });
 
-  if (parsed.data.status === "RESOLVED" && existing.task?.achievementId) {
-    await prisma.$transaction(async (tx) => {
-      await awardAchievementToUser(tx, { achievementId: existing.task.achievementId, userId: existing.user.id });
+      if (!existing) {
+        return { kind: "missing" as const };
+      }
 
-      const coins = Math.max(0, existing.task.rewardCoins ?? 0);
-      if (coins > 0) {
-        // Store coin bonus as a SHOP notification containing a marker that shop router can parse.
+      const nextStatus = parsed.data.status ?? existing.status;
+      const statusChanged = parsed.data.status !== undefined && parsed.data.status !== existing.status;
+      const nextResponseRaw = parsed.data.adminResponse !== undefined ? parsed.data.adminResponse : existing.adminResponse;
+      const nextResponse = typeof nextResponseRaw === "string" ? nextResponseRaw.trim() : nextResponseRaw;
+      const rejectionReason = parsed.data.rejectionReason?.trim();
+      const mergedResponse =
+        nextStatus === "REJECTED" && rejectionReason
+          ? [nextResponse, `??????? ??????????: ${rejectionReason}`].filter(Boolean).join("\n")
+          : nextResponse ?? null;
+
+      if (statusChanged && nextStatus === "RESOLVED" && !existing.task?.achievementId) {
+        throw new Error(`Resolved task submission ${existing.id} has no linked achievement`);
+      }
+
+      const updated = await tx.taskSubmission.update({
+        where: { id: existing.id },
+        data: {
+          status: parsed.data.status ?? undefined,
+          adminResponse: mergedResponse ?? undefined,
+          isRead: parsed.data.isRead,
+          reviewedAt: parsed.data.status ? new Date() : undefined,
+          reviewedById: parsed.data.status ? req.user?.id : undefined,
+        },
+      });
+
+      const shouldAward = statusChanged && nextStatus === "RESOLVED" && Boolean(existing.task?.achievementId);
+      if (shouldAward && existing.task?.achievementId) {
+        await awardAchievementToUser(tx, { achievementId: existing.task.achievementId, userId: existing.user.id });
+
+        const coins = Math.max(0, existing.task.rewardCoins ?? 0);
         await tx.notification.create({
           data: {
-            type: "SHOP",
+            type: coins > 0 ? "SHOP" : "ACH",
             userId: existing.user.id,
             adminName: adminDisplayName,
-            text: `✅ Задание принято: ${existing.task.title}\nАдминистратор: ${adminDisplayName}\nНаграда: +${coins} монет\n[COIN_BONUS]:${coins}`,
-          },
-        });
-      } else {
-        await tx.notification.create({
-          data: {
-            type: "ACH",
-            userId: existing.user.id,
-            adminName: adminDisplayName,
-            text: `✅ Задание принято: ${existing.task.title}\nАдминистратор: ${adminDisplayName}\nНаграда: достижение добавлено в профиль`,
+            text:
+              coins > 0
+                ? `? ??????? ???????: ${existing.task.title}
+?????????????: ${adminDisplayName}
+???????: +${coins} ?????
+[COIN_BONUS]:${coins}`
+                : `? ??????? ???????: ${existing.task.title}
+?????????????: ${adminDisplayName}
+???????: ?????????? ????????? ? ???????`,
           },
         });
       }
-    });
-    invalidateSupportUnreadCountCache(existing.user.id);
-  }
 
-  const shouldNotify =
-    (parsed.data.status !== undefined && parsed.data.status !== existing.status) ||
-    (parsed.data.adminResponse !== undefined && parsed.data.adminResponse !== existing.adminResponse) ||
-    Boolean(rejectionReason);
-  if (shouldNotify) {
-    const parts: string[] = [`Ответ администрации по заданию «${existing.task.title}»`];
-    parts.push(`Администратор: ${adminDisplayName}`);
-    parts.push(`Статус: ${supportStatusLabel(nextStatus)}`);
-    if (mergedResponse?.trim()) parts.push(`Ответ: ${mergedResponse.trim()}`);
-    if (nextStatus === "REJECTED" && rejectionReason) {
-      parts.push(`Ваше задание «${existing.task.title}» отклонено. Причина: ${rejectionReason}`);
+      const shouldNotify =
+        statusChanged ||
+        (parsed.data.adminResponse !== undefined && parsed.data.adminResponse !== existing.adminResponse) ||
+        Boolean(rejectionReason);
+
+      if (shouldNotify) {
+        const parts: string[] = [`????? ????????????? ?? ??????? ?${existing.task.title}?`];
+        parts.push(`?????????????: ${adminDisplayName}`);
+        parts.push(`??????: ${supportStatusLabel(nextStatus)}`);
+        if (mergedResponse?.trim()) parts.push(`?????: ${mergedResponse.trim()}`);
+        if (nextStatus === "REJECTED" && rejectionReason) {
+          parts.push(`???? ??????? ?${existing.task.title}? ?????????. ???????: ${rejectionReason}`);
+        }
+
+        await tx.notification.create({
+          data: {
+            type: "SUPPORT",
+            userId: existing.user.id,
+            adminName: adminDisplayName,
+            text: parts.join("\n"),
+          },
+        });
+      }
+
+      return {
+        kind: "ok" as const,
+        updated,
+        existing,
+        nextStatus,
+        shouldInvalidate: shouldAward || shouldNotify,
+      };
+    });
+
+    if (result.kind === "missing") return fail(res, 404, "Submission not found");
+
+    if (result.shouldInvalidate) {
+      invalidateSupportUnreadCountCache(result.existing.user.id);
     }
-    await prisma.notification.create({
-      data: {
-        type: "SUPPORT",
-        userId: existing.user.id,
-        adminName: adminDisplayName,
-        text: parts.join("\n"),
-      },
-    });
-    invalidateSupportUnreadCountCache(existing.user.id);
-  }
 
-  const auditWorthy =
-    parsed.data.status !== undefined ||
-    parsed.data.adminResponse !== undefined ||
-    parsed.data.isRead !== undefined;
-  if (req.user?.id && auditWorthy) {
-    await logAdminAction(prisma, {
-      adminId: req.user.id,
-      action: "task.submission",
-      summary: `Задание «${existing.task.title}» — пользователь «${existing.user.nickname}»: ${supportStatusLabel(nextStatus)}`,
-      targetUserId: existing.user.id,
-      targetNickname: existing.user.nickname,
-      meta: { submissionId: existing.id, taskId: existing.taskId, status: nextStatus },
-    });
-  }
+    const auditWorthy =
+      parsed.data.status !== undefined ||
+      parsed.data.adminResponse !== undefined ||
+      parsed.data.isRead !== undefined;
+    if (req.user?.id && auditWorthy) {
+      await logAdminAction(prisma, {
+        adminId: req.user.id,
+        action: "task.submission",
+        summary: `??????? ?${result.existing.task.title}? ? ???????????? ?${result.existing.user.nickname}?: ${supportStatusLabel(result.nextStatus)}`,
+        targetUserId: result.existing.user.id,
+        targetNickname: result.existing.user.nickname,
+        meta: { submissionId: result.existing.id, taskId: result.existing.taskId, status: result.nextStatus },
+      });
+    }
 
-  return ok(res, updated);
+    return ok(res, result.updated);
+  } catch (error) {
+    console.error("task_submission_update_failed", {
+      actorUserId: req.user?.id ?? null,
+      submissionId: parsedSubmissionId.data,
+      payload: parsed.data,
+      error,
+    });
+    return fail(res, 500, "?? ??????? ???????? ???????? ???????");
+  }
 });
-

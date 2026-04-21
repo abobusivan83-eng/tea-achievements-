@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { getCoinBonus } from "../lib/coins.js";
+import { getCoinBonus, getUserCoins } from "../lib/coins.js";
 import { parseJsonStringArray } from "../lib/cosmeticsAccess.js";
 import { logAdminAction } from "../lib/adminAudit.js";
 import {
@@ -99,16 +99,8 @@ shopRouter.post("/buy", async (req: AuthedRequest, res) => {
   try {
     await prisma.$transaction(
       async (tx) => {
-        const [spentRows, bonus] = await Promise.all([
-          tx.shopPurchase.findMany({
-            where: { userId: req.user!.id },
-            select: { item: { select: { price: true } } },
-          }),
-          getCoinBonus(tx, req.user!.id),
-        ]);
-
-        const spent = spentRows.reduce((s, p) => s + p.item.price, 0);
-        if (bonus - spent < item.price) {
+        const availableCoins = await getUserCoins(tx, req.user!.id);
+        if (availableCoins < item.price) {
           throw new Error("Not enough coins");
         }
 
