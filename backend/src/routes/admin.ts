@@ -933,6 +933,19 @@ adminRouter.patch("/support/reports/:id", async (req: AuthedRequest, res) => {
   return ok(res, updated);
 });
 
+adminRouter.get("/inbox-counts", async (req: AuthedRequest, res) => {
+  if (!adminOnly(req, res)) return;
+
+  const [tasks, suggestions, reports] = await Promise.all([
+    prisma.taskSubmission.count({ where: { status: "PENDING" } }),
+    prisma.suggestion.count({ where: { status: "PENDING" } }),
+    prisma.report.count({ where: { status: "PENDING" } }),
+  ]);
+
+  res.setHeader("Cache-Control", "private, max-age=10");
+  return ok(res, { tasks, suggestions, reports });
+});
+
 const CreateTaskSchema = z.object({
   title: z.string().min(3).max(120),
   description: z.string().min(10).max(2000),
@@ -1100,12 +1113,31 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
         select: {
           id: true,
           title: true,
+          description: true,
+          conditions: true,
           rewardCoins: true,
+          isActive: true,
           isEvent: true,
           startsAt: true,
           endsAt: true,
           styleTag: true,
-          achievement: { select: { id: true, title: true, rarity: true, iconPath: true } },
+          achievementId: true,
+          createdById: true,
+          createdAt: true,
+          updatedAt: true,
+          achievement: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              rarity: true,
+              points: true,
+              iconPath: true,
+              frameKey: true,
+              isPublic: true,
+              createdAt: true,
+            },
+          },
         },
       },
     },
@@ -1119,8 +1151,14 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
       task: {
         ...s.task,
         achievement: s.task.achievement
-          ? { ...s.task.achievement, iconUrl: toPublicFileUrl(s.task.achievement.iconPath) }
+          ? {
+              ...s.task.achievement,
+              iconUrl: toPublicFileUrl(s.task.achievement.iconPath),
+              createdAt: s.task.achievement.createdAt.toISOString(),
+            }
           : null,
+        createdAt: s.task.createdAt.toISOString(),
+        updatedAt: s.task.updatedAt.toISOString(),
       },
     })),
   );
@@ -1140,7 +1178,7 @@ const UpdateTaskSubmissionSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["rejectionReason"],
-        message: "??????? ??????? ?????????? (??????? 3 ???????)",
+        message: "Укажите причину отклонения (минимум 3 символа)",
       });
     }
   });
@@ -1177,7 +1215,7 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
       const rejectionReason = parsed.data.rejectionReason?.trim();
       const mergedResponse =
         nextStatus === "REJECTED" && rejectionReason
-          ? [nextResponse, `??????? ??????????: ${rejectionReason}`].filter(Boolean).join("\n")
+          ? [nextResponse, `Причина отклонения: ${rejectionReason}`].filter(Boolean).join("\n")
           : nextResponse ?? null;
 
       if (statusChanged && nextStatus === "RESOLVED" && !existing.task?.achievementId) {
@@ -1207,13 +1245,13 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
             adminName: adminDisplayName,
             text:
               coins > 0
-                ? `? ??????? ???????: ${existing.task.title}
-?????????????: ${adminDisplayName}
-???????: +${coins} ?????
+                ? `Вы выполнили задание: ${existing.task.title}
+Администратор: ${adminDisplayName}
+Награда: +${coins} монет
 [COIN_BONUS]:${coins}`
-                : `? ??????? ???????: ${existing.task.title}
-?????????????: ${adminDisplayName}
-???????: ?????????? ????????? ? ???????`,
+                : `Вы выполнили задание: ${existing.task.title}
+Администратор: ${adminDisplayName}
+Награда: достижение уже добавлено в профиль`,
           },
         });
       }
@@ -1224,12 +1262,12 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         Boolean(rejectionReason);
 
       if (shouldNotify) {
-        const parts: string[] = [`????? ????????????? ?? ??????? ?${existing.task.title}?`];
-        parts.push(`?????????????: ${adminDisplayName}`);
-        parts.push(`??????: ${supportStatusLabel(nextStatus)}`);
-        if (mergedResponse?.trim()) parts.push(`?????: ${mergedResponse.trim()}`);
+        const parts: string[] = [`Ответ администрации по заданию «${existing.task.title}»`];
+        parts.push(`Администратор: ${adminDisplayName}`);
+        parts.push(`Статус: ${supportStatusLabel(nextStatus)}`);
+        if (mergedResponse?.trim()) parts.push(`Ответ: ${mergedResponse.trim()}`);
         if (nextStatus === "REJECTED" && rejectionReason) {
-          parts.push(`???? ??????? ?${existing.task.title}? ?????????. ???????: ${rejectionReason}`);
+          parts.push(`Заявка по заданию «${existing.task.title}» отклонена. Причина: ${rejectionReason}`);
         }
 
         await tx.notification.create({
@@ -1265,7 +1303,7 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
       await logAdminAction(prisma, {
         adminId: req.user.id,
         action: "task.submission",
-        summary: `??????? ?${result.existing.task.title}? ? ???????????? ?${result.existing.user.nickname}?: ${supportStatusLabel(result.nextStatus)}`,
+        summary: `Заявка «${result.existing.task.title}» пользователя «${result.existing.user.nickname}»: ${supportStatusLabel(result.nextStatus)}`,
         targetUserId: result.existing.user.id,
         targetNickname: result.existing.user.nickname,
         meta: { submissionId: result.existing.id, taskId: result.existing.taskId, status: result.nextStatus },

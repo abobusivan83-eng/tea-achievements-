@@ -225,19 +225,29 @@ export type TaskSubmission = {
   task: {
     id: string;
     title: string;
+    description: string;
+    conditions: string;
     rewardCoins?: number;
+    isActive: boolean;
     isEvent: boolean;
     startsAt: string | null;
     endsAt: string | null;
     styleTag: string | null;
+    achievementId: string;
+    createdById: string | null;
+    createdAt: string;
+    updatedAt: string;
     achievement: {
       id: string;
       title: string;
+      description?: string;
       rarity: Rarity;
       iconUrl: string | null;
-      points?: number;
+      points: number;
+      frameKey?: string | null;
+      isPublic?: boolean;
+      createdAt?: string;
     } | null;
   };
   user?: { id: string; nickname: string; email: string };
 };
-

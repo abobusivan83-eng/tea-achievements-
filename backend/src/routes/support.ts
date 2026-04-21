@@ -4,7 +4,11 @@ import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { upload } from "../middleware/uploads.js";
-import { getCachedSupportUnreadCount, invalidateSupportUnreadCountCache, setCachedSupportUnreadCount } from "../lib/cache.js";
+import {
+  getCachedSupportUnreadCount,
+  invalidateSupportUnreadCountCache,
+  setCachedSupportUnreadCount,
+} from "../lib/cache.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 
 export const supportRouter = Router();
@@ -44,41 +48,59 @@ supportRouter.post("/suggestions", async (req: AuthedRequest, res) => {
   const parsed = CreateSuggestionSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
 
-  const s = await prisma.suggestion.create({
+  const suggestion = await prisma.suggestion.create({
     data: {
       title: parsed.data.title,
       description: parsed.data.description,
       authorId: req.user!.id,
     },
-    select: { id: true, title: true, description: true, status: true, adminResponse: true, isRead: true, createdAt: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      adminResponse: true,
+      isRead: true,
+      createdAt: true,
+    },
   });
 
   await prisma.notification.create({
     data: {
       type: "SUPPORT",
-      text: `💡 Новое предложение: ${parsed.data.title}`,
+      text: `Новое предложение: ${parsed.data.title}`,
       adminName: null,
       userId: null,
     },
   });
   invalidateSupportUnreadCountCache();
 
-  const parsedDesc = parseRichDescription(s.description);
-  return ok(res, { ...s, description: parsedDesc.text, images: parsedDesc.images });
+  const parsedDesc = parseRichDescription(suggestion.description);
+  return ok(res, { ...suggestion, description: parsedDesc.text, images: parsedDesc.images });
 });
 
 supportRouter.get("/suggestions/mine", async (req: AuthedRequest, res) => {
   const items = await prisma.suggestion.findMany({
     where: { authorId: req.user!.id },
     orderBy: { createdAt: "desc" },
-    select: { id: true, title: true, description: true, status: true, adminResponse: true, isRead: true, createdAt: true, updatedAt: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      adminResponse: true,
+      isRead: true,
+      createdAt: true,
+      updatedAt: true,
+    },
     take: 200,
   });
+
   return ok(
     res,
-    items.map((x) => {
-      const parsed = parseRichDescription(x.description);
-      return { ...x, description: parsed.text, images: parsed.images };
+    items.map((item) => {
+      const parsed = parseRichDescription(item.description);
+      return { ...item, description: parsed.text, images: parsed.images };
     }),
   );
 });
@@ -94,7 +116,7 @@ supportRouter.post("/reports", async (req: AuthedRequest, res) => {
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
   if (parsed.data.reportedId === req.user!.id) return fail(res, 400, "You cannot report yourself");
 
-  const r = await prisma.report.create({
+  const report = await prisma.report.create({
     data: {
       reporterId: req.user!.id,
       reportedId: parsed.data.reportedId,
@@ -116,15 +138,15 @@ supportRouter.post("/reports", async (req: AuthedRequest, res) => {
   await prisma.notification.create({
     data: {
       type: "SUPPORT",
-      text: `⚠️ Новая жалоба (${parsed.data.reason})`,
+      text: `Новая жалоба (${parsed.data.reason})`,
       adminName: null,
       userId: null,
     },
   });
   invalidateSupportUnreadCountCache();
 
-  const parsedDesc = parseRichDescription(r.description);
-  return ok(res, { ...r, description: parsedDesc.text, images: parsedDesc.images });
+  const parsedDesc = parseRichDescription(report.description);
+  return ok(res, { ...report, description: parsedDesc.text, images: parsedDesc.images });
 });
 
 supportRouter.get("/reports/mine", async (req: AuthedRequest, res) => {
@@ -144,11 +166,12 @@ supportRouter.get("/reports/mine", async (req: AuthedRequest, res) => {
     },
     take: 200,
   });
+
   return ok(
     res,
-    items.map((x) => {
-      const parsed = parseRichDescription(x.description);
-      return { ...x, description: parsed.text, images: parsed.images };
+    items.map((item) => {
+      const parsed = parseRichDescription(item.description);
+      return { ...item, description: parsed.text, images: parsed.images };
     }),
   );
 });
@@ -160,26 +183,25 @@ supportRouter.post("/suggestions/:id/images", upload.array("files", 8), async (r
   });
   if (!existing) return fail(res, 404, "Suggestion not found");
   if (existing.authorId !== req.user!.id && req.user!.role !== "ADMIN") return fail(res, 403, "Forbidden");
+
   const files = ((req as any).files as Express.Multer.File[] | undefined) ?? [];
   if (!files.length) return fail(res, 400, "No files");
+
   const uploadedUrls = await Promise.all(
     files
-      .filter((f) => !!f.buffer)
-      .map((f, i) =>
+      .filter((file) => !!file.buffer)
+      .map((file, index) =>
         uploadImageToMediaStorage({
-          buffer: f.buffer,
+          buffer: file.buffer,
           folder: "support",
-          publicIdPrefix: `suggestion-${existing.id}-${i}`,
+          publicIdPrefix: `suggestion-${existing.id}-${index}`,
           preset: { width: 1600, height: 1600, quality: 80, fit: "inside" },
         }),
       ),
   );
 
   const parsed = parseRichDescription(existing.description);
-  const nextImages = [
-    ...parsed.images,
-    ...uploadedUrls.filter(Boolean),
-  ].slice(0, 12) as string[];
+  const nextImages = [...parsed.images, ...uploadedUrls.filter(Boolean)].slice(0, 12) as string[];
 
   const updated = await prisma.suggestion.update({
     where: { id: existing.id },
@@ -197,26 +219,25 @@ supportRouter.post("/reports/:id/images", upload.array("files", 8), async (req: 
   });
   if (!existing) return fail(res, 404, "Report not found");
   if (existing.reporterId !== req.user!.id && req.user!.role !== "ADMIN") return fail(res, 403, "Forbidden");
+
   const files = ((req as any).files as Express.Multer.File[] | undefined) ?? [];
   if (!files.length) return fail(res, 400, "No files");
+
   const uploadedUrls = await Promise.all(
     files
-      .filter((f) => !!f.buffer)
-      .map((f, i) =>
+      .filter((file) => !!file.buffer)
+      .map((file, index) =>
         uploadImageToMediaStorage({
-          buffer: f.buffer,
+          buffer: file.buffer,
           folder: "support",
-          publicIdPrefix: `report-${existing.id}-${i}`,
+          publicIdPrefix: `report-${existing.id}-${index}`,
           preset: { width: 1600, height: 1600, quality: 80, fit: "inside" },
         }),
       ),
   );
 
   const parsed = parseRichDescription(existing.description);
-  const nextImages = [
-    ...parsed.images,
-    ...uploadedUrls.filter(Boolean),
-  ].slice(0, 12) as string[];
+  const nextImages = [...parsed.images, ...uploadedUrls.filter(Boolean)].slice(0, 12) as string[];
 
   const updated = await prisma.report.update({
     where: { id: existing.id },
@@ -227,7 +248,6 @@ supportRouter.post("/reports/:id/images", upload.array("files", 8), async (req: 
   return ok(res, { id: updated.id, images: next.images });
 });
 
-// Notifications are always personal and scoped to current user.
 supportRouter.get("/notifications", async (req: AuthedRequest, res) => {
   const take = Math.min(200, Math.max(1, Number(req.query.take ?? 50)));
   const where = { userId: req.user!.id };
@@ -250,8 +270,9 @@ supportRouter.get("/notifications/unread-count", async (req: AuthedRequest, res)
     return ok(res, { count: cached });
   }
 
-  const where = { userId: req.user!.id, isRead: false };
-  const count = await prisma.notification.count({ where });
+  const count = await prisma.notification.count({
+    where: { userId: req.user!.id, isRead: false },
+  });
   setCachedSupportUnreadCount(cacheKey, count);
   res.setHeader("Cache-Control", "private, max-age=20");
   return ok(res, { count });
@@ -276,13 +297,9 @@ supportRouter.patch("/notifications/:id/read", async (req: AuthedRequest, res) =
 
 supportRouter.patch("/notifications/read-all", async (req: AuthedRequest, res) => {
   await prisma.notification.updateMany({
-    where: {
-      userId: req.user!.id,
-      isRead: false,
-    },
+    where: { userId: req.user!.id, isRead: false },
     data: { isRead: true },
   });
   invalidateSupportUnreadCountCache();
   return ok(res, { updated: true });
 });
-

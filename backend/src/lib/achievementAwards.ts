@@ -20,14 +20,11 @@ export async function awardAchievementToUser(
   });
   if (!ach) throw new Error("Achievement not found");
 
-  const already = await db.userAchievement.findUnique({
-    where: { userId_achievementId: { userId: params.userId, achievementId: params.achievementId } },
+  const created = await db.userAchievement.createMany({
+    data: [{ userId: params.userId, achievementId: params.achievementId }],
+    skipDuplicates: true,
   });
-  if (already) return { awarded: true, already: true };
-
-  await db.userAchievement.create({
-    data: { userId: params.userId, achievementId: params.achievementId },
-  });
+  if (created.count === 0) return { awarded: true, already: true };
 
   if (!ach.isPublic) {
     await db.achievementAccess.upsert({

@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiDelete, apiFetch, apiJson, apiUpload } from "../lib/api";
-import type { Achievement, AdminAchievement, AdminAuditLogRow, AdminUserRow, CreatedAchievement, Rarity, Role } from "../lib/types";
+import type {
+  Achievement,
+  AdminAchievement,
+  AdminAuditLogRow,
+  AdminUserRow,
+  CreatedAchievement,
+  Rarity,
+  Role,
+  TaskItem,
+  TaskSubmission,
+} from "../lib/types";
 import { Button } from "../ui/components/Button";
 import { Modal } from "../ui/components/Modal";
 import { motion } from "framer-motion";
@@ -16,6 +26,7 @@ import { badgeCatalog, frames, statusEmojiCatalog } from "../lib/cosmetics";
 import { AvatarFrame } from "../ui/components/AvatarFrame";
 import { AchievementIcon } from "../ui/components/AchievementIcon";
 import { AchievementCard } from "../ui/components/AchievementCard";
+import { TaskQuestCard } from "../ui/components/TaskQuestCard";
 import { calculateLevelColor } from "../lib/levelColor";
 
 type SupportSuggestionRow = {
@@ -52,6 +63,12 @@ type AdminShopItem = {
   rarity: Rarity;
   description: string | null;
   icon: string | null;
+};
+
+type AdminInboxCounts = {
+  tasks: number;
+  suggestions: number;
+  reports: number;
 };
 
 type AdminTask = {
@@ -107,28 +124,34 @@ function toAdminAchievementCardModel(a: AdminAchievement): Achievement {
   };
 }
 
-type AdminTaskSubmission = {
-  id: string;
-  taskId: string;
-  userId: string;
-  message: string;
-  status: "PENDING" | "REVIEWED" | "RESOLVED" | "REJECTED";
-  adminResponse: string | null;
-  isRead: boolean;
-  createdAt: string;
-  evidence: string[];
-  user: { id: string; nickname: string; email: string };
-  task: {
-    id: string;
-    title: string;
-    rewardCoins?: number;
-    isEvent: boolean;
-    startsAt: string | null;
-    endsAt: string | null;
-    styleTag: string | null;
-    achievement: { id: string; title: string; rarity: Rarity; iconUrl?: string | null } | null;
-  };
+type AdminTaskSubmission = TaskSubmission & {
+  user: NonNullable<TaskSubmission["user"]>;
 };
+
+function toAdminTaskCardModel(submission: AdminTaskSubmission): TaskItem {
+  return {
+    ...submission.task,
+    rewardCoins: submission.task.rewardCoins ?? 0,
+    achievementId: submission.task.achievementId,
+    achievement: submission.task.achievement
+      ? {
+          ...submission.task.achievement,
+          description: submission.task.achievement.description ?? "",
+          frameKey: submission.task.achievement.frameKey ?? null,
+          isPublic: submission.task.achievement.isPublic ?? true,
+          createdAt: submission.task.achievement.createdAt ?? submission.task.createdAt,
+        }
+      : null,
+    mySubmission: {
+      id: submission.id,
+      status: submission.status,
+      createdAt: submission.createdAt,
+      reviewedAt: submission.reviewedAt,
+      adminResponse: submission.adminResponse,
+      reviewedByNickname: null,
+    },
+  };
+}
 
 export function AdminPage() {
   const me = useAuth((s) => s.me);
@@ -152,11 +175,13 @@ export function AdminPage() {
   const [supportSuggestions, setSupportSuggestions] = useState<SupportSuggestionRow[]>([]);
   const [supportReports, setSupportReports] = useState<SupportReportRow[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogRow[]>([]);
+  const [adminInboxCounts, setAdminInboxCounts] = useState<AdminInboxCounts>({ tasks: 0, suggestions: 0, reports: 0 });
   const [suggestionResponses, setSuggestionResponses] = useState<Record<string, string>>({});
   const [reportResponses, setReportResponses] = useState<Record<string, string>>({});
   const [shopItems, setShopItems] = useState<AdminShopItem[]>([]);
   const [tasks, setTasks] = useState<AdminTask[]>([]);
   const [taskSubmissions, setTaskSubmissions] = useState<AdminTaskSubmission[]>([]);
+  const [selectedTaskSubmissionId, setSelectedTaskSubmissionId] = useState<string>("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
   const [taskConditions, setTaskConditions] = useState("");
@@ -243,6 +268,11 @@ export function AdminPage() {
     ]);
     setSupportSuggestions(suggestions);
     setSupportReports(reports);
+    setAdminInboxCounts((prev) => ({
+      ...prev,
+      suggestions: suggestions.filter((item) => item.status === "PENDING").length,
+      reports: reports.filter((item) => item.status === "PENDING").length,
+    }));
   }
 
   async function refreshAuditLogs() {
@@ -262,6 +292,15 @@ export function AdminPage() {
     ]);
     setTasks(taskRows);
     setTaskSubmissions(submissionRows);
+    setAdminInboxCounts((prev) => ({
+      ...prev,
+      tasks: submissionRows.filter((item) => item.status === "PENDING").length,
+    }));
+  }
+
+  async function refreshAdminInboxCounts() {
+    const counts = await apiFetch<AdminInboxCounts>("/api/admin/inbox-counts", { silent: true });
+    setAdminInboxCounts(counts);
   }
 
   function mapCosmeticRarityToShop(r: string): Rarity {
@@ -347,7 +386,7 @@ export function AdminPage() {
   useEffect(() => {
     const tasks: Promise<unknown>[] = [refreshAchievements()];
     if (isStaffUser) {
-      tasks.push(refreshUsers(), refreshSupport(), refreshShop(), refreshTasks(), refreshAuditLogs());
+      tasks.push(refreshUsers(), refreshSupport(), refreshShop(), refreshTasks(), refreshAuditLogs(), refreshAdminInboxCounts());
     }
     Promise.all(tasks).catch((e: any) => setError(e?.message ?? "Ошибка загрузки"));
   }, [isStaffUser]);
@@ -355,6 +394,57 @@ export function AdminPage() {
   useEffect(() => {
     if (!isStaffUser && tab !== "achievements") setTab("achievements");
   }, [isStaffUser, tab]);
+
+  useEffect(() => {
+    if (!isStaffUser) return;
+    let cancelled = false;
+
+    const refreshCurrentSection = async () => {
+      try {
+        if (tab === "tasks") {
+          await Promise.all([refreshTasks(), refreshAdminInboxCounts()]);
+        } else if (tab === "reports" || tab === "suggestions") {
+          await Promise.all([refreshSupport(), refreshAdminInboxCounts()]);
+        } else {
+          await refreshAdminInboxCounts();
+        }
+      } catch (e: any) {
+        if (!cancelled) setError((prev) => prev ?? e?.message ?? "Ошибка обновления данных");
+      }
+    };
+
+    void refreshCurrentSection();
+    const id = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void refreshCurrentSection();
+    }, 15_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [isStaffUser, tab]);
+
+  const unreadTaskSubmissions = useMemo(() => taskSubmissions.filter((submission) => !submission.isRead), [taskSubmissions]);
+  const readTaskSubmissions = useMemo(() => taskSubmissions.filter((submission) => submission.isRead), [taskSubmissions]);
+  const selectedTaskSubmission = useMemo(
+    () =>
+      taskSubmissions.find((submission) => submission.id === selectedTaskSubmissionId) ??
+      unreadTaskSubmissions[0] ??
+      readTaskSubmissions[0] ??
+      null,
+    [readTaskSubmissions, selectedTaskSubmissionId, taskSubmissions, unreadTaskSubmissions],
+  );
+
+  useEffect(() => {
+    if (!selectedTaskSubmission && selectedTaskSubmissionId) {
+      setSelectedTaskSubmissionId("");
+      return;
+    }
+    if (!selectedTaskSubmissionId && selectedTaskSubmission) {
+      setSelectedTaskSubmissionId(selectedTaskSubmission.id);
+    }
+  }, [selectedTaskSubmission, selectedTaskSubmissionId]);
 
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
@@ -399,6 +489,15 @@ export function AdminPage() {
     return "Ожидает";
   }
 
+  function renderAdminCountBadge(count: number) {
+    if (count <= 0) return null;
+    return (
+      <span className="ml-2 inline-flex min-w-6 items-center justify-center rounded-full border border-amber-300/20 bg-amber-300/15 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+        {count > 99 ? "99+" : count}
+      </span>
+    );
+  }
+
   function shopRarityLabel(r: Rarity) {
     if (r === "RARE") return "Редкая";
     if (r === "EPIC") return "Эпическая";
@@ -416,6 +515,27 @@ export function AdminPage() {
   function openTaskEditor(task: AdminTask) {
     setEditingTask(task);
     setEditTaskOpen(true);
+  }
+
+  function openRejectTaskSubmission(submission: AdminTaskSubmission) {
+    setSelectedTaskSubmissionId(submission.id);
+    setRejectTarget(submission);
+    setRejectReasonDraft(taskResponses[submission.id] ?? submission.adminResponse ?? "");
+    setRejectOpen(true);
+  }
+
+  async function grantTaskSubmission(submission: AdminTaskSubmission) {
+    await apiJson(
+      `/api/admin/tasks/submissions/${submission.id}`,
+      {
+        status: "RESOLVED",
+        isRead: true,
+        adminResponse: taskResponses[submission.id] ?? submission.adminResponse ?? "",
+      },
+      "PATCH",
+    );
+    await refreshTasks();
+    toast({ kind: "success", title: "Награда выдана" });
   }
 
   async function updateReportStatus(report: SupportReportRow, status: SupportReportRow["status"], adminResponse?: string | null) {
@@ -484,16 +604,25 @@ export function AdminPage() {
                   Кастомизация профиля
                 </Button>
                 <Button variant={tab === "reports" ? "primary" : "ghost"} size="sm" onClick={() => setTab("reports")}>
-                  Жалобы
+                  <span className="inline-flex items-center">
+                    Жалобы
+                    {renderAdminCountBadge(adminInboxCounts.reports)}
+                  </span>
                 </Button>
                 <Button variant={tab === "suggestions" ? "primary" : "ghost"} size="sm" onClick={() => setTab("suggestions")}>
-                  Предложения
+                  <span className="inline-flex items-center">
+                    Предложения
+                    {renderAdminCountBadge(adminInboxCounts.suggestions)}
+                  </span>
                 </Button>
                 <Button variant={tab === "shop" ? "primary" : "ghost"} size="sm" onClick={() => setTab("shop")}>
                   Магазин
                 </Button>
                 <Button variant={tab === "tasks" ? "primary" : "ghost"} size="sm" onClick={() => setTab("tasks")}>
-                  Задания
+                  <span className="inline-flex items-center">
+                    Задания
+                    {renderAdminCountBadge(adminInboxCounts.tasks)}
+                  </span>
                 </Button>
                 <Button variant={tab === "audit" ? "primary" : "ghost"} size="sm" onClick={() => setTab("audit")}>
                   Действия администрации
@@ -577,7 +706,7 @@ export function AdminPage() {
                     );
                   })}
                 </div>
-              </div>
+                </div>
             </label>
 
             <label className="grid gap-1 text-sm">
@@ -1470,7 +1599,200 @@ export function AdminPage() {
 
             <div className="grid gap-2">
               <div className="text-sm font-semibold">Отправки пользователей</div>
-              <div className="grid gap-4">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 border-b border-white/10 px-2 pb-2 text-[11px] uppercase tracking-[0.18em] text-steam-muted">
+                    <div>Заявка</div>
+                    <div>Статус</div>
+                    <div>Файлы</div>
+                    <div>Дата</div>
+                  </div>
+                  <div className="mt-3 grid gap-4">
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between gap-2 text-xs uppercase tracking-[0.18em] text-steam-muted">
+                        <span>Входящие</span>
+                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">{unreadTaskSubmissions.length}</span>
+                      </div>
+                      {unreadTaskSubmissions.length ? (
+                        unreadTaskSubmissions.map((submission) => {
+                          const selected = submission.id === selectedTaskSubmission?.id;
+                          return (
+                            <button
+                              key={submission.id}
+                              type="button"
+                              onClick={() => setSelectedTaskSubmissionId(submission.id)}
+                              className={clsx(
+                                "grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 rounded-xl border px-3 py-3 text-left transition",
+                                selected
+                                  ? "border-steam-accent/50 bg-steam-accent/10 shadow-[0_0_0_1px_rgba(102,192,244,0.18)]"
+                                  : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.04]",
+                              )}
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-steam-text">{submission.task.title}</div>
+                                <div className="truncate text-xs text-steam-muted">
+                                  {submission.user?.nickname ?? "Пользователь"} • ID #{submission.userId}
+                                </div>
+                              </div>
+                              <div className="text-xs text-steam-muted">{supportStatusLabel(submission.status)}</div>
+                              <div className="text-xs text-steam-muted">{submission.evidence.length}</div>
+                              <div className="text-xs text-steam-muted">{new Date(submission.createdAt).toLocaleDateString()}</div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-5 text-sm text-steam-muted">
+                          Нет входящих отправок.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between gap-2 text-xs uppercase tracking-[0.18em] text-steam-muted">
+                        <span>Прочитано</span>
+                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">{readTaskSubmissions.length}</span>
+                      </div>
+                      {readTaskSubmissions.length ? (
+                        readTaskSubmissions.map((submission) => {
+                          const selected = submission.id === selectedTaskSubmission?.id;
+                          return (
+                            <button
+                              key={submission.id}
+                              type="button"
+                              onClick={() => setSelectedTaskSubmissionId(submission.id)}
+                              className={clsx(
+                                "grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 rounded-xl border px-3 py-3 text-left opacity-90 transition",
+                                selected
+                                  ? "border-steam-accent/50 bg-steam-accent/10 shadow-[0_0_0_1px_rgba(102,192,244,0.18)]"
+                                  : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.04]",
+                              )}
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-steam-text">{submission.task.title}</div>
+                                <div className="truncate text-xs text-steam-muted">
+                                  {submission.user?.nickname ?? "Пользователь"} • {submission.adminResponse ? "Есть ответ" : "Без ответа"}
+                                </div>
+                              </div>
+                              <div className="text-xs text-steam-muted">{supportStatusLabel(submission.status)}</div>
+                              <div className="text-xs text-steam-muted">{submission.evidence.length}</div>
+                              <div className="text-xs text-steam-muted">{new Date(submission.createdAt).toLocaleDateString()}</div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-5 text-sm text-steam-muted">
+                          Пока нет прочитанных отправок.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  {selectedTaskSubmission ? (
+                    <>
+                      <TaskQuestCard
+                        task={toAdminTaskCardModel(selectedTaskSubmission)}
+                        variant="completed"
+                        expanded
+                        showForm={false}
+                        nowMs={Date.now()}
+                        onToggleExpand={() => undefined}
+                        onOpenForm={() => undefined}
+                        message=""
+                        onMessageChange={() => undefined}
+                        files={[]}
+                        onFilesChange={() => undefined}
+                        submitting={false}
+                        uploadProgress={0}
+                        uploadStatus={null}
+                        onSubmit={() => undefined}
+                      />
+
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-steam-muted">Application Info</div>
+                        <div className="mt-3 grid gap-3">
+                          <div className="grid gap-1">
+                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Пользователь</div>
+                            <div className="text-sm font-semibold text-steam-text">
+                              {selectedTaskSubmission.user?.nickname ?? "Пользователь"} ({selectedTaskSubmission.user?.email ?? selectedTaskSubmission.userId})
+                            </div>
+                          </div>
+                          <div className="grid gap-1">
+                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Ответ пользователя</div>
+                            <div className="whitespace-pre-line rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-steam-text">
+                              {selectedTaskSubmission.message || "Пользователь не оставил текст."}
+                            </div>
+                          </div>
+                          <div className="grid gap-1">
+                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Дата отправки</div>
+                            <div className="text-sm text-steam-text">{new Date(selectedTaskSubmission.createdAt).toLocaleString()}</div>
+                          </div>
+                          <div className="grid gap-2">
+                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Скриншоты и вложения</div>
+                            {selectedTaskSubmission.evidence.length ? (
+                              <div className="flex flex-wrap gap-2">
+                                {selectedTaskSubmission.evidence.map((file, index) => (
+                                  <button
+                                    key={file}
+                                    type="button"
+                                    onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
+                                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-steam-text transition hover:border-steam-accent/40 hover:bg-steam-accent/10"
+                                  >
+                                    {isVideoMedia(file) ? `Видео ${index + 1}` : `Скриншот ${index + 1}`}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-4 text-sm text-steam-muted">
+                                Вложений нет.
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid gap-2">
+                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Ответ администрации</div>
+                            <textarea
+                              className="min-h-24 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-steam-accent"
+                              value={taskResponses[selectedTaskSubmission.id] ?? selectedTaskSubmission.adminResponse ?? ""}
+                              onChange={(e) =>
+                                setTaskResponses((prev) => ({
+                                  ...prev,
+                                  [selectedTaskSubmission.id]: e.target.value,
+                                }))
+                              }
+                              placeholder="Ответ пользователю"
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await grantTaskSubmission(selectedTaskSubmission);
+                                } catch (e: any) {
+                                  setError(e?.message ?? "Ошибка выдачи");
+                                  toast({ kind: "error", title: "Не удалось выдать награду", message: e?.message ?? "Ошибка" });
+                                }
+                              }}
+                            >
+                              Grant Achievement
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}>
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/15 px-5 py-8 text-sm text-steam-muted">
+                      Выбери заявку слева, чтобы открыть карточку задания, посмотреть Application Info и принять решение.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {false && <div className="grid gap-4">
                 <div className="grid gap-2">
                   <div className="text-xs uppercase tracking-[0.18em] text-steam-muted">Входящие</div>
                   {taskSubmissions.filter((s) => !s.isRead).map((s) => (
@@ -1579,7 +1901,7 @@ export function AdminPage() {
                     <div className="text-sm text-steam-muted">Пока нет прочитанных отправок.</div>
                   ) : null}
                 </div>
-              </div>
+              </div>}
 
               {false && taskSubmissions.map((s) => (
                 <div key={s.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -2365,4 +2687,3 @@ export function AdminPage() {
     </div>
   );
 }
-

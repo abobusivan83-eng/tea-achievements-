@@ -29,6 +29,26 @@ import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
 
+async function logDatabaseEncoding() {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ server_encoding: string; client_encoding: string }>>`
+      SELECT
+        current_setting('server_encoding') AS server_encoding,
+        current_setting('client_encoding') AS client_encoding
+    `;
+    const encoding = rows[0];
+    if (!encoding) return;
+    logger.info("database_encoding", encoding);
+    if (encoding.server_encoding !== "UTF8" || encoding.client_encoding !== "UTF8") {
+      logger.warn("database_encoding_not_utf8", encoding);
+    }
+  } catch (error) {
+    logger.warn("database_encoding_check_failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 const corsOrigins = ["https://tea-achievements.vercel.app", "http://localhost:5173"];
 
 app.use(
@@ -191,6 +211,7 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
 const port = Number(process.env.PORT) || 3000;
 const server = app.listen(port, () => {
   console.log(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
+  void logDatabaseEncoding();
   if (process.env.RENDER === "true") {
     console.warn(
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",

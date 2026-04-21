@@ -64,7 +64,7 @@ type TaskKind = "event" | "timed" | "permanent";
 
 function taskKind(t: TaskItem): TaskKind {
   if (t.isEvent) return "event";
-  if (t.startsAt || t.endsAt) return "timed";
+  if (t.startsAt && t.endsAt) return "timed";
   return "permanent";
 }
 
