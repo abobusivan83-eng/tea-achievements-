@@ -247,39 +247,87 @@ authRouter.post("/login", async (req, res) => {
 });
 
 authRouter.get("/me", requireAuth, async (req: AuthedRequest, res) => {
-  const user = await prisma.user.findUnique({
-    where: { id: req.user!.id },
-    select: {
-      id: true,
-      nickname: true,
-      email: true,
-      telegramChatId: true,
-      telegramUsername: true,
-      role: true,
-      blocked: true,
-      level: true,
-      xp: true,
-      avatarUrl: true,
-      bannerUrl: true,
-      avatarPath: true,
-      bannerPath: true,
-      frameKey: true,
-      badgesJson: true,
-      statusEmoji: true,
-      unlockedFramesJson: true,
-      unlockedStatusesJson: true,
-      createdAt: true,
-    },
-  });
+  let user:
+    | {
+        id: string;
+        nickname: string;
+        email: string;
+        telegramChatId?: string | null;
+        telegramUsername?: string | null;
+        role: Role;
+        blocked: boolean;
+        level: number;
+        xp: number;
+        avatarUrl?: string | null;
+        bannerUrl?: string | null;
+        avatarPath?: string | null;
+        bannerPath?: string | null;
+        frameKey?: string | null;
+        badgesJson?: Prisma.JsonValue | null;
+        statusEmoji?: string | null;
+        unlockedFramesJson?: Prisma.JsonValue;
+        unlockedStatusesJson?: Prisma.JsonValue;
+        createdAt: Date;
+      }
+    | null = null;
+
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true,
+        nickname: true,
+        email: true,
+        telegramChatId: true,
+        telegramUsername: true,
+        role: true,
+        blocked: true,
+        level: true,
+        xp: true,
+        avatarUrl: true,
+        bannerUrl: true,
+        avatarPath: true,
+        bannerPath: true,
+        frameKey: true,
+        badgesJson: true,
+        statusEmoji: true,
+        unlockedFramesJson: true,
+        unlockedStatusesJson: true,
+        createdAt: true,
+      },
+    });
+  } catch {
+    user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true,
+        nickname: true,
+        email: true,
+        role: true,
+        blocked: true,
+        level: true,
+        xp: true,
+        avatarPath: true,
+        bannerPath: true,
+        frameKey: true,
+        badgesJson: true,
+        statusEmoji: true,
+        createdAt: true,
+      },
+    });
+  }
   if (!user) return fail(res, 404, "User not found");
   const publicId = await computeUserPublicId(prisma as any, user.id);
-  const { unlockedFramesJson, unlockedStatusesJson, ...rest } = user;
+  const { unlockedFramesJson, unlockedStatusesJson, ...rest } = user as typeof user & {
+    unlockedFramesJson?: Prisma.JsonValue;
+    unlockedStatusesJson?: Prisma.JsonValue;
+  };
   const unlockedFrames = parseJsonStringArray(unlockedFramesJson);
   const unlockedStatuses = parseJsonStringArray(unlockedStatusesJson);
   return ok(res, {
     ...rest,
-    avatarUrl: resolveStoredMediaUrl(user.avatarUrl, user.avatarPath),
-    bannerUrl: resolveStoredMediaUrl(user.bannerUrl, user.bannerPath),
+    avatarUrl: resolveStoredMediaUrl(user.avatarUrl ?? null, user.avatarPath ?? null),
+    bannerUrl: resolveStoredMediaUrl(user.bannerUrl ?? null, user.bannerPath ?? null),
     publicId,
     unlockedFrames,
     unlockedStatuses,
