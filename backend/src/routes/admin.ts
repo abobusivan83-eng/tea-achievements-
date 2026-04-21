@@ -1194,8 +1194,27 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
   const adminDisplayName = await getAdminDisplayName(req);
 
+  let result:
+    | {
+        kind: "missing";
+      }
+    | {
+        kind: "ok";
+        updated: Awaited<ReturnType<typeof prisma.taskSubmission.update>>;
+        existing: {
+          id: string;
+          taskId: string;
+          status: import("@prisma/client").SupportStatus;
+          adminResponse: string | null;
+          task: { id: string; title: string; achievementId: string; rewardCoins: number };
+          user: { id: string; nickname: string };
+        };
+        nextStatus: import("@prisma/client").SupportStatus;
+        shouldInvalidate: boolean;
+      };
+
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    result = await prisma.$transaction(async (tx) => {
       const existing = await tx.taskSubmission.findUnique({
         where: { id: parsedSubmissionId.data },
         include: {
@@ -1289,17 +1308,30 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
       };
     });
 
-    if (result.kind === "missing") return fail(res, 404, "Submission not found");
+  } catch (error) {
+    console.error("task_submission_update_failed", {
+      actorUserId: req.user?.id ?? null,
+      submissionId: parsedSubmissionId.data,
+      payload: parsed.data,
+      error,
+    });
+    const message = error instanceof Error && error.message.trim() ? error.message : "Не удалось обновить заявку задания";
+    return fail(res, 500, message);
+  }
 
-    if (result.shouldInvalidate) {
-      invalidateSupportUnreadCountCache(result.existing.user.id);
-    }
+  if (result.kind === "missing") return fail(res, 404, "Submission not found");
 
-    const auditWorthy =
-      parsed.data.status !== undefined ||
-      parsed.data.adminResponse !== undefined ||
-      parsed.data.isRead !== undefined;
-    if (req.user?.id && auditWorthy) {
+  if (result.shouldInvalidate) {
+    invalidateSupportUnreadCountCache(result.existing.user.id);
+  }
+
+  const auditWorthy =
+    parsed.data.status !== undefined ||
+    parsed.data.adminResponse !== undefined ||
+    parsed.data.isRead !== undefined;
+
+  if (req.user?.id && auditWorthy) {
+    try {
       await logAdminAction(prisma, {
         adminId: req.user.id,
         action: "task.submission",
@@ -1308,16 +1340,14 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         targetNickname: result.existing.user.nickname,
         meta: { submissionId: result.existing.id, taskId: result.existing.taskId, status: result.nextStatus },
       });
+    } catch (error) {
+      console.error("task_submission_audit_failed", {
+        actorUserId: req.user.id,
+        submissionId: result.existing.id,
+        error,
+      });
     }
-
-    return ok(res, result.updated);
-  } catch (error) {
-    console.error("task_submission_update_failed", {
-      actorUserId: req.user?.id ?? null,
-      submissionId: parsedSubmissionId.data,
-      payload: parsed.data,
-      error,
-    });
-    return fail(res, 500, "Не удалось обновить заявку задания");
   }
+
+  return ok(res, result.updated);
 });
