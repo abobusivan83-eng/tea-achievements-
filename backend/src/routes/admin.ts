@@ -630,14 +630,14 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
 adminRouter.delete("/users/:id", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
   const id = req.params.id;
-  if (id === req.user!.id) return fail(res, 400, "?????? ??????? ???? ???????");
+  if (id === req.user!.id) return fail(res, 400, "Нельзя удалить самого себя");
 
   const target = await prisma.user.findUnique({
     where: { id },
     select: { id: true, nickname: true, role: true, email: true },
   });
   if (!target) return fail(res, 404, "User not found");
-  if (target.role === "CREATOR") return fail(res, 403, "?????? ??????? ??????? ?????? ?????????");
+  if (target.role === "CREATOR") return fail(res, 403, "Нельзя удалить владельца проекта");
 
   try {
     await deleteUserWithDependencies(prisma, { userId: target.id });
@@ -646,7 +646,7 @@ adminRouter.delete("/users/:id", async (req: AuthedRequest, res) => {
       await logAdminAction(prisma, {
         adminId: req.user.id,
         action: "user.delete",
-        summary: `?????? ???????????? ?${target.nickname}? (${target.email})`,
+        summary: `Удален пользователь «${target.nickname}» (${target.email})`,
         targetUserId: null,
         targetNickname: target.nickname,
       });
@@ -661,7 +661,7 @@ adminRouter.delete("/users/:id", async (req: AuthedRequest, res) => {
       targetEmail: target.email,
       error,
     });
-    return fail(res, 500, "?? ??????? ??????? ????????????");
+    return fail(res, 500, "Не удалось удалить пользователя");
   }
 });
 
@@ -1318,6 +1318,6 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
       payload: parsed.data,
       error,
     });
-    return fail(res, 500, "?? ??????? ???????? ???????? ???????");
+    return fail(res, 500, "Не удалось обновить заявку задания");
   }
 });

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { levelFromXp } from "./levels.js";
 
 type AwardDb = Pick<
@@ -20,11 +20,22 @@ export async function awardAchievementToUser(
   });
   if (!ach) throw new Error("Achievement not found");
 
-  const created = await db.userAchievement.createMany({
-    data: [{ userId: params.userId, achievementId: params.achievementId }],
-    skipDuplicates: true,
+  const existing = await db.userAchievement.findUnique({
+    where: { userId_achievementId: { userId: params.userId, achievementId: params.achievementId } },
+    select: { userId: true },
   });
-  if (created.count === 0) return { awarded: true, already: true };
+  if (existing) return { awarded: true, already: true };
+
+  try {
+    await db.userAchievement.create({
+      data: { userId: params.userId, achievementId: params.achievementId },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { awarded: true, already: true };
+    }
+    throw error;
+  }
 
   if (!ach.isPublic) {
     await db.achievementAccess.upsert({
