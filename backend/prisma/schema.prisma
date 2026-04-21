@@ -80,8 +80,6 @@ model User {
   role         Role     @default(USER)
   blocked      Boolean  @default(false)
   /// Последняя активность пользователя (heartbeat). Используется для онлайн/оффлайн статуса.
-  lastActiveAt DateTime?
-
   level Int @default(1)
   xp    Int @default(0)
 
@@ -372,4 +370,3 @@ model AdminAuditLog {
   @@index([createdAt])
   @@index([adminId, createdAt])
 }
-

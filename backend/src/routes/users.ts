@@ -169,50 +169,25 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     return ok(res, cached);
   }
 
-  let target: any;
-  try {
-    target = await prisma.user.findUnique({
-      where: { id: targetId },
-      select: {
-        id: true,
-        nickname: true,
-        role: true,
-        blocked: true,
-        level: true,
-        xp: true,
-        lastActiveAt: true,
-        avatarUrl: true,
-        bannerUrl: true,
-        avatarPath: true,
-        bannerPath: true,
-        frameKey: true,
-        badgesJson: true,
-        statusEmoji: true,
-        createdAt: true,
-      },
-    });
-  } catch {
-    // If the DB column isn't present yet (migration not applied), keep API functional.
-    target = await prisma.user.findUnique({
-      where: { id: targetId },
-      select: {
-        id: true,
-        nickname: true,
-        role: true,
-        blocked: true,
-        level: true,
-        xp: true,
-        avatarUrl: true,
-        bannerUrl: true,
-        avatarPath: true,
-        bannerPath: true,
-        frameKey: true,
-        badgesJson: true,
-        statusEmoji: true,
-        createdAt: true,
-      },
-    });
-  }
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: {
+      id: true,
+      nickname: true,
+      role: true,
+      blocked: true,
+      level: true,
+      xp: true,
+      avatarUrl: true,
+      bannerUrl: true,
+      avatarPath: true,
+      bannerPath: true,
+      frameKey: true,
+      badgesJson: true,
+      statusEmoji: true,
+      createdAt: true,
+    },
+  });
   if (!target) return fail(res, 404, "User not found");
   if (target.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
 
@@ -285,4 +260,3 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   res.setHeader("Cache-Control", "private, max-age=15");
   return ok(res, payload);
 });
-
