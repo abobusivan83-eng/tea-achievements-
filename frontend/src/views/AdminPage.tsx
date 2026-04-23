@@ -108,6 +108,20 @@ function buildRejectReasonText(text: string) {
   return text.trim().replace(/\s+/g, " ");
 }
 
+function getSafeStatusEmoji(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  if (/^[\u25A1\u25A0\uFFFD?]+$/.test(normalized)) return null;
+  return normalized;
+}
+
+function getUserInitials(nickname: string | null | undefined) {
+  const source = (nickname ?? "").trim();
+  if (!source) return "U";
+  const parts = source.split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || source.slice(0, 1).toUpperCase();
+}
+
 function toAdminAchievementCardModel(a: AdminAchievement): Achievement {
   return {
     id: a.id,
@@ -1805,20 +1819,26 @@ export function AdminPage() {
                       )}
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div className="relative">
-                            <AvatarFrame frameKey={submission.user.frameKey || null} size={42} src={submission.user.avatarUrl || ""} />
-                            {submission.user.statusEmoji && (
-                              <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/80 text-[10px] shadow-lg border border-white/10">
-                                {submission.user.statusEmoji}
+                            {submission.user.avatarUrl ? (
+                              <AvatarFrame frameKey={submission.user.frameKey || null} size={42} src={submission.user.avatarUrl} />
+                            ) : (
+                              <div className="flex h-[42px] w-[42px] items-center justify-center rounded-full border border-cyan-200/15 bg-[linear-gradient(180deg,rgba(34,52,80,0.92),rgba(15,23,42,0.96))] text-[12px] font-black uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_18px_rgba(56,189,248,0.18)]">
+                                {getUserInitials(submission.user.nickname)}
                               </div>
                             )}
+                            {getSafeStatusEmoji(submission.user.statusEmoji) ? (
+                              <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-cyan-200/10 bg-[#020817]/90 text-[10px] shadow-lg">
+                                {getSafeStatusEmoji(submission.user.statusEmoji)}
+                              </div>
+                            ) : null}
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               <span className="truncate text-sm font-bold text-steam-text">{submission.user.nickname}</span>
                               <span
-                                className="rounded px-1.5 py-0.5 text-[8px] font-black text-white shadow-[0_0_8px_rgba(255,255,255,0.1)]"
+                                className="shrink-0 rounded px-1.5 py-0.5 text-[8px] font-black text-white shadow-[0_0_8px_rgba(255,255,255,0.1)]"
                                 style={{ backgroundColor: calculateLevelColor(submission.user.level) }}
                               >
                                 {submission.user.level}
@@ -1832,7 +1852,7 @@ export function AdminPage() {
 
                         <div
                           className={clsx(
-                            "rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest shadow-md",
+                            "ml-3 shrink-0 self-start rounded-full border px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.18em] shadow-md",
                             submission.status === "PENDING"
                               ? "border-amber-400/40 bg-amber-400/15 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
                               : submission.status === "RESOLVED"
@@ -1894,35 +1914,41 @@ export function AdminPage() {
             </section>
 
             {/* Right Column: Submission Details (Sticky) */}
-            <section className="sticky top-6">
+            <section className="sticky top-6 overflow-hidden">
               {selectedTaskSubmission ? (
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={selectedTaskSubmission.id}
-                  className="rounded-2xl border border-cyan-200/12 bg-[linear-gradient(180deg,rgba(34,52,80,0.94),rgba(15,23,42,0.96))] p-6 shadow-[0_24px_70px_rgba(8,15,30,0.45)] backdrop-blur-2xl"
+                  className="overflow-hidden rounded-2xl border border-cyan-200/12 bg-[linear-gradient(180deg,rgba(34,52,80,0.94),rgba(15,23,42,0.96))] p-5 shadow-[0_24px_70px_rgba(8,15,30,0.45)] backdrop-blur-2xl"
                 >
                   <div className="flex flex-col gap-6">
                     {/* Header Details */}
-                    <div className="flex items-center justify-between border-b border-white/5 pb-5">
-                      <div className="flex items-center gap-4">
+                    <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-5">
+                      <div className="flex min-w-0 items-center gap-4">
                         <div className="relative">
-                          <AvatarFrame
-                            frameKey={selectedTaskSubmission.user.frameKey || null}
-                            size={56}
-                            src={selectedTaskSubmission.user.avatarUrl || "https://placehold.co/108x108/png?text=?"}
-                          />
-                          {selectedTaskSubmission.user.statusEmoji && (
-                            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-black/90 text-xs shadow-xl">
-                              {selectedTaskSubmission.user.statusEmoji}
+                          {selectedTaskSubmission.user.avatarUrl ? (
+                            <AvatarFrame
+                              frameKey={selectedTaskSubmission.user.frameKey || null}
+                              size={56}
+                              src={selectedTaskSubmission.user.avatarUrl}
+                            />
+                          ) : (
+                            <div className="flex h-[56px] w-[56px] items-center justify-center rounded-full border border-cyan-200/15 bg-[linear-gradient(180deg,rgba(34,52,80,0.92),rgba(15,23,42,0.96))] text-sm font-black uppercase tracking-[0.18em] text-cyan-100 shadow-[0_0_22px_rgba(56,189,248,0.18)]">
+                              {getUserInitials(selectedTaskSubmission.user.nickname)}
                             </div>
                           )}
+                          {getSafeStatusEmoji(selectedTaskSubmission.user.statusEmoji) ? (
+                            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-cyan-200/10 bg-[#020817]/90 text-xs shadow-xl">
+                              {getSafeStatusEmoji(selectedTaskSubmission.user.statusEmoji)}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
                             <span
-                              className="rounded px-2 py-0.5 text-[10px] font-black text-white shadow-[0_0_10px_rgba(255,255,255,0.1)]"
+                              className="shrink-0 rounded px-2 py-0.5 text-[10px] font-black text-white shadow-[0_0_10px_rgba(255,255,255,0.1)]"
                               style={{ backgroundColor: calculateLevelColor(selectedTaskSubmission.user.level) }}
                             >
                               LVL {selectedTaskSubmission.user.level}
@@ -1931,9 +1957,9 @@ export function AdminPage() {
                           <div className="mt-0.5 text-xs font-bold text-steam-muted/80 tracking-wide">ID: #{selectedTaskSubmission.userId}</div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="flex shrink-0 flex-col items-end text-right">
                         <div className={clsx(
-                          "inline-flex rounded-full border px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] shadow-lg",
+                          "inline-flex max-w-full items-center justify-center rounded-full border px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.16em] shadow-lg",
                           selectedTaskSubmission.status === "PENDING" ? "border-amber-400/50 bg-amber-400/20 text-amber-400 animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.2)]" :
                           selectedTaskSubmission.status === "RESOLVED" ? "border-emerald-400/50 bg-emerald-400/20 text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]" :
                           "border-red-500/50 bg-red-500/20 text-red-400 shadow-[0_0_15px_rgba(248,113,113,0.2)]"
@@ -2011,9 +2037,9 @@ export function AdminPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="grid gap-4 pt-2">
+                    <div className="grid gap-3 pt-1">
                       <Button
-                        className="h-16 w-full border border-cyan-200/20 bg-gradient-to-r from-[#38bdf8] via-[#22d3ee] to-[#3b82f6] text-base font-black uppercase tracking-[0.25em] text-white shadow-[0_15px_40px_rgba(34,211,238,0.32)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(34,211,238,0.45)]"
+                        className="h-12 w-full border border-cyan-200/20 bg-gradient-to-r from-[#38bdf8] via-[#22d3ee] to-[#3b82f6] px-4 text-[11px] font-black uppercase tracking-[0.22em] text-white shadow-[0_10px_24px_rgba(34,211,238,0.22)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_26px_rgba(34,211,238,0.35)]"
                         onClick={async () => {
                           try {
                             await grantTaskSubmission(selectedTaskSubmission);
@@ -2027,7 +2053,7 @@ export function AdminPage() {
                       </Button>
                       <Button
                         variant="danger"
-                        className="h-16 w-full border border-red-400/30 bg-gradient-to-r from-[#4c0914] via-[#6b1120] to-[#8b1e31] text-base font-black uppercase tracking-[0.25em] text-red-100 shadow-[0_10px_30px_rgba(127,29,29,0.24)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(127,29,29,0.38)]"
+                        className="h-12 w-full border border-red-400/30 bg-gradient-to-r from-[#4c0914] via-[#6b1120] to-[#8b1e31] px-4 text-[11px] font-black uppercase tracking-[0.22em] text-red-100 shadow-[0_10px_24px_rgba(127,29,29,0.2)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_26px_rgba(127,29,29,0.32)]"
                         onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}
                       >
                         Отклонить
