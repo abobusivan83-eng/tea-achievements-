@@ -49,6 +49,7 @@ async function logDatabaseEncoding() {
     if (encoding.server_encoding !== "UTF8" || encoding.client_encoding !== "UTF8") {
       logger.warn("database_encoding_not_utf8", encoding);
     }
+    console.log("✅ Успешное подключение к Supabase (Pooler IPv4)");
   } catch (error) {
     logger.warn("database_encoding_check_failed", {
       error: error instanceof Error ? error.message : String(error),

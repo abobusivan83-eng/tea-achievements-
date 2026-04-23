@@ -6,12 +6,22 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 export const prisma =
   globalForPrisma.prisma ??
-  new PrismaClient({
-    log:
-      process.env.NODE_ENV === "production"
-        ? [{ emit: "event", level: "query" }, "error"]
-        : [{ emit: "event", level: "query" }, "warn", "error"],
-  });
+  (() => {
+    try {
+      return new PrismaClient({
+        log:
+          process.env.NODE_ENV === "production"
+            ? [{ emit: "event", level: "query" }, "error"]
+            : [{ emit: "event", level: "query" }, "warn", "error"],
+      });
+    } catch (e) {
+      console.error("❌ Критическая ошибка при инициализации Prisma Client:", e);
+      // Возвращаем прокси или объект, который не уронит сервер сразу, 
+      // но в данном случае лучше просто дать серверу запуститься, 
+      // а ошибки ловить в middleware/маршрутах
+      return new PrismaClient(); 
+    }
+  })();
 
 prisma.$on("query", (event) => {
   if (event.duration >= env.PRISMA_SLOW_QUERY_MS) {
