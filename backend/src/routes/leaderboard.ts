@@ -23,16 +23,13 @@ type LeaderboardAggRow = {
 };
 
 leaderboardRouter.get("/", requireAuth, async (_req, res) => {
-  const cached = getCachedLeaderboard<ReturnType<typeof attachPublicIds>>();
+  const cached = getCachedLeaderboard<unknown[]>();
   if (cached) {
-    res.setHeader("Cache-Control", "private, max-age=20");
+    res.setHeader("Cache-Control", "private, max-age=60");
     return ok(res, cached);
   }
 
   const isSqlite = process.env.DATABASE_URL?.startsWith("file:");
-
-  const cached = getCachedLeaderboard<unknown[]>();
-  if (cached) return ok(res, cached);
 
   let rows: LeaderboardAggRow[];
   if (isSqlite) {
