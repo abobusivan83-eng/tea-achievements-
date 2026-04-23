@@ -217,7 +217,9 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
 });
 
 const server = app.listen(port, () => {
+  const maskedUrl = env.DATABASE_URL.replace(/:([^:@]+)@/, ":****@");
   logger.info(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
+  logger.info(`Using DATABASE_URL: ${maskedUrl}`);
   void logDatabaseEncoding();
   if (process.env.RENDER === "true") {
     logger.warn(

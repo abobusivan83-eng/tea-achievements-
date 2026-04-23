@@ -102,7 +102,11 @@ export function mapErrorToResponse(err: unknown): MappedError {
     if (isClientUploadMessage(err.message)) {
       return { status: 400, message: err.message, logAsError: false };
     }
-    return { status: 500, message: "Internal server error", logAsError: true };
+    // Если это ошибка БД, но не распознанная Prisma (например, ошибка коннекта пулера)
+    if (err.message.includes("database") || err.message.includes("prisma") || err.message.includes("connection")) {
+      return { status: 503, message: "Database connection error. Please check your Pooler settings.", logAsError: true };
+    }
+    return { status: 500, message: `Internal server error: ${err.message}`, logAsError: true };
   }
 
   if (messageFromUnknown) {
