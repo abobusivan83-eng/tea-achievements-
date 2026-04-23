@@ -186,16 +186,6 @@ export function TaskQuestCard(props: {
         kind === "permanent" && "task-card--permanent",
       )}
     >
-      {overlayAllowed ? (
-        <div className="pointer-events-none absolute inset-0 rounded-[12px] bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
-          <div className="text-center px-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 text-steam-accent shadow-[0_0_16px_rgba(102,192,244,0.18)]">
-              <FiLock className="h-6 w-6" />
-            </div>
-            <div className="mt-3 text-sm font-extrabold text-steam-text">{scheduleLockText}</div>
-          </div>
-        </div>
-      ) : null}
       {kind === "event" ? <div className="task-card__event-halo" aria-hidden /> : null}
 
       {!reduce && kind === "event" ? (
@@ -456,6 +446,33 @@ export function TaskQuestCard(props: {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {overlayAllowed ? (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center rounded-[12px] bg-black/60 backdrop-blur-md">
+          <div className="px-3 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/40 text-steam-accent shadow-[0_0_25px_rgba(102,192,244,0.3)]">
+              <FiLock className="h-7 w-7" />
+            </div>
+            <div className="mt-4 text-sm font-black uppercase tracking-widest text-steam-text drop-shadow-lg">{scheduleLockText}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {!reduce &&
+      resolved &&
+      ach &&
+      (ach.rarity === "RARE" ||
+        ach.rarity === "EPIC" ||
+        ach.rarity === "LEGENDARY" ||
+        ach.rarity === "EXCLUSIVE" ||
+        ach.rarity === "SECRET") ? (
+        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100">
+          <div className="absolute -inset-[40%] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)] [transform:translateX(-65%)_rotate(18deg)] animate-[shine_2.2s_ease-in-out_infinite]" />
+        </div>
+      ) : null}
+    </motion.div>
+  );
+}
 
       {!reduce &&
       resolved &&

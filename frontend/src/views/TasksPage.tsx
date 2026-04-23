@@ -82,7 +82,7 @@ export function TasksPage() {
 
   // Keep time-based task locks/countdowns fresh without page reload.
   useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 5000);
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
