@@ -1,11 +1,11 @@
+// SQLite dev schema — keep in sync with schema.prisma (models/enums), datasource only differs.
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -19,7 +19,6 @@ enum Rarity {
   RARE
   EPIC
   LEGENDARY
-  /// Выше легендарного; задавать может только роль CREATOR при создании/редактировании.
   EXCLUSIVE
   SECRET
 }
@@ -46,40 +45,14 @@ enum ShopItemType {
   BADGE
 }
 
-/// Временная запись до подтверждения через Telegram (код из 4 цифр).
-model RegistrationOtp {
-  id               String   @id @default(uuid())
-  linkToken        String?  @unique
-  telegramChatId   String?
-  telegramUsername String?
-  nickname         String
-  passwordHash     String
-  codeHash         String?
-  expiresAt        DateTime
-  createdAt        DateTime @default(now())
-
-  @@index([expiresAt])
-  @@index([telegramChatId])
-  @@index([telegramUsername])
-}
-
-/// После сообщения боту: @username (нижний регистр) → chat_id для отправки кода без ввода числового ID.
-model TelegramChatLookup {
-  usernameLower String   @id
-  chatId        String
-  updatedAt     DateTime @updatedAt
-}
-
 model User {
   id           String   @id @default(uuid())
   nickname     String
   email        String   @unique
-  telegramChatId   String? @unique
-  telegramUsername String?
   passwordHash String
   role         Role     @default(USER)
   blocked      Boolean  @default(false)
-  /// Последняя активность пользователя (heartbeat). Используется для онлайн/оффлайн статуса.
+
   level Int @default(1)
   xp    Int @default(0)
 
@@ -87,15 +60,13 @@ model User {
   bannerPath String?
   avatarUrl  String?
   bannerUrl  String?
-  frameKey   String?  // selected profile frame style key (frontend knows available frames)
-  badgesJson Json?    // array of badge keys / ids (extensible)
+  frameKey   String?
+  badgesJson Json?
   statusEmoji String?
-  /// Cosmetic frame keys unlocked via shop (JSON string[]). Empty for new users.
   unlockedFramesJson   Json @default("[]")
-  /// Status emoji catalog keys unlocked via shop (JSON string[], e.g. "calm"). Empty for new users.
   unlockedStatusesJson Json @default("[]")
-  adminNotes String?  // admin-only notes about user
-  adminTags  Json?    // admin-only tags/labels (extensible)
+  adminNotes String?
+  adminTags  Json?
 
   achievements UserAchievement[]
   createdAchievements Achievement[] @relation("AchievementCreator")
@@ -119,9 +90,6 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([nickname])
-  @@index([telegramUsername])
 }
 
 model Achievement {
@@ -229,7 +197,7 @@ model Notification {
   text      String
   adminName String?
 
-  userId String? // null = global notification
+  userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   giftId String? @unique
@@ -319,11 +287,9 @@ model Gift {
   toUserId   String
   xpAmount  Int      @default(0)
   message   String?
-  /// Coins are credited to the receiver immediately; kept for history / migrations.
   accepted  Boolean  @default(true)
   createdAt DateTime @default(now())
   acceptedAt DateTime?
-  /// When the receiver opened the gift in the Gifts UI (badge / read state).
   receiverViewedAt DateTime?
 
   fromUser User @relation("GiftSender", fields: [fromUserId], references: [id], onDelete: Cascade)
@@ -336,7 +302,6 @@ model Gift {
   @@index([fromUserId, createdAt])
 }
 
-/// Idempotent gift sends: same sender + key returns the same gift (no double charge).
 model GiftSendRequest {
   id             String   @id @default(uuid())
   senderId       String
@@ -351,7 +316,6 @@ model GiftSendRequest {
   @@index([senderId, createdAt])
 }
 
-/// Journal of admin actions (who changed what / whom).
 model AdminAuditLog {
   id             String   @id @default(uuid())
   adminId        String

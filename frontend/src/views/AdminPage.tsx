@@ -197,6 +197,18 @@ export function AdminPage() {
   const [rejectBusy, setRejectBusy] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminTaskSubmission | null>(null);
   const [rejectReasonDraft, setRejectReasonDraft] = useState("");
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerFiles, setViewerFiles] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [zoom, setZoom] = useState(1);
+
+  function openViewer(files: string[], index: number) {
+    setViewerFiles(files);
+    setViewerIndex(index);
+    setZoom(1);
+    setViewerOpen(true);
+  }
+
   const [shopName, setShopName] = useState("");
   const [shopType, setShopType] = useState<"FRAME" | "BADGE">("FRAME");
   const [shopKey, setShopKey] = useState("");
@@ -206,8 +218,6 @@ export function AdminPage() {
   const [shopIcon, setShopIcon] = useState("");
   const [editShopOpen, setEditShopOpen] = useState(false);
   const [editingShop, setEditingShop] = useState<AdminShopItem | null>(null);
-  const [viewerImages, setViewerImages] = useState<string[]>([]);
-  const [viewerIndex, setViewerIndex] = useState(0);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -1691,68 +1701,137 @@ export function AdminPage() {
                 <div className="grid gap-3">
                   {selectedTaskSubmission ? (
                     <>
-                      <TaskQuestCard
-                        task={toAdminTaskCardModel(selectedTaskSubmission)}
-                        variant="completed"
-                        expanded
-                        showForm={false}
-                        nowMs={Date.now()}
-                        onToggleExpand={() => undefined}
-                        onOpenForm={() => undefined}
-                        message=""
-                        onMessageChange={() => undefined}
-                        files={[]}
-                        onFilesChange={() => undefined}
-                        submitting={false}
-                        uploadProgress={0}
-                        uploadStatus={null}
-                        onSubmit={() => undefined}
-                      />
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5 shadow-xl">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                          <div className="flex items-center gap-4">
+                            <div className="relative">
+                              <AvatarFrame
+                                frameKey={selectedTaskSubmission.user.frameKey}
+                                size={54}
+                                src={selectedUser?.avatarUrl || "https://placehold.co/108x108/png?text=?"}
+                              />
+                              {selectedTaskSubmission.user.statusEmoji && (
+                                <div className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-black/80 px-1 py-0.5 text-xs">
+                                  {selectedTaskSubmission.user.statusEmoji}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
+                                <span
+                                  className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                                  style={{ backgroundColor: calculateLevelColor(selectedTaskSubmission.user.level), color: "#fff" }}
+                                >
+                                  Lvl {selectedTaskSubmission.user.level}
+                                </span>
+                              </div>
+                              <div className="text-xs text-steam-muted">ID: #{selectedTaskSubmission.userId}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs uppercase tracking-widest text-steam-muted">Статус</div>
+                            <div className={clsx(
+                              "mt-1 text-sm font-bold",
+                              selectedTaskSubmission.status === "PENDING" ? "text-steam-accent" :
+                              selectedTaskSubmission.status === "RESOLVED" ? "text-emerald-400" :
+                              selectedTaskSubmission.status === "REJECTED" ? "text-red-400" : "text-steam-muted"
+                            )}>
+                              {statusLabel(selectedTaskSubmission.status).toUpperCase()}
+                            </div>
+                          </div>
+                        </div>
 
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-steam-muted">Application Info</div>
-                        <div className="mt-3 grid gap-3">
-                          <div className="grid gap-1">
-                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Пользователь</div>
-                            <div className="text-sm font-semibold text-steam-text">
-                              {selectedTaskSubmission.user?.nickname ?? "Пользователь"} ({selectedTaskSubmission.user?.email ?? selectedTaskSubmission.userId})
-                            </div>
-                          </div>
-                          <div className="grid gap-1">
-                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Ответ пользователя</div>
-                            <div className="whitespace-pre-line rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-steam-text">
-                              {selectedTaskSubmission.message || "Пользователь не оставил текст."}
-                            </div>
-                          </div>
-                          <div className="grid gap-1">
-                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Дата отправки</div>
-                            <div className="text-sm text-steam-text">{new Date(selectedTaskSubmission.createdAt).toLocaleString()}</div>
-                          </div>
+                        <div className="mt-6 grid gap-6">
                           <div className="grid gap-2">
-                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Скриншоты и вложения</div>
+                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Задание</div>
+                            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                              <div className="text-base font-semibold text-steam-text">{selectedTaskSubmission.task.title}</div>
+                              <div className="mt-2 text-xs leading-relaxed text-steam-muted">{selectedTaskSubmission.task.conditions}</div>
+                              <div className="mt-4 flex flex-wrap items-center gap-3">
+                                {selectedTaskSubmission.task.achievement && (
+                                  <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                                    <AchievementIcon iconUrl={selectedTaskSubmission.task.achievement.iconUrl} size={28} />
+                                    <div className="min-w-0">
+                                      <div className="truncate text-xs font-bold text-steam-text">{selectedTaskSubmission.task.achievement.title}</div>
+                                      <div className="text-[10px] text-steam-muted">Награда за выполнение</div>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center">
+                                  <div className="text-xs font-bold text-amber-400">+{selectedTaskSubmission.task.rewardCoins}</div>
+                                  <div className="text-[10px] text-amber-400/60">Монет</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-2">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Доказательства (Evidence)</div>
                             {selectedTaskSubmission.evidence.length ? (
-                              <div className="flex flex-wrap gap-2">
-                                {selectedTaskSubmission.evidence.map((file, index) => (
-                                  <button
-                                    key={file}
-                                    type="button"
-                                    onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
-                                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-steam-text transition hover:border-steam-accent/40 hover:bg-steam-accent/10"
-                                  >
-                                    {isVideoMedia(file) ? `Видео ${index + 1}` : `Скриншот ${index + 1}`}
-                                  </button>
-                                ))}
+                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                {selectedTaskSubmission.evidence.map((file, index) => {
+                                  const isVideo = isVideoMedia(file);
+                                  return (
+                                    <div key={file} className="group relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                                      {isVideo ? (
+                                        <div className="flex h-full w-full flex-col items-center justify-center p-2 text-center">
+                                          <video
+                                            src={file}
+                                            className="absolute inset-0 h-full w-full object-cover opacity-40"
+                                            muted
+                                            onMouseOver={(e) => (e.currentTarget as HTMLVideoElement).play()}
+                                            onMouseOut={(e) => {
+                                              const v = e.currentTarget as HTMLVideoElement;
+                                              v.pause();
+                                              v.currentTime = 0;
+                                            }}
+                                          />
+                                          <div className="relative z-10 rounded-full bg-black/60 p-2 text-white shadow-xl backdrop-blur-md">
+                                            <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                            </svg>
+                                          </div>
+                                          <span className="relative z-10 mt-2 text-[10px] font-bold uppercase tracking-wider text-white">Видео #{index + 1}</span>
+                                          <button
+                                            onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
+                                            className="absolute inset-0 z-20"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
+                                          className="h-full w-full"
+                                        >
+                                          <img src={file} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" alt={`Evidence ${index + 1}`} />
+                                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
+                                          <div className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white opacity-0 transition duration-300 group-hover:opacity-100">
+                                            Скриншот #{index + 1}
+                                          </div>
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : (
-                              <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-4 text-sm text-steam-muted">
-                                Вложений нет.
+                              <div className="rounded-xl border border-dashed border-white/10 bg-black/15 py-8 text-center">
+                                <div className="text-sm text-steam-muted">Пользователь не приложил медиафайлы</div>
                               </div>
                             )}
                           </div>
+
                           <div className="grid gap-2">
-                            <div className="text-xs uppercase tracking-[0.14em] text-steam-muted">Ответ администрации</div>
+                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Ответ пользователя</div>
+                            <div className="whitespace-pre-line rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm leading-relaxed text-steam-text shadow-inner">
+                              {selectedTaskSubmission.message || "Без текстового сообщения."}
+                            </div>
+                          </div>
+
+                          <div className="grid gap-2 border-t border-white/5 pt-4">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Решение администрации</div>
                             <textarea
-                              className="min-h-24 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-steam-accent"
+                              className="min-h-32 w-full rounded-xl border border-white/10 bg-black/40 p-4 text-sm outline-none transition focus:border-steam-accent/50 focus:bg-black/60 focus:ring-1 focus:ring-steam-accent/20"
                               value={taskResponses[selectedTaskSubmission.id] ?? selectedTaskSubmission.adminResponse ?? ""}
                               onChange={(e) =>
                                 setTaskResponses((prev) => ({
@@ -1760,12 +1839,13 @@ export function AdminPage() {
                                   [selectedTaskSubmission.id]: e.target.value,
                                 }))
                               }
-                              placeholder="Ответ пользователю"
+                              placeholder="Напишите комментарий для пользователя (необязательно при одобрении, желательно при отклонении)"
                             />
                           </div>
-                          <div className="flex flex-wrap gap-2">
+
+                          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
                             <Button
-                              size="sm"
+                              className="h-11 px-8 text-sm font-bold shadow-lg shadow-emerald-500/10"
                               onClick={async () => {
                                 try {
                                   await grantTaskSubmission(selectedTaskSubmission);
@@ -1775,10 +1855,14 @@ export function AdminPage() {
                                 }
                               }}
                             >
-                              Grant Achievement
+                              Одобрить и выдать
                             </Button>
-                            <Button size="sm" variant="danger" onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}>
-                              Reject
+                            <Button
+                              variant="danger"
+                              className="h-11 px-8 text-sm font-bold shadow-lg shadow-red-500/10"
+                              onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}
+                            >
+                              Отклонить
                             </Button>
                           </div>
                         </div>
@@ -2377,35 +2461,6 @@ export function AdminPage() {
         }}
       />
 
-      <Modal open={viewerImages.length > 0} title="Вложения" onClose={() => setViewerImages([])}>
-        {viewerImages.length ? (
-          <div className="grid gap-3">
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/35">
-              {isVideoMedia(viewerImages[viewerIndex]) ? (
-                <video
-                  src={viewerImages[viewerIndex]}
-                  controls
-                  className="max-h-[70vh] w-full bg-black object-contain"
-                />
-              ) : (
-                <img src={viewerImages[viewerIndex]} className="max-h-[70vh] w-full object-contain" />
-              )}
-            </div>
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" onClick={() => setViewerIndex((x) => (x - 1 + viewerImages.length) % viewerImages.length)}>
-                Назад
-              </Button>
-              <div className="text-xs text-steam-muted">
-                {viewerIndex + 1} / {viewerImages.length}
-              </div>
-              <Button variant="ghost" onClick={() => setViewerIndex((x) => (x + 1) % viewerImages.length)}>
-                Вперёд
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
-
       <Modal
         open={rejectOpen}
         title={rejectTarget ? `Отклонить: ${rejectTarget.task.title}` : "Отклонение задания"}
@@ -2684,6 +2739,108 @@ export function AdminPage() {
           </div>
         ) : null}
       </Modal>
+
+      <AnimatePresence>
+        {viewerOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 p-4 backdrop-blur-xl"
+            onClick={() => setViewerOpen(false)}
+          >
+            <div className="absolute right-6 top-6 flex items-center gap-4 z-[110]">
+              <div className="text-sm font-bold text-white/40">
+                {viewerIndex + 1} / {viewerFiles.length}
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewerOpen(false);
+                }}
+                className="rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="relative flex h-full w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={viewerFiles[viewerIndex]}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  className="relative max-h-full max-w-full"
+                >
+                  {isVideoMedia(viewerFiles[viewerIndex]) ? (
+                    <video
+                      src={viewerFiles[viewerIndex]}
+                      controls
+                      autoPlay
+                      className="max-h-[85vh] max-w-[90vw] rounded-xl shadow-2xl"
+                    />
+                  ) : (
+                    <div className="relative overflow-hidden rounded-xl">
+                      <motion.img
+                        src={viewerFiles[viewerIndex]}
+                        className="max-h-[85vh] max-w-[90vw] cursor-zoom-in object-contain shadow-2xl"
+                        animate={{ scale: zoom }}
+                        onClick={() => setZoom(prev => prev === 1 ? 2 : 1)}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+
+              {viewerFiles.length > 1 && (
+                <>
+                  <button
+                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/5 p-4 text-white backdrop-blur-md transition hover:bg-white/15"
+                    onClick={() => setViewerIndex((prev) => (prev === 0 ? viewerFiles.length - 1 : prev - 1))}
+                  >
+                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/5 p-4 text-white backdrop-blur-md transition hover:bg-white/15"
+                    onClick={() => setViewerIndex((prev) => (prev === viewerFiles.length - 1 ? 0 : prev + 1))}
+                  >
+                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="mt-8 flex gap-2 overflow-x-auto p-2">
+              {viewerFiles.map((file, i) => (
+                <button
+                  key={file}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewerIndex(i);
+                  }}
+                  className={clsx(
+                    "h-16 w-24 shrink-0 overflow-hidden rounded-lg border-2 transition",
+                    i === viewerIndex ? "border-steam-accent scale-105 shadow-lg shadow-steam-accent/20" : "border-transparent opacity-50 hover:opacity-100"
+                  )}
+                >
+                  {isVideoMedia(file) ? (
+                    <div className="flex h-full w-full items-center justify-center bg-black/40 text-[10px] font-bold text-white">VIDEO</div>
+                  ) : (
+                    <img src={file} className="h-full w-full object-cover" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

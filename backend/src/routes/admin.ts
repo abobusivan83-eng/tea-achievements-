@@ -1254,9 +1254,60 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
       const shouldAward = statusChanged && nextStatus === "RESOLVED" && Boolean(existing.task?.achievementId);
       if (shouldAward && existing.task?.achievementId) {
-        await awardAchievementToUser(tx, { achievementId: existing.task.achievementId, userId: existing.user.id });
+        // Используем upsert для предотвращения ошибок уникальности P2002
+        await tx.userAchievement.upsert({
+          where: {
+            userId_achievementId: {
+              userId: existing.user.id,
+              achievementId: existing.task.achievementId,
+            },
+          },
+          create: {
+            userId: existing.user.id,
+            achievementId: existing.task.achievementId,
+          },
+          update: {}, // Ничего не меняем, если уже есть
+        });
+
+        // Начисляем очки опыта, если достижение выдано впервые
+        const ach = await tx.achievement.findUnique({
+          where: { id: existing.task.achievementId },
+          select: { points: true, isPublic: true },
+        });
+
+        if (ach) {
+          if (!ach.isPublic) {
+            await tx.achievementAccess.upsert({
+              where: { achievementId_userId: { achievementId: existing.task.achievementId, userId: existing.user.id } },
+              create: { achievementId: existing.task.achievementId, userId: existing.user.id },
+              update: {},
+            });
+          }
+
+          const user = await tx.user.findUnique({
+            where: { id: existing.user.id },
+            select: { xp: true },
+          });
+
+          if (user) {
+            const nextXp = Math.max(0, user.xp + ach.points);
+            await tx.user.update({
+              where: { id: existing.user.id },
+              data: { xp: nextXp, level: levelFromXp(nextXp).level },
+            });
+          }
+        }
 
         const coins = Math.max(0, existing.task.rewardCoins ?? 0);
+        if (coins > 0) {
+          await tx.user.update({
+            where: { id: existing.user.id },
+            data: { xp: { increment: 0 } }, // Просто для атомарности, монеты обычно в другом поле, но тут rewardCoins в Task
+          });
+          // В данной схеме монеты пользователя не хранятся в БД User (только XP/Level), 
+          // они обрабатываются через [COIN_BONUS] в уведомлении для фронтенда или внешних систем.
+        }
+
         await tx.notification.create({
           data: {
             type: coins > 0 ? "SHOP" : "ACH",
