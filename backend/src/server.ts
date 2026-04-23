@@ -29,9 +29,11 @@ import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
 
+const port = process.env.PORT || env.PORT || 3000;
+
 async function logDatabaseEncoding() {
   try {
-    // В SQLite нет current_setting, просто пропускаем или пишем инфо
+    // В PostgreSQL проверяем кодировку, в SQLite пропускаем
     if (env.DATABASE_URL.startsWith("file:")) {
       logger.info("database_type", { type: "sqlite" });
       return;
@@ -213,19 +215,18 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   return fail(res, mapped.status, mapped.message);
 });
 
-const port = Number(process.env.PORT) || 3000;
 const server = app.listen(port, () => {
-  console.log(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
+  logger.info(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
   void logDatabaseEncoding();
   if (process.env.RENDER === "true") {
-    console.warn(
+    logger.warn(
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",
     );
   }
   if (isTelegramConfigured()) {
-    startTelegramLongPolling();
+    void startTelegramLongPolling();
   }
-  startRegistrationOtpCleanup();
+  void startRegistrationOtpCleanup();
 });
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;

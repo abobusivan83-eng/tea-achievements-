@@ -1138,14 +1138,28 @@ export function AdminPage() {
                   />
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(["PENDING", "REVIEWED", "RESOLVED", "REJECTED"] as const).map((st) => (
-                      <Button key={st} size="sm" variant={r.status === st ? "primary" : "ghost"} onClick={() => updateReportStatus(r, st)}>
+                      <Button key={st} size="sm" variant={r.status === st ? "primary" : "ghost"} onClick={async () => {
+                        await updateReportStatus(r, st);
+                        // Помечаем как прочитанное при смене статуса
+                        if (!r.isRead) {
+                          await apiJson(`/api/admin/support/reports/${r.id}`, { isRead: true }, "PATCH");
+                          await refreshSupport();
+                        }
+                      }}>
                         {supportStatusLabel(st)}
                       </Button>
                     ))}
                     <Button
                       size="sm"
                       variant="primary"
-                      onClick={() => updateReportStatus(r, r.status === "PENDING" ? "REVIEWED" : r.status, reportResponses[r.id] ?? r.adminResponse ?? "")}
+                      onClick={async () => {
+                        await updateReportStatus(r, r.status === "PENDING" ? "REVIEWED" : r.status, reportResponses[r.id] ?? r.adminResponse ?? "");
+                        // Помечаем как прочитанное при отправке ответа
+                        if (!r.isRead) {
+                          await apiJson(`/api/admin/support/reports/${r.id}`, { isRead: true }, "PATCH");
+                          await refreshSupport();
+                        }
+                      }}
                     >
                       Отправить ответ
                     </Button>
@@ -1252,14 +1266,28 @@ export function AdminPage() {
                   />
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(["PENDING", "REVIEWED", "RESOLVED", "REJECTED"] as const).map((st) => (
-                      <Button key={st} size="sm" variant={s.status === st ? "primary" : "ghost"} onClick={() => updateSuggestionStatus(s, st)}>
+                      <Button key={st} size="sm" variant={s.status === st ? "primary" : "ghost"} onClick={async () => {
+                        await updateSuggestionStatus(s, st);
+                        // Помечаем как прочитанное при смене статуса
+                        if (!s.isRead) {
+                          await apiJson(`/api/admin/support/suggestions/${s.id}`, { isRead: true }, "PATCH");
+                          await refreshSupport();
+                        }
+                      }}>
                         {supportStatusLabel(st)}
                       </Button>
                     ))}
                     <Button
                       size="sm"
                       variant="primary"
-                      onClick={() => updateSuggestionStatus(s, s.status === "PENDING" ? "REVIEWED" : s.status, suggestionResponses[s.id] ?? s.adminResponse ?? "")}
+                      onClick={async () => {
+                        await updateSuggestionStatus(s, s.status === "PENDING" ? "REVIEWED" : s.status, suggestionResponses[s.id] ?? s.adminResponse ?? "");
+                        // Помечаем как прочитанное при отправке ответа
+                        if (!s.isRead) {
+                          await apiJson(`/api/admin/support/suggestions/${s.id}`, { isRead: true }, "PATCH");
+                          await refreshSupport();
+                        }
+                      }}
                     >
                       Отправить ответ
                     </Button>
@@ -1630,7 +1658,18 @@ export function AdminPage() {
                             <button
                               key={submission.id}
                               type="button"
-                              onClick={() => setSelectedTaskSubmissionId(submission.id)}
+                              onClick={async () => {
+                                setSelectedTaskSubmissionId(submission.id);
+                                // При клике на непрочитанную заявку - помечаем как прочитанную на сервере
+                                if (!submission.isRead) {
+                                  try {
+                                    await apiJson(`/api/admin/tasks/submissions/${submission.id}`, { isRead: true }, "PATCH");
+                                    await refreshTasks();
+                                  } catch (e) {
+                                    console.error("Failed to mark submission as read", e);
+                                  }
+                                }
+                              }}
                               className={clsx(
                                 "grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 rounded-xl border px-3 py-3 text-left transition",
                                 selected

@@ -1265,6 +1265,7 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
           create: {
             userId: existing.user.id,
             achievementId: existing.task.achievementId,
+            awardedAt: new Date(),
           },
           update: {}, // Ничего не меняем, если уже есть
         });
@@ -1300,12 +1301,8 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
         const coins = Math.max(0, existing.task.rewardCoins ?? 0);
         if (coins > 0) {
-          await tx.user.update({
-            where: { id: existing.user.id },
-            data: { xp: { increment: 0 } }, // Просто для атомарности, монеты обычно в другом поле, но тут rewardCoins в Task
-          });
           // В данной схеме монеты пользователя не хранятся в БД User (только XP/Level), 
-          // они обрабатываются через [COIN_BONUS] в уведомлении для фронтенда или внешних систем.
+          // они рассчитываются динамически из уведомлений с маркером [COIN_BONUS]
         }
 
         await tx.notification.create({
