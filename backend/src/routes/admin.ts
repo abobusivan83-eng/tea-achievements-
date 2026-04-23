@@ -1108,7 +1108,18 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
     where,
     orderBy: [{ isRead: "asc" }, { createdAt: "desc" }],
     include: {
-      user: { select: { id: true, nickname: true, email: true } },
+      user: {
+        select: {
+          id: true,
+          nickname: true,
+          email: true,
+          avatarPath: true,
+          avatarUrl: true,
+          frameKey: true,
+          statusEmoji: true,
+          xp: true,
+        },
+      },
       task: {
         select: {
           id: true,
@@ -1148,6 +1159,11 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
     rows.map((s) => ({
       ...s,
       evidence: (s.evidenceJson as unknown as string[] | null) ?? [],
+      user: {
+        ...s.user,
+        avatarUrl: s.user.avatarUrl || (s.user.avatarPath ? toPublicFileUrl(s.user.avatarPath) : null),
+        level: levelFromXp(s.user.xp).level,
+      },
       task: {
         ...s.task,
         achievement: s.task.achievement

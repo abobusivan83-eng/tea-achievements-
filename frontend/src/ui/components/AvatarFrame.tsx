@@ -32,7 +32,7 @@ export function AvatarFrame(props: {
   }, [props.src]);
   const f = getFrame(props.frameKey);
   const reduce = useReducedMotion();
-  const imgSrc = imgBroken ? DEFAULT_AVATAR_URL : props.src;
+  const imgSrc = (imgBroken || !props.src) ? DEFAULT_AVATAR_URL : props.src;
 
   const shape: FrameShape = f?.shape ?? "circle";
   const fxClass = f?.className ?? "frame--common";
