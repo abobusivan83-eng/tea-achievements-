@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log("Seeding database...");
   const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@clan.local";
   const adminPassword = process.env.ADMIN_PASSWORD?.trim() || "admin12345";
   const adminHash = await bcrypt.hash(adminPassword, 10);
@@ -28,6 +29,7 @@ async function main() {
     },
     select: { id: true, email: true },
   });
+  console.log(`Admin user created/updated: ${admin.email}`);
 
   const baseAchievements = [
     {
@@ -60,6 +62,7 @@ async function main() {
     const existing = await prisma.achievement.findFirst({ where: { title: a.title } });
     if (!existing) {
       await prisma.achievement.create({ data: { ...a, createdById: admin.id } });
+      console.log(`Achievement created: ${a.title}`);
     }
   }
 
@@ -85,6 +88,7 @@ async function main() {
       },
       update: { rewardCoins: 250, isActive: true },
     });
+    console.log("Task 'Первый шаг' created/updated");
   }
 
   if (achFighter) {
@@ -99,12 +103,13 @@ async function main() {
         isEvent: false,
         startsAt: null,
         endsAt: null,
-        styleTag: "grind",
+        styleTag: "series",
         achievementId: achFighter.id,
         createdById: admin.id,
       },
       update: { rewardCoins: 600, isActive: true },
     });
+    console.log("Task 'Серия активностей' created/updated");
   }
 
   // Create a demo user for ZBT
@@ -206,13 +211,15 @@ async function main() {
       adminName: "System",
     },
   });
+  console.log("Seeding finished.");
 }
 
 main()
-  .then(async () => prisma.$disconnect())
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
+  .catch((e) => {
+    console.error("Seed error:", e);
     process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });
 

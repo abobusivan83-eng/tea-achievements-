@@ -31,6 +31,11 @@ app.set("trust proxy", env.TRUST_PROXY);
 
 async function logDatabaseEncoding() {
   try {
+    // В SQLite нет current_setting, просто пропускаем или пишем инфо
+    if (env.DATABASE_URL.startsWith("file:")) {
+      logger.info("database_type", { type: "sqlite" });
+      return;
+    }
     const rows = await prisma.$queryRaw<Array<{ server_encoding: string; client_encoding: string }>>`
       SELECT
         current_setting('server_encoding') AS server_encoding,

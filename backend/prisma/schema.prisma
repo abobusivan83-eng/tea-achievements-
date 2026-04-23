@@ -327,10 +327,29 @@ model AdminAuditLog {
   meta           Json?
 
   createdAt DateTime @default(now())
-
-  admin      User  @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: Cascade)
-  targetUser User? @relation("AdminAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  admin     User     @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUser User?    @relation("AdminAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([adminId, createdAt])
+}
+
+/// Временная запись до подтверждения через Telegram (код из 4 цифр).
+model RegistrationOtp {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  nickname     String
+  passwordHash String
+  codeHash     String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+/// После сообщения боту: @username (нижний регистр) → chat_id для отправки кода без ввода числового ID.
+model TelegramChatLookup {
+  usernameLower String   @id
+  chatId        String
+  updatedAt     DateTime @updatedAt
 }

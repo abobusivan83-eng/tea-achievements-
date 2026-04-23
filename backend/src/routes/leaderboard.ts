@@ -29,25 +29,50 @@ leaderboardRouter.get("/", requireAuth, async (_req, res) => {
     return ok(res, cached);
   }
 
-  const rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
-    SELECT
-      u.id,
-      u."createdAt",
-      u.nickname,
-      u."avatarPath",
-      u."avatarUrl",
-      u."frameKey",
-      u.level,
-      u.xp,
-      COUNT(ua."achievementId")::int AS "achievementCount",
-      COALESCE(SUM(a.points), 0)::int AS "totalPoints"
-    FROM "User" u
-    LEFT JOIN "UserAchievement" ua ON ua."userId" = u.id
-    LEFT JOIN "Achievement" a ON a.id = ua."achievementId"
-    GROUP BY u.id, u."createdAt", u.nickname, u."avatarPath", u."avatarUrl", u."frameKey", u.level, u.xp
-    ORDER BY "totalPoints" DESC, u.xp DESC
-    LIMIT 100
-  `;
+  const isSqlite = process.env.DATABASE_URL?.startsWith("file:");
+
+  let rows: LeaderboardAggRow[];
+  if (isSqlite) {
+    rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
+      SELECT
+        u.id,
+        u.createdAt,
+        u.nickname,
+        u.avatarPath,
+        u.avatarUrl,
+        u.frameKey,
+        u.level,
+        u.xp,
+        CAST(COUNT(ua.achievementId) AS INTEGER) AS achievementCount,
+        CAST(COALESCE(SUM(a.points), 0) AS INTEGER) AS totalPoints
+      FROM User u
+      LEFT JOIN UserAchievement ua ON ua.userId = u.id
+      LEFT JOIN Achievement a ON a.id = ua.achievementId
+      GROUP BY u.id, u.createdAt, u.nickname, u.avatarPath, u.avatarUrl, u.frameKey, u.level, u.xp
+      ORDER BY totalPoints DESC, u.xp DESC
+      LIMIT 100
+    `;
+  } else {
+    rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
+      SELECT
+        u.id,
+        u."createdAt",
+        u.nickname,
+        u."avatarPath",
+        u."avatarUrl",
+        u."frameKey",
+        u.level,
+        u.xp,
+        COUNT(ua."achievementId")::int AS "achievementCount",
+        COALESCE(SUM(a.points), 0)::int AS "totalPoints"
+      FROM "User" u
+      LEFT JOIN "UserAchievement" ua ON ua."userId" = u.id
+      LEFT JOIN "Achievement" a ON a.id = ua."achievementId"
+      GROUP BY u.id, u."createdAt", u.nickname, u."avatarPath", u."avatarUrl", u."frameKey", u.level, u.xp
+      ORDER BY "totalPoints" DESC, u.xp DESC
+      LIMIT 100
+    `;
+  }
 
   const normalized = rows.map((r) => ({
     ...r,
