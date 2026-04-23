@@ -249,5 +249,14 @@ export type TaskSubmission = {
       createdAt?: string;
     } | null;
   };
-  user?: { id: string; nickname: string; email: string };
+  user?: {
+    id: string;
+    nickname: string;
+    email: string;
+    level: number;
+    xp: number;
+    avatarUrl?: string | null;
+    frameKey?: string | null;
+    statusEmoji?: string | null;
+  };
 };

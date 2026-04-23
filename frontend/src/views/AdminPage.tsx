@@ -13,7 +13,7 @@ import type {
 } from "../lib/types";
 import { Button } from "../ui/components/Button";
 import { Modal } from "../ui/components/Modal";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { FiAward, FiChevronDown, FiChevronUp, FiEdit2, FiPlus, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
 import { useToasts } from "../state/toasts";
 import { useAuth } from "../state/auth";
@@ -197,6 +197,7 @@ export function AdminPage() {
   const [rejectBusy, setRejectBusy] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminTaskSubmission | null>(null);
   const [rejectReasonDraft, setRejectReasonDraft] = useState("");
+
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFiles, setViewerFiles] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -473,11 +474,6 @@ export function AdminPage() {
     () => achievements.find((a) => a.id === awardAchId) ?? null,
     [achievements, awardAchId],
   );
-
-  function openViewer(images: string[], idx: number) {
-    setViewerImages(images);
-    setViewerIndex(idx);
-  }
 
   async function loadUserOwnedAchievements(userId: string) {
     if (!userId) {
@@ -1790,7 +1786,7 @@ export function AdminPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <div className="relative">
-                            <AvatarFrame frameKey={submission.user.frameKey} size={40} src={submission.user.avatarUrl} />
+                            <AvatarFrame frameKey={submission.user.frameKey || null} size={40} src={submission.user.avatarUrl || ""} />
                             {submission.user.statusEmoji && (
                               <div className="absolute -bottom-1 -right-1 rounded-full bg-black/80 px-1 py-0.5 text-[10px]">
                                 {submission.user.statusEmoji}
@@ -1886,24 +1882,32 @@ export function AdminPage() {
                   className="rounded-2xl border border-white/10 bg-black/20 p-5 shadow-2xl backdrop-blur-sm"
                 >
                   <div className="flex flex-col gap-6">
-                    {/* Header Details */}
-                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Выбранная заявка</div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className={clsx(
-                            "h-2 w-2 rounded-full",
-                            selectedTaskSubmission.status === "PENDING" ? "bg-amber-400 animate-pulse" :
-                            selectedTaskSubmission.status === "RESOLVED" ? "bg-emerald-400" : "bg-red-400"
-                          )} />
-                          <span className="text-sm font-bold text-steam-text">{supportStatusLabel(selectedTaskSubmission.status)}</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Создана</div>
-                        <div className="mt-1 text-xs text-steam-text">{new Date(selectedTaskSubmission.createdAt).toLocaleString()}</div>
-                      </div>
-                    </div>
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <AvatarFrame
+                                frameKey={selectedTaskSubmission.user.frameKey || null}
+                                size={54}
+                                src={selectedTaskSubmission.user.avatarUrl || "https://placehold.co/108x108/png?text=?"}
+                              />
+                              {selectedTaskSubmission.user.statusEmoji && (
+                                <div className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-black/80 px-1 py-0.5 text-xs">
+                                  {selectedTaskSubmission.user.statusEmoji}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
+                                <span
+                                  className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                                  style={{ backgroundColor: calculateLevelColor(selectedTaskSubmission.user.level), color: "#fff" }}
+                                >
+                                  Lvl {selectedTaskSubmission.user.level}
+                                </span>
+                              </div>
+                              <div className="text-xs text-steam-muted">ID: #{selectedTaskSubmission.userId}</div>
+                            </div>
+                          </div>
 
                     {/* Media Area */}
                     <div className="grid gap-2">
