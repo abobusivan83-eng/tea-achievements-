@@ -1368,3 +1368,40 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
   return ok(res, result.updated);
 });
+
+adminRouter.delete("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
+  if (!adminOnly(req, res)) return;
+
+  const parsedSubmissionId = TaskSubmissionIdSchema.safeParse(req.params.id);
+  if (!parsedSubmissionId.success) return fail(res, 400, parsedSubmissionId.error.issues[0]?.message ?? "Invalid submission id");
+
+  const existing = await prisma.taskSubmission.findUnique({
+    where: { id: parsedSubmissionId.data },
+    include: {
+      task: { select: { id: true, title: true } },
+      user: { select: { id: true, nickname: true } },
+    },
+  });
+
+  if (!existing) return fail(res, 404, "Submission not found");
+  if (existing.status === "PENDING") {
+    return fail(res, 400, "Нельзя удалить заявку, пока она не обработана");
+  }
+
+  await prisma.taskSubmission.delete({
+    where: { id: existing.id },
+  });
+
+  if (req.user?.id) {
+    await logAdminAction(prisma, {
+      adminId: req.user.id,
+      action: "task.submission.delete",
+      summary: `Удалена заявка «${existing.task.title}» пользователя «${existing.user.nickname}»`,
+      targetUserId: existing.user.id,
+      targetNickname: existing.user.nickname,
+      meta: { submissionId: existing.id, taskId: existing.task.id, status: existing.status },
+    });
+  }
+
+  return ok(res, { deleted: true });
+});

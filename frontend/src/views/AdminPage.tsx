@@ -559,6 +559,18 @@ export function AdminPage() {
     toast({ kind: "success", title: "Награда выдана" });
   }
 
+  async function deleteTaskSubmission(submission: AdminTaskSubmission) {
+    await apiDelete(`/api/admin/tasks/submissions/${submission.id}`);
+    setTaskResponses((prev) => {
+      const next = { ...prev };
+      delete next[submission.id];
+      return next;
+    });
+    if (selectedTaskSubmissionId === submission.id) setSelectedTaskSubmissionId("");
+    await refreshTasks();
+    toast({ kind: "success", title: "Р—Р°СЏРІРєР° СѓРґР°Р»РµРЅР°" });
+  }
+
   async function updateReportStatus(report: SupportReportRow, status: SupportReportRow["status"], adminResponse?: string | null) {
     await apiJson(
       `/api/admin/support/reports/${report.id}`,
@@ -1828,11 +1840,6 @@ export function AdminPage() {
                                 {getUserInitials(submission.user.nickname)}
                               </div>
                             )}
-                            {getSafeStatusEmoji(submission.user.statusEmoji) ? (
-                              <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-cyan-200/10 bg-[#020817]/90 text-[10px] shadow-lg">
-                                {getSafeStatusEmoji(submission.user.statusEmoji)}
-                              </div>
-                            ) : null}
                           </div>
                           <div className="min-w-0">
                             <div className="flex min-w-0 items-center gap-2">
@@ -1938,11 +1945,6 @@ export function AdminPage() {
                               {getUserInitials(selectedTaskSubmission.user.nickname)}
                             </div>
                           )}
-                          {getSafeStatusEmoji(selectedTaskSubmission.user.statusEmoji) ? (
-                            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-cyan-200/10 bg-[#020817]/90 text-xs shadow-xl">
-                              {getSafeStatusEmoji(selectedTaskSubmission.user.statusEmoji)}
-                            </div>
-                          ) : null}
                         </div>
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-2">
@@ -2014,7 +2016,7 @@ export function AdminPage() {
 
                     {/* User Message */}
                     <div className="grid gap-3">
-                      <div className="text-[10px] font-black uppercase tracking-[0.3em] text-steam-accent/60">Ответ пользователя</div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.3em] text-steam-accent/60">Заявка пользователя</div>
                       <div className="max-h-56 overflow-auto whitespace-pre-line rounded-2xl border border-cyan-200/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.82),rgba(7,12,24,0.92))] p-5 text-sm font-medium leading-relaxed text-steam-text shadow-inner">
                         {selectedTaskSubmission.message || "Текстовый комментарий отсутствует."}
                       </div>
@@ -2058,6 +2060,22 @@ export function AdminPage() {
                       >
                         Отклонить
                       </Button>
+                      {selectedTaskSubmission.status !== "PENDING" ? (
+                        <Button
+                          variant="ghost"
+                          className="h-11 w-full border border-white/10 bg-white/5 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-steam-muted transition-all duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                          onClick={async () => {
+                            try {
+                              await deleteTaskSubmission(selectedTaskSubmission);
+                            } catch (e: any) {
+                              setError(e?.message ?? "������ ��������");
+                              toast({ kind: "error", title: "�� ������� ������� ������", message: e?.message ?? "������" });
+                            }
+                          }}
+                        >
+                          ������� ������
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </motion.div>
