@@ -1532,17 +1532,22 @@ export function AdminPage() {
 
       {tab === "tasks" ? (
         <div className="flex flex-col gap-6">
-          <section className="steam-card steam-card--hover overflow-hidden p-0">
+          {/* Add Task Form - Styled to match main UI */}
+          <section className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-steam-panel/90 to-steam-bg/95 shadow-xl backdrop-blur-md">
             <button
               type="button"
               onClick={() => setAddTaskExpanded(!addTaskExpanded)}
-              className="flex w-full items-center justify-between p-4 transition hover:bg-white/[0.02]"
+              className="flex w-full items-center justify-between p-5 transition hover:bg-white/[0.04]"
             >
-              <div className="flex items-center gap-2">
-                <FiPlus className={clsx("text-steam-accent transition", addTaskExpanded && "rotate-45")} />
-                <span className="text-sm font-semibold">Добавить задание</span>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-steam-accent/10 text-steam-accent">
+                  <FiPlus className={clsx("transition-transform duration-300", addTaskExpanded && "rotate-45")} />
+                </div>
+                <span className="text-sm font-bold uppercase tracking-widest text-steam-text">Добавить новое задание</span>
               </div>
-              {addTaskExpanded ? <FiChevronUp className="text-steam-muted" /> : <FiChevronDown className="text-steam-muted" />}
+              <div className="rounded-full bg-white/5 p-1">
+                {addTaskExpanded ? <FiChevronUp className="text-steam-muted" /> : <FiChevronDown className="text-steam-muted" />}
+              </div>
             </button>
 
             <motion.div
@@ -1550,16 +1555,16 @@ export function AdminPage() {
               animate={{ height: addTaskExpanded ? "auto" : 0, opacity: addTaskExpanded ? 1 : 0 }}
               className="overflow-hidden"
             >
-              <div className="grid gap-4 border-t border-white/5 p-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Название</span>
-                    <input className={inputClass} placeholder="Название задания" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+              <div className="grid gap-5 border-t border-white/5 bg-black/20 p-6">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Название задания</span>
+                    <input className={inputClass} placeholder="Например: Победить босса без урона" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Связанное достижение</span>
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Связанное достижение</span>
                     <select className={selectClass} value={taskAchievementId} onChange={(e) => setTaskAchievementId(e.target.value)}>
-                      <option value="">Выберите достижение</option>
+                      <option value="">Выберите достижение...</option>
                       {achievements.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.title} ({a.rarity})
@@ -1569,12 +1574,12 @@ export function AdminPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Описание</span>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Краткое описание</span>
                     <textarea
-                      className="min-h-20 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none transition focus:border-steam-accent"
-                      placeholder="Краткое описание для карточки"
+                      className="min-h-[100px] w-full rounded-xl border border-white/10 bg-steam-bg/60 px-4 py-3 text-sm outline-none transition focus:border-steam-accent focus:ring-1 focus:ring-steam-accent/20"
+                      placeholder="Опишите суть задания для карточки"
                       value={taskDesc}
                       onChange={(e) => setTaskDesc(e.target.value)}
                       onInput={(e) => {
@@ -1584,11 +1589,11 @@ export function AdminPage() {
                       }}
                     />
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Условия выполнения</span>
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Условия выполнения</span>
                     <textarea
-                      className="min-h-20 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none transition focus:border-steam-accent"
-                      placeholder="Что именно должен сделать пользователь"
+                      className="min-h-[100px] w-full rounded-xl border border-white/10 bg-steam-bg/60 px-4 py-3 text-sm outline-none transition focus:border-steam-accent focus:ring-1 focus:ring-steam-accent/20"
+                      placeholder="Что именно нужно сделать пользователю?"
                       value={taskConditions}
                       onChange={(e) => setTaskConditions(e.target.value)}
                       onInput={(e) => {
@@ -1601,39 +1606,41 @@ export function AdminPage() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-4">
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Награда</span>
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Награда (🪙)</span>
                     <div className="relative">
                       <input
-                        className={clsx(inputClass, "w-full pr-8")}
+                        className={clsx(inputClass, "w-full pr-10")}
                         type="number"
                         min={0}
                         placeholder="Монеты"
                         value={taskRewardCoins}
                         onChange={(e) => setTaskRewardCoins(Number(e.target.value) || 0)}
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs opacity-50">🪙</span>
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm opacity-40">🪙</span>
                     </div>
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Тип</span>
-                    <label className="flex h-full items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm">
-                      <input type="checkbox" checked={taskIsEvent} onChange={(e) => setTaskIsEvent(e.target.checked)} />
-                      <span>Ивентовое</span>
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Тип задания</span>
+                    <label className="flex h-[42px] cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-steam-bg/40 px-4 text-sm transition hover:bg-white/5">
+                      <input type="checkbox" className="accent-steam-accent" checked={taskIsEvent} onChange={(e) => setTaskIsEvent(e.target.checked)} />
+                      <span className="font-medium text-steam-text">Ивентовое</span>
                     </label>
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Начало</span>
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Начало</span>
                     <input className={inputClass} type="datetime-local" value={taskStartsAt} onChange={(e) => setTaskStartsAt(e.target.value)} />
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Конец</span>
+                  <div className="grid gap-1.5">
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Конец</span>
                     <input className={inputClass} type="datetime-local" value={taskEndsAt} onChange={(e) => setTaskEndsAt(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="flex justify-end pt-2">
                   <Button
+                    className="h-11 px-8 font-bold uppercase tracking-widest"
+                    variant="primary"
                     onClick={async () => {
                       if (!taskAchievementId) {
                         setError("Выберите связанное достижение для задания");
@@ -1676,41 +1683,52 @@ export function AdminPage() {
 
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[25%_45%_30%]">
             {/* Left Column: Tasks List */}
-            <section className="sticky top-6 grid gap-3">
-              <div className="flex items-center justify-between px-1">
-                <div className="text-xs font-bold uppercase tracking-widest text-steam-muted">Все задания</div>
-                <Button size="sm" variant="ghost" onClick={() => refreshTasks()}>
+            <section className="sticky top-6 grid gap-4">
+              <div className="flex items-center justify-between px-2">
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Все задания</div>
+                <button
+                  onClick={() => refreshTasks()}
+                  className="text-[10px] font-bold uppercase tracking-widest text-steam-accent/60 transition hover:text-steam-accent"
+                >
                   Обновить
-                </Button>
+                </button>
               </div>
               <div className="grid gap-3">
                 {tasks.map((t) => (
                   <div
                     key={t.id}
                     className={clsx(
-                      "group relative rounded-xl border border-white/10 bg-black/25 p-3 transition hover:bg-white/[0.04]",
-                      t.isEvent && "border-amber-500/20 bg-amber-500/5",
-                      !t.isActive && "opacity-60 grayscale",
+                      "group relative overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br p-4 transition-all duration-300",
+                      t.isEvent
+                        ? "from-amber-500/10 to-steam-bg/80 border-amber-500/20 shadow-lg shadow-amber-500/5"
+                        : "from-steam-panel/60 to-steam-bg/80 border-white/5 hover:border-white/20",
+                      !t.isActive && "opacity-50 grayscale",
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-bold text-steam-text">{t.title}</div>
-                        <div className="mt-0.5 text-[10px] text-steam-muted">
-                          {t.isEvent ? "Ивентовое" : "Обычное"} • {t.submissionsCount ?? 0} заявок
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className={clsx(
+                            "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                            t.isEvent ? "bg-amber-500/20 text-amber-400" : "bg-steam-accent/10 text-steam-accent"
+                          )}>
+                            {t.isEvent ? "Ивент" : "Обычное"}
+                          </span>
+                          <span className="text-[10px] text-steam-muted">{t.submissionsCount ?? 0} заявок</span>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
+                      <div className="flex shrink-0 gap-1 opacity-0 transition duration-300 group-hover:opacity-100">
                         <button
                           title="Редактировать"
-                          className="rounded p-1 text-steam-muted hover:bg-white/10 hover:text-steam-text"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-steam-accent/20 hover:text-steam-accent"
                           onClick={() => openTaskEditor(t)}
                         >
-                          <FiEdit2 size={14} />
+                          <FiEdit2 size={12} />
                         </button>
                         <button
                           title="Удалить"
-                          className="rounded p-1 text-steam-muted hover:bg-red-400/10 hover:text-red-400"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-red-500/20 hover:text-red-400"
                           onClick={async () => {
                             if (confirm("Удалить задание? Все связанные заявки также будут удалены.")) {
                               await apiDelete(`/api/admin/tasks/${t.id}`);
@@ -1718,17 +1736,17 @@ export function AdminPage() {
                             }
                           }}
                         >
-                          <FiTrash2 size={14} />
+                          <FiTrash2 size={12} />
                         </button>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
                       <button
                         className={clsx(
-                          "rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-tighter transition",
+                          "rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all duration-300",
                           t.isActive
-                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                            : "border-white/10 bg-white/5 text-steam-muted hover:bg-white/10",
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                            : "bg-white/5 text-steam-muted border border-white/10 hover:bg-white/10",
                         )}
                         onClick={async () => {
                           await apiJson(`/api/admin/tasks/${t.id}`, { isActive: !t.isActive }, "PATCH");
@@ -1737,7 +1755,10 @@ export function AdminPage() {
                       >
                         {t.isActive ? "Активно" : "Выключено"}
                       </button>
-                      <span className="text-[10px] font-bold text-amber-400/80">+{t.rewardCoins} 🪙</span>
+                      <div className="flex items-center gap-1.5 text-[11px] font-black text-amber-400">
+                        <span>+{t.rewardCoins}</span>
+                        <span className="text-[9px]">🪙</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1746,10 +1767,11 @@ export function AdminPage() {
 
             {/* Center Column: Submissions Feed */}
             <section className="grid gap-4">
-              <div className="flex items-center justify-between px-1">
-                <div className="text-xs font-bold uppercase tracking-widest text-steam-muted">Отправки пользователей</div>
-                <div className="flex gap-2">
-                  <span className="rounded-full border border-steam-accent/20 bg-steam-accent/10 px-2 py-0.5 text-[10px] font-bold text-steam-accent">
+              <div className="flex items-center justify-between px-2">
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Отправки пользователей</div>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-steam-accent"></div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-steam-accent">
                     {unreadTaskSubmissions.length} новых
                   </span>
                 </div>
@@ -1758,7 +1780,6 @@ export function AdminPage() {
               <div className="grid gap-3">
                 {[...unreadTaskSubmissions, ...readTaskSubmissions].map((submission) => {
                   const selected = submission.id === selectedTaskSubmission?.id;
-                  const isPending = submission.status === "PENDING";
                   return (
                     <motion.button
                       layout
@@ -1776,19 +1797,19 @@ export function AdminPage() {
                         }
                       }}
                       className={clsx(
-                        "relative flex w-full flex-col gap-3 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300",
+                        "relative flex w-full flex-col gap-4 overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300 backdrop-blur-sm",
                         selected
-                          ? "border-steam-accent/40 bg-steam-accent/5 shadow-lg shadow-steam-accent/5"
-                          : "border-white/5 bg-black/20 hover:border-white/10 hover:bg-white/[0.03]",
-                        !submission.isRead && "ring-1 ring-steam-accent/20",
+                          ? "border-steam-accent/40 bg-steam-accent/10 shadow-[0_0_20px_rgba(102,192,244,0.05)]"
+                          : "border-white/5 bg-gradient-to-br from-steam-panel/40 to-steam-bg/60 hover:border-white/20 hover:from-steam-panel/50",
+                        !submission.isRead && "ring-1 ring-steam-accent/30",
                       )}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <div className="relative">
-                            <AvatarFrame frameKey={submission.user.frameKey || null} size={40} src={submission.user.avatarUrl || ""} />
+                            <AvatarFrame frameKey={submission.user.frameKey || null} size={42} src={submission.user.avatarUrl || ""} />
                             {submission.user.statusEmoji && (
-                              <div className="absolute -bottom-1 -right-1 rounded-full bg-black/80 px-1 py-0.5 text-[10px]">
+                              <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/80 text-[10px] shadow-lg">
                                 {submission.user.statusEmoji}
                               </div>
                             )}
@@ -1797,57 +1818,57 @@ export function AdminPage() {
                             <div className="flex items-center gap-2">
                               <span className="truncate text-sm font-bold text-steam-text">{submission.user.nickname}</span>
                               <span
-                                className="rounded px-1 py-0.5 text-[9px] font-bold text-white"
+                                className="rounded px-1 py-0.5 text-[8px] font-black text-white shadow-sm"
                                 style={{ backgroundColor: calculateLevelColor(submission.user.level) }}
                               >
-                                Lvl {submission.user.level}
+                                {submission.user.level}
                               </span>
                             </div>
-                            <div className="truncate text-xs text-steam-muted">
-                              ID: #{submission.userId} • {new Date(submission.createdAt).toLocaleDateString()}
+                            <div className="truncate text-[10px] font-medium tracking-wide text-steam-muted">
+                              #{submission.userId} • {new Date(submission.createdAt).toLocaleDateString()}
                             </div>
                           </div>
                         </div>
 
                         <div
                           className={clsx(
-                            "rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                            "rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest shadow-sm",
                             submission.status === "PENDING"
-                              ? "border-amber-400/20 bg-amber-400/10 text-amber-400"
+                              ? "border-amber-400/30 bg-amber-400/10 text-amber-400"
                               : submission.status === "RESOLVED"
-                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-400"
-                                : "border-red-400/20 bg-red-400/10 text-red-400",
+                                ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-400"
+                                : "border-red-400/30 bg-red-400/10 text-red-400",
                           )}
                         >
                           {supportStatusLabel(submission.status)}
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                        <div className="text-xs font-bold text-steam-text">{submission.task.title}</div>
-                        <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-steam-muted">
-                          {submission.message || "Текстовое сообщение отсутствует"}
+                      <div className="rounded-xl border border-white/5 bg-black/20 p-4">
+                        <div className="text-xs font-bold uppercase tracking-wide text-steam-accent/80">{submission.task.title}</div>
+                        <div className="mt-2 line-clamp-2 text-xs leading-relaxed text-steam-muted">
+                          {submission.message || "Без текстового комментария..."}
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between border-t border-white/5 pt-3">
                         <div className="flex -space-x-2">
-                          {submission.evidence.slice(0, 3).map((file, i) => (
-                            <div key={i} className="h-8 w-12 overflow-hidden rounded-md border border-black/40 bg-black/20 shadow-sm">
+                          {submission.evidence.slice(0, 4).map((file, i) => (
+                            <div key={i} className="h-8 w-12 overflow-hidden rounded-md border border-black/50 bg-steam-bg/80 shadow-md">
                               {isVideoMedia(file) ? (
-                                <div className="flex h-full w-full items-center justify-center bg-black/40 text-[8px] text-white">VID</div>
+                                <div className="flex h-full w-full items-center justify-center bg-steam-accent/10 text-[8px] font-black text-steam-accent">MP4</div>
                               ) : (
                                 <img src={file} className="h-full w-full object-cover" />
                               )}
                             </div>
                           ))}
-                          {submission.evidence.length > 3 && (
-                            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-white/5 bg-black/40 text-[10px] font-bold text-steam-muted">
-                              +{submission.evidence.length - 3}
+                          {submission.evidence.length > 4 && (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-white/5 bg-steam-panel/80 text-[10px] font-black text-steam-muted">
+                              +{submission.evidence.length - 4}
                             </div>
                           )}
                         </div>
-                        <div className="text-[10px] font-bold text-steam-muted">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted/60">
                           {submission.evidence.length} вложений
                         </div>
                       </div>
@@ -1855,7 +1876,7 @@ export function AdminPage() {
                       {selected && (
                         <motion.div
                           layoutId="selected-indicator"
-                          className="absolute inset-y-0 left-0 w-1 bg-steam-accent"
+                          className="absolute inset-y-0 left-0 w-1 bg-steam-accent shadow-[2px_0_10px_rgba(102,192,244,0.5)]"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                         />
@@ -1865,8 +1886,8 @@ export function AdminPage() {
                 })}
 
                 {taskSubmissions.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-white/10 py-12 text-center">
-                    <div className="text-sm text-steam-muted">Заявок пока нет</div>
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 py-12 text-center">
+                    <div className="text-sm font-medium text-steam-muted">Входящих заявок нет</div>
                   </div>
                 )}
               </div>
@@ -1879,45 +1900,61 @@ export function AdminPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={selectedTaskSubmission.id}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-5 shadow-2xl backdrop-blur-sm"
+                  className="rounded-2xl border border-white/10 bg-gradient-to-b from-steam-panel to-steam-bg p-6 shadow-2xl backdrop-blur-xl"
                 >
                   <div className="flex flex-col gap-6">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <AvatarFrame
-                                frameKey={selectedTaskSubmission.user.frameKey || null}
-                                size={54}
-                                src={selectedTaskSubmission.user.avatarUrl || "https://placehold.co/108x108/png?text=?"}
-                              />
-                              {selectedTaskSubmission.user.statusEmoji && (
-                                <div className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-black/80 px-1 py-0.5 text-xs">
-                                  {selectedTaskSubmission.user.statusEmoji}
-                                </div>
-                              )}
+                    {/* Header Details */}
+                    <div className="flex items-center justify-between border-b border-white/5 pb-5">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          <AvatarFrame
+                            frameKey={selectedTaskSubmission.user.frameKey || null}
+                            size={56}
+                            src={selectedTaskSubmission.user.avatarUrl || "https://placehold.co/108x108/png?text=?"}
+                          />
+                          {selectedTaskSubmission.user.statusEmoji && (
+                            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-black/80 text-xs shadow-xl">
+                              {selectedTaskSubmission.user.statusEmoji}
                             </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
-                                <span
-                                  className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-                                  style={{ backgroundColor: calculateLevelColor(selectedTaskSubmission.user.level), color: "#fff" }}
-                                >
-                                  Lvl {selectedTaskSubmission.user.level}
-                                </span>
-                              </div>
-                              <div className="text-xs text-steam-muted">ID: #{selectedTaskSubmission.userId}</div>
-                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
+                            <span
+                              className="rounded px-2 py-0.5 text-[10px] font-black text-white shadow-lg"
+                              style={{ backgroundColor: calculateLevelColor(selectedTaskSubmission.user.level) }}
+                            >
+                              LVL {selectedTaskSubmission.user.level}
+                            </span>
                           </div>
+                          <div className="mt-0.5 text-xs font-medium text-steam-muted">ID: #{selectedTaskSubmission.userId}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={clsx(
+                          "inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-lg",
+                          selectedTaskSubmission.status === "PENDING" ? "border-amber-400/40 bg-amber-400/10 text-amber-400 animate-pulse" :
+                          selectedTaskSubmission.status === "RESOLVED" ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" :
+                          "border-red-500/40 bg-red-500/10 text-red-400"
+                        )}>
+                          {supportStatusLabel(selectedTaskSubmission.status)}
+                        </div>
+                        <div className="mt-2 text-[9px] font-bold uppercase tracking-tighter text-steam-muted/50">
+                          {new Date(selectedTaskSubmission.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Media Area */}
-                    <div className="grid gap-2">
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Медиа-вложения</div>
+                    <div className="grid gap-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-steam-muted/60">Медиа-вложения</div>
                       {selectedTaskSubmission.evidence.length ? (
-                        <div className="grid grid-cols-1 gap-3">
+                        <div className="grid grid-cols-1 gap-4">
                           {selectedTaskSubmission.evidence.map((file, index) => {
                             const isVideo = isVideoMedia(file);
                             return (
-                              <div key={file} className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                              <div key={file} className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/50 shadow-inner">
                                 {isVideo ? (
                                   <div className="aspect-video w-full bg-black">
                                     <video
@@ -1932,9 +1969,9 @@ export function AdminPage() {
                                     onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
                                     className="block w-full"
                                   >
-                                    <img src={file} className="w-full object-contain transition duration-500 hover:scale-[1.02]" alt={`Evidence ${index + 1}`} />
-                                    <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm">
-                                      Скриншот #{index + 1}
+                                    <img src={file} className="w-full object-contain transition duration-700 hover:scale-[1.03]" alt={`Evidence ${index + 1}`} />
+                                    <div className="absolute bottom-3 right-3 rounded-lg bg-black/70 px-3 py-1.5 text-[10px] font-black text-white shadow-xl backdrop-blur-md">
+                                      СКРИНШОТ #{index + 1}
                                     </div>
                                   </button>
                                 )}
@@ -1943,25 +1980,25 @@ export function AdminPage() {
                           })}
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-dashed border-white/10 bg-black/15 py-8 text-center">
-                          <div className="text-sm text-steam-muted">Без вложений</div>
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 py-10 text-center">
+                          <div className="text-sm font-medium text-steam-muted">Медиафайлы не приложены</div>
                         </div>
                       )}
                     </div>
 
                     {/* User Message */}
-                    <div className="grid gap-2">
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Ответ пользователя</div>
-                      <div className="max-h-40 overflow-auto whitespace-pre-line rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm leading-relaxed text-steam-text">
-                        {selectedTaskSubmission.message || "Без текстового сообщения."}
+                    <div className="grid gap-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-steam-muted/60">Ответ пользователя</div>
+                      <div className="max-h-48 overflow-auto whitespace-pre-line rounded-2xl border border-white/5 bg-steam-bg/40 p-5 text-sm leading-relaxed text-steam-text shadow-inner">
+                        {selectedTaskSubmission.message || "Текстовый комментарий отсутствует."}
                       </div>
                     </div>
 
                     {/* Admin Response */}
-                    <div className="grid gap-2 border-t border-white/5 pt-4">
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Ваш комментарий</div>
+                    <div className="grid gap-3 border-t border-white/5 pt-5">
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-steam-muted/60">Ваше решение / Комментарий</div>
                       <textarea
-                        className="min-h-24 w-full rounded-xl border border-white/10 bg-black/40 p-3 text-sm outline-none transition focus:border-steam-accent/50 focus:bg-black/60"
+                        className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/40 p-4 text-sm outline-none transition duration-300 focus:border-steam-accent/50 focus:bg-black/60 focus:ring-1 focus:ring-steam-accent/20"
                         value={taskResponses[selectedTaskSubmission.id] ?? selectedTaskSubmission.adminResponse ?? ""}
                         onChange={(e) =>
                           setTaskResponses((prev) => ({
@@ -1969,15 +2006,14 @@ export function AdminPage() {
                             [selectedTaskSubmission.id]: e.target.value,
                           }))
                         }
-                        placeholder="Причина отклонения или поздравление..."
+                        placeholder="Поздравить с выполнением или указать причину отказа..."
                       />
                     </div>
 
                     {/* Actions */}
-                    <div className="grid gap-3 pt-2">
+                    <div className="grid gap-4 pt-2">
                       <Button
-                        className="h-12 w-full text-base font-bold shadow-lg shadow-emerald-500/20"
-                        variant="primary"
+                        className="h-14 w-full bg-gradient-to-r from-steam-accent to-steam-blue-hover text-base font-black uppercase tracking-[0.15em] text-white shadow-[0_10px_30px_rgba(102,192,244,0.2)] hover:shadow-[0_15px_40px_rgba(102,192,244,0.3)]"
                         onClick={async () => {
                           try {
                             await grantTaskSubmission(selectedTaskSubmission);
@@ -1991,7 +2027,7 @@ export function AdminPage() {
                       </Button>
                       <Button
                         variant="danger"
-                        className="h-12 w-full text-base font-bold shadow-lg shadow-red-500/20"
+                        className="h-14 w-full bg-gradient-to-r from-red-600 to-red-800 text-base font-black uppercase tracking-[0.15em] text-white shadow-[0_10px_30px_rgba(239,68,68,0.15)] hover:shadow-[0_15px_40px_rgba(239,68,68,0.25)]"
                         onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}
                       >
                         Отклонить
@@ -2000,19 +2036,21 @@ export function AdminPage() {
                   </div>
                 </motion.div>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/10 px-6 py-12 text-center">
-                  <div className="mb-4 rounded-full bg-white/5 p-4">
-                    <FiSearch className="h-8 w-8 text-steam-muted" />
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-steam-panel/20 px-8 py-20 text-center backdrop-blur-sm">
+                  <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-steam-accent/5 shadow-inner">
+                    <FiSearch className="h-10 w-10 text-steam-accent/30" />
                   </div>
-                  <div className="text-sm font-medium text-steam-muted">
-                    Выберите заявку из центральной колонки для детального просмотра и принятия решения.
+                  <div className="text-sm font-bold uppercase tracking-widest text-steam-muted/60">
+                    Выберите заявку для просмотра
+                  </div>
+                  <div className="mt-3 max-w-[200px] text-xs leading-relaxed text-steam-muted/40">
+                    Детальная информация, медиафайлы и инструменты модерации появятся здесь после выбора
                   </div>
                 </div>
               )}
             </section>
           </div>
         </div>
-      ) : null}
 
       {tab === "audit" ? (
         <section className="steam-card steam-card--hover p-4">
