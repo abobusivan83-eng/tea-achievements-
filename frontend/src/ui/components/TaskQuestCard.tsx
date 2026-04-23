@@ -52,7 +52,7 @@ function rarityShortRu(r: Rarity | undefined) {
     case "LEGENDARY":
       return "Легендарное";
     case "EXCLUSIVE":
-      return "Эксклюзив (создатель)";
+      return "Эксклюзив";
     case "SECRET":
       return "Секретное";
     default:
@@ -61,6 +61,8 @@ function rarityShortRu(r: Rarity | undefined) {
 }
 
 type TaskKind = "event" | "timed" | "permanent";
+type TaskScheduleStatus = "UPCOMING" | "ACTIVE" | "EXPIRED";
+export type TaskQuestCardVariant = "available" | "completed";
 
 function taskKind(t: TaskItem): TaskKind {
   if (t.isEvent) return "event";
@@ -87,9 +89,13 @@ function formatDuration(seconds: number | null | undefined) {
   return `${mm}:${ss}`;
 }
 
-export type TaskQuestCardVariant = "available" | "completed";
-
-type TaskScheduleStatus = "UPCOMING" | "ACTIVE" | "EXPIRED";
+function formatCountdown(totalMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 function scheduleStatusFromTime(startsAt: string | null, endsAt: string | null, nowMs: number): TaskScheduleStatus {
   const s = startsAt ? new Date(startsAt).getTime() : null;
@@ -101,8 +107,8 @@ function scheduleStatusFromTime(startsAt: string | null, endsAt: string | null, 
 
 function formatUpcomingText(startsAt: string | null, nowMs: number) {
   if (!startsAt) return "Ожидайте начала";
-  const s = new Date(startsAt).getTime();
-  const delta = s - nowMs;
+  const startMs = new Date(startsAt).getTime();
+  const delta = startMs - nowMs;
   if (!Number.isFinite(delta) || delta <= 0) return `Старт: ${new Date(startsAt).toLocaleString()}`;
   const totalSeconds = Math.floor(delta / 1000);
   const days = Math.floor(totalSeconds / 86400);
@@ -132,6 +138,9 @@ export function TaskQuestCard(props: {
 }) {
   const variant = props.variant ?? "available";
   const reduce = useReducedMotion();
+  const [syncedNowMs, setSyncedNowMs] = useState(props.nowMs);
+  const [videoDurationByUrl, setVideoDurationByUrl] = useState<Record<string, number>>({});
+
   const t = props.task;
   const sub = t.mySubmission;
   const ach = t.achievement;
@@ -140,17 +149,21 @@ export function TaskQuestCard(props: {
   const rClass = rarityClassFrom(rarity);
   const glow = rarityGlowClass(rarity ?? "COMMON", resolved);
   const kind = taskKind(t);
-  const scheduleStatus = scheduleStatusFromTime(t.startsAt, t.endsAt, props.nowMs);
+  const scheduleStatus = scheduleStatusFromTime(t.startsAt, t.endsAt, syncedNowMs);
   const scheduleLocked = scheduleStatus !== "ACTIVE";
-  const overlayAllowed = props.variant === "available" && scheduleLocked && !resolved;
+  const overlayAllowed = variant === "available" && scheduleLocked && !resolved;
+  const startsAtMs = t.startsAt ? new Date(t.startsAt).getTime() : null;
+  const upcomingRemainingMs = startsAtMs !== null ? Math.max(0, startsAtMs - syncedNowMs) : 0;
   const scheduleLockText =
-    scheduleStatus === "UPCOMING" ? formatUpcomingText(t.startsAt, props.nowMs) : scheduleStatus === "EXPIRED" ? "Ивент завершен" : "";
+    scheduleStatus === "UPCOMING"
+      ? formatUpcomingText(t.startsAt, syncedNowMs)
+      : scheduleStatus === "EXPIRED"
+        ? "Ивент завершен"
+        : "";
   const canSubmit =
     variant === "available" &&
     scheduleStatus === "ACTIVE" &&
-    (!sub ||
-      sub.status === "REJECTED" ||
-      (sub.status !== "PENDING" && sub.status !== "REVIEWED" && sub.status !== "RESOLVED"));
+    (!sub || sub.status === "REJECTED" || (sub.status !== "PENDING" && sub.status !== "REVIEWED" && sub.status !== "RESOLVED"));
 
   const hoverLift = resolved ? -5 : kind === "event" ? -4 : -2;
   const previewItems = useMemo(
@@ -162,13 +175,24 @@ export function TaskQuestCard(props: {
       })),
     [props.files],
   );
-  const [videoDurationByUrl, setVideoDurationByUrl] = useState<Record<string, number>>({});
 
   useEffect(() => {
     return () => {
       previewItems.forEach((item) => URL.revokeObjectURL(item.url));
     };
   }, [previewItems]);
+
+  useEffect(() => {
+    setSyncedNowMs(props.nowMs);
+    const localStart = Date.now();
+    const intervalId = window.setInterval(() => {
+      setSyncedNowMs(props.nowMs + (Date.now() - localStart));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [props.nowMs]);
 
   return (
     <motion.div
@@ -177,7 +201,7 @@ export function TaskQuestCard(props: {
       whileHover={reduce ? undefined : { y: hoverLift, scale: 1.012 }}
       transition={{ type: "spring", stiffness: 520, damping: 34 }}
       className={clsx(
-        "achievement-card task-card group relative",
+        "achievement-card task-card group relative overflow-hidden",
         rClass,
         overlayAllowed && "is-locked",
         glow,
@@ -194,7 +218,7 @@ export function TaskQuestCard(props: {
         </div>
       ) : null}
 
-      <button type="button" className="task-card__header" onClick={() => props.onToggleExpand()}>
+      <button type="button" className="task-card__header relative z-0" onClick={() => props.onToggleExpand()}>
         <div className="ach-icon-box">
           <AchievementIcon
             iconUrl={ach?.iconUrl}
@@ -258,7 +282,7 @@ export function TaskQuestCard(props: {
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="task-card__body mt-3 border-t border-white/10 pt-3"
+            className="task-card__body relative z-0 mt-3 border-t border-white/10 pt-3"
           >
             <div className="task-conditions-block">
               <div className="task-conditions-block__label">Условия выполнения</div>
@@ -311,15 +335,11 @@ export function TaskQuestCard(props: {
               <div className="rounded-lg border border-steam-green/35 bg-steam-green/10 px-3 py-2.5 text-sm text-steam-text">
                 <div className="text-[11px] font-extrabold uppercase tracking-wide text-steam-green">Выполнено вами</div>
                 <div className="mt-1 text-[13px] text-steam-muted">
-                  Принято модерацией:{" "}
-                  <span className="font-semibold text-steam-text">
-                    {new Date(sub.reviewedAt ?? sub.createdAt).toLocaleString()}
-                  </span>
+                  Принято модерацией: <span className="font-semibold text-steam-text">{new Date(sub.reviewedAt ?? sub.createdAt).toLocaleString()}</span>
                 </div>
                 {sub.reviewedByNickname ? (
                   <div className="mt-1 text-[13px] text-steam-muted">
-                    Администратор, выдавший награду:{" "}
-                    <span className="font-semibold text-steam-text">{sub.reviewedByNickname}</span>
+                    Администратор, выдавший награду: <span className="font-semibold text-steam-text">{sub.reviewedByNickname}</span>
                   </div>
                 ) : null}
                 <div className="mt-1 text-xs text-steam-muted">
@@ -375,9 +395,7 @@ export function TaskQuestCard(props: {
                         />
                         Выбрать файлы
                       </span>
-                      {props.files.length ? (
-                        <span className="text-xs text-steam-muted">Выбрано: {props.files.length}</span>
-                      ) : null}
+                      {props.files.length ? <span className="text-xs text-steam-muted">Выбрано: {props.files.length}</span> : null}
                       {previewItems.length ? (
                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {previewItems.map((item) => (
@@ -395,13 +413,7 @@ export function TaskQuestCard(props: {
                                     }}
                                   />
                                 ) : (
-                                  <img
-                                    src={item.url}
-                                    alt={item.file.name}
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-28 w-full object-cover"
-                                  />
+                                  <img src={item.url} alt={item.file.name} loading="lazy" decoding="async" className="h-28 w-full object-cover" />
                                 )}
                                 <div className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
                                   {item.isVideo ? "Видео" : "Фото"}
@@ -448,31 +460,27 @@ export function TaskQuestCard(props: {
       </AnimatePresence>
 
       {overlayAllowed ? (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center rounded-[12px] bg-black/60 backdrop-blur-md">
-          <div className="px-3 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/40 text-steam-accent shadow-[0_0_25px_rgba(102,192,244,0.3)]">
+        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[12px] bg-[#020817]/88 backdrop-blur-2xl">
+          <div className="flex max-w-[88%] flex-col items-center justify-center px-4 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-cyan-300/25 bg-[#020817]/95 text-steam-accent shadow-[0_0_28px_rgba(102,192,244,0.24)]">
               <FiLock className="h-7 w-7" />
             </div>
-            <div className="mt-4 text-sm font-black uppercase tracking-widest text-steam-text drop-shadow-lg">{scheduleLockText}</div>
+            <div className="mt-4 text-[11px] font-black uppercase tracking-[0.28em] text-steam-muted/80">
+              {scheduleStatus === "UPCOMING" ? "Открытие задания" : "Доступ закрыт"}
+            </div>
+            {scheduleStatus === "UPCOMING" ? (
+              <div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 px-5 py-3 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
+                <div className="font-mono text-2xl font-black tracking-[0.22em] text-cyan-100">
+                  {formatCountdown(upcomingRemainingMs)}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4 max-w-[280px] text-sm font-bold leading-relaxed text-steam-text/92 drop-shadow-lg">
+              {scheduleStatus === "UPCOMING" ? "Задание автоматически откроется, когда таймер дойдёт до нуля." : scheduleLockText}
+            </div>
           </div>
         </div>
       ) : null}
-
-      {!reduce &&
-      resolved &&
-      ach &&
-      (ach.rarity === "RARE" ||
-        ach.rarity === "EPIC" ||
-        ach.rarity === "LEGENDARY" ||
-        ach.rarity === "EXCLUSIVE" ||
-        ach.rarity === "SECRET") ? (
-        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100">
-          <div className="absolute -inset-[40%] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)] [transform:translateX(-65%)_rotate(18deg)] animate-[shine_2.2s_ease-in-out_infinite]" />
-        </div>
-      ) : null}
-    </motion.div>
-  );
-}
 
       {!reduce &&
       resolved &&

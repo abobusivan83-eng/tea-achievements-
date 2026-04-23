@@ -1531,9 +1531,9 @@ export function AdminPage() {
       ) : null}
 
       {tab === "tasks" ? (
-        <div className="flex flex-col gap-6 bg-[#0f172a]/60 rounded-3xl p-4 lg:p-6 shadow-2xl backdrop-blur-sm">
+        <div className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(9,16,32,0.94))] p-4 shadow-[0_30px_80px_rgba(2,6,23,0.45)] backdrop-blur-xl lg:p-6">
           {/* Add Task Form - Styled to match main UI */}
-          <section className="overflow-hidden rounded-2xl border border-steam-accent/20 bg-gradient-to-br from-[#1e293b] to-[#0f172a] shadow-[0_0_30px_rgba(102,192,244,0.05)] backdrop-blur-md">
+          <section className="overflow-hidden rounded-2xl border border-steam-accent/20 bg-[linear-gradient(135deg,rgba(30,41,59,0.92),rgba(15,23,42,0.9))] shadow-[0_0_30px_rgba(102,192,244,0.08)] backdrop-blur-xl">
             <button
               type="button"
               onClick={() => setAddTaskExpanded(!addTaskExpanded)}
@@ -1555,7 +1555,7 @@ export function AdminPage() {
               animate={{ height: addTaskExpanded ? "auto" : 0, opacity: addTaskExpanded ? 1 : 0 }}
               className="overflow-hidden"
             >
-              <div className="grid gap-5 border-t border-white/5 bg-[#0a1120]/40 p-6">
+              <div className="grid gap-5 border-t border-white/10 bg-[linear-gradient(180deg,rgba(12,20,36,0.82),rgba(9,14,28,0.74))] p-6 backdrop-blur-xl">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-1.5">
                     <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Название задания</span>
@@ -1698,10 +1698,10 @@ export function AdminPage() {
                   <div
                     key={t.id}
                     className={clsx(
-                      "group relative overflow-hidden rounded-xl border bg-gradient-to-br p-4 transition-all duration-300 backdrop-blur-sm",
+                      "group relative overflow-hidden rounded-xl border bg-gradient-to-br p-4 transition-all duration-300 backdrop-blur-xl",
                       t.isEvent
-                        ? "from-amber-500/15 to-[#1a2b44]/60 border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]"
-                        : "from-[#1a2b44]/80 to-[#0f172a]/90 border-white/10 hover:border-steam-accent/30 shadow-lg",
+                        ? "from-amber-500/12 via-[#22304b]/88 to-[#111c32]/94 border-amber-400/30 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+                        : "from-[#22304b]/88 via-[#162235]/92 to-[#0d1728]/96 border-white/10 hover:border-steam-accent/35 shadow-[0_14px_34px_rgba(2,6,23,0.3)]",
                       !t.isActive && "opacity-50 grayscale",
                     )}
                   >
@@ -1797,10 +1797,10 @@ export function AdminPage() {
                         }
                       }}
                       className={clsx(
-                        "relative flex w-full flex-col gap-4 overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300 backdrop-blur-md shadow-lg",
+                        "relative flex w-full flex-col gap-4 overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300 backdrop-blur-xl shadow-[0_18px_40px_rgba(2,6,23,0.24)]",
                         selected
-                          ? "border-steam-accent/50 bg-[#1a2b44]/60 shadow-[0_0_25px_rgba(102,192,244,0.1)]"
-                          : "border-white/10 bg-gradient-to-br from-[#1a2b44]/40 to-[#0f172a]/80 hover:border-white/20 hover:from-[#1a2b44]/60",
+                          ? "border-steam-accent/50 bg-[linear-gradient(135deg,rgba(31,54,84,0.82),rgba(15,23,42,0.92))] shadow-[0_0_25px_rgba(102,192,244,0.14)]"
+                          : "border-white/10 bg-[linear-gradient(135deg,rgba(26,43,68,0.58),rgba(15,23,42,0.9))] hover:border-white/20 hover:from-[#203351]/70",
                         !submission.isRead && "ring-1 ring-steam-accent/40 shadow-[0_0_15px_rgba(102,192,244,0.05)]",
                       )}
                     >
@@ -1844,7 +1844,7 @@ export function AdminPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-white/5 bg-[#0a1120]/60 p-4">
+                      <div className="rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.82),rgba(7,12,24,0.92))] p-4 backdrop-blur-lg">
                         <div className="text-[11px] font-black uppercase tracking-widest text-steam-accent drop-shadow-[0_0_8px_rgba(102,192,244,0.3)]">{submission.task.title}</div>
                         <div className="mt-2 line-clamp-2 text-xs leading-relaxed text-steam-text/80 font-medium">
                           {submission.message || "Без текстового комментария..."}
@@ -1886,7 +1886,7 @@ export function AdminPage() {
                 })}
 
                 {taskSubmissions.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-[#0f172a]/40 py-16 text-center backdrop-blur-sm">
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.62),rgba(9,16,30,0.7))] py-16 text-center backdrop-blur-xl">
                     <div className="text-sm font-bold uppercase tracking-widest text-steam-muted/60">Входящих заявок нет</div>
                   </div>
                 )}
@@ -1900,7 +1900,7 @@ export function AdminPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={selectedTaskSubmission.id}
-                  className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#1e293b] to-[#0f172a] p-6 shadow-2xl backdrop-blur-xl border-l-steam-accent/20"
+                  className="rounded-2xl border border-cyan-200/12 bg-[linear-gradient(180deg,rgba(34,52,80,0.94),rgba(15,23,42,0.96))] p-6 shadow-[0_24px_70px_rgba(8,15,30,0.45)] backdrop-blur-2xl"
                 >
                   <div className="flex flex-col gap-6">
                     {/* Header Details */}
@@ -1954,7 +1954,7 @@ export function AdminPage() {
                           {selectedTaskSubmission.evidence.map((file, index) => {
                             const isVideo = isVideoMedia(file);
                             return (
-                              <div key={file} className="group relative overflow-hidden rounded-xl border border-white/10 bg-[#0f172a]/60 shadow-inner">
+                              <div key={file} className="group relative overflow-hidden rounded-xl border border-cyan-200/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.85),rgba(6,10,20,0.94))] shadow-inner backdrop-blur-lg">
                                 {isVideo ? (
                                   <div className="aspect-video w-full bg-black">
                                     <video
@@ -1980,7 +1980,7 @@ export function AdminPage() {
                           })}
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-dashed border-white/10 bg-[#0a1120]/40 py-12 text-center shadow-inner">
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-[linear-gradient(180deg,rgba(11,18,32,0.72),rgba(8,13,24,0.86))] py-12 text-center shadow-inner backdrop-blur-lg">
                           <div className="text-sm font-bold uppercase tracking-widest text-steam-muted/40">Файлы не приложены</div>
                         </div>
                       )}
@@ -1989,7 +1989,7 @@ export function AdminPage() {
                     {/* User Message */}
                     <div className="grid gap-3">
                       <div className="text-[10px] font-black uppercase tracking-[0.3em] text-steam-accent/60">Ответ пользователя</div>
-                      <div className="max-h-56 overflow-auto whitespace-pre-line rounded-2xl border border-white/10 bg-[#0a1120]/60 p-5 text-sm leading-relaxed text-steam-text shadow-inner font-medium border-l-steam-accent/30">
+                      <div className="max-h-56 overflow-auto whitespace-pre-line rounded-2xl border border-cyan-200/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.82),rgba(7,12,24,0.92))] p-5 text-sm font-medium leading-relaxed text-steam-text shadow-inner">
                         {selectedTaskSubmission.message || "Текстовый комментарий отсутствует."}
                       </div>
                     </div>
@@ -1998,7 +1998,7 @@ export function AdminPage() {
                     <div className="grid gap-3 border-t border-white/5 pt-5">
                       <div className="text-[10px] font-black uppercase tracking-[0.3em] text-steam-accent/60">Ваше решение / Комментарий</div>
                       <textarea
-                        className="min-h-[140px] w-full rounded-2xl border border-white/10 bg-[#0f172a]/60 p-5 text-sm text-steam-text outline-none transition duration-500 focus:border-steam-accent/60 focus:bg-[#0f172a]/80 focus:ring-1 focus:ring-steam-accent/30 shadow-inner"
+                        className="min-h-[140px] w-full rounded-2xl border border-cyan-200/10 bg-[linear-gradient(180deg,rgba(10,18,34,0.82),rgba(8,12,24,0.92))] p-5 text-sm text-steam-text outline-none transition duration-500 focus:border-steam-accent/60 focus:ring-1 focus:ring-steam-accent/30 shadow-inner"
                         value={taskResponses[selectedTaskSubmission.id] ?? selectedTaskSubmission.adminResponse ?? ""}
                         onChange={(e) =>
                           setTaskResponses((prev) => ({
@@ -2013,7 +2013,7 @@ export function AdminPage() {
                     {/* Actions */}
                     <div className="grid gap-4 pt-2">
                       <Button
-                        className="h-16 w-full bg-gradient-to-r from-cyan-400 to-blue-500 text-base font-black uppercase tracking-[0.25em] text-white shadow-[0_15px_40px_rgba(34,211,238,0.3)] hover:shadow-[0_20px_50px_rgba(34,211,238,0.45)] hover:-translate-y-1 transition-all duration-300"
+                        className="h-16 w-full border border-cyan-200/20 bg-gradient-to-r from-[#38bdf8] via-[#22d3ee] to-[#3b82f6] text-base font-black uppercase tracking-[0.25em] text-white shadow-[0_15px_40px_rgba(34,211,238,0.32)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(34,211,238,0.45)]"
                         onClick={async () => {
                           try {
                             await grantTaskSubmission(selectedTaskSubmission);
@@ -2027,7 +2027,7 @@ export function AdminPage() {
                       </Button>
                       <Button
                         variant="danger"
-                        className="h-16 w-full bg-gradient-to-r from-[#450a0a] to-[#7f1d1d] border border-red-500/30 text-base font-black uppercase tracking-[0.25em] text-red-100 shadow-[0_10px_30px_rgba(127,29,29,0.2)] hover:shadow-[0_15px_40px_rgba(127,29,29,0.35)] hover:-translate-y-1 transition-all duration-300"
+                        className="h-16 w-full border border-red-400/30 bg-gradient-to-r from-[#4c0914] via-[#6b1120] to-[#8b1e31] text-base font-black uppercase tracking-[0.25em] text-red-100 shadow-[0_10px_30px_rgba(127,29,29,0.24)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(127,29,29,0.38)]"
                         onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}
                       >
                         Отклонить
@@ -2036,7 +2036,7 @@ export function AdminPage() {
                   </div>
                 </motion.div>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-[#0f172a]/30 px-8 py-24 text-center backdrop-blur-md shadow-inner">
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-[linear-gradient(180deg,rgba(24,37,60,0.68),rgba(12,20,36,0.82))] px-8 py-24 text-center backdrop-blur-xl shadow-inner">
                   <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-steam-accent/5 shadow-[0_0_30px_rgba(102,192,244,0.05)] border border-white/5">
                     <FiSearch className="h-12 w-12 text-steam-accent/20" />
                   </div>
@@ -2051,6 +2051,7 @@ export function AdminPage() {
             </section>
           </div>
         </div>
+      ) : null}
 
       {tab === "audit" ? (
         <section className="steam-card steam-card--hover p-4">
