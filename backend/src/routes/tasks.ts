@@ -98,49 +98,25 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
   });
 
   const payload = rows.map((t) => {
-      const sub = t.submissions[0] ?? null;
-      return {
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        conditions: t.conditions,
-        rewardCoins: t.rewardCoins,
-        isActive: t.isActive,
-        isEvent: t.isEvent,
-        startsAt: t.startsAt?.toISOString() ?? null,
-        endsAt: t.endsAt?.toISOString() ?? null,
-        styleTag: t.styleTag,
-        achievementId: t.achievementId,
-        createdById: t.createdById,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-        achievement: t.achievement
-          ? {
-              id: t.achievement.id,
-              title: t.achievement.title,
-              description: t.achievement.description,
-              rarity: t.achievement.rarity,
-              points: t.achievement.points,
-              iconUrl: toPublicFileUrl(t.achievement.iconPath),
-              frameKey: t.achievement.frameKey,
-              isPublic: t.achievement.isPublic,
-              createdAt: t.achievement.createdAt.toISOString(),
-            }
-          : null,
-        mySubmission: sub
-          ? {
-              id: sub.id,
-              status: sub.status,
-              createdAt: sub.createdAt.toISOString(),
-              reviewedAt: sub.reviewedAt?.toISOString() ?? null,
-              adminResponse: sub.adminResponse,
-              reviewedByNickname: sub.reviewedBy?.nickname ?? null,
-            }
-          : null,
-        scheduleStatus: scheduleStatusFromTime(t.startsAt, t.endsAt, now),
-      };
-    });
+    const sub = t.submissions[0];
+    return {
+      ...t,
+      achievement: {
+        ...t.achievement,
+        iconUrl: toPublicFileUrl(t.achievement.iconPath),
+      },
+      submission: sub
+        ? {
+            ...sub,
+            reviewedByNickname: sub.reviewedBy?.nickname ?? null,
+          }
+        : null,
+      scheduleStatus: scheduleStatusFromTime(t.startsAt, t.endsAt, now),
+    };
+  });
+
   setCachedTasksList(req.user!.id, payload);
+  res.setHeader("Cache-Control", "private, max-age=45");
   return ok(res, payload);
 });
 

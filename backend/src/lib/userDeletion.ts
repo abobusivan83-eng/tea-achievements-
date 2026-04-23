@@ -3,6 +3,12 @@ import type { PrismaClient } from "@prisma/client";
 export async function deleteUserWithDependencies(db: PrismaClient, params: { userId: string }): Promise<void> {
   const { userId } = params;
 
+  const target = await db.user.findUnique({
+    where: { id: userId },
+    select: { nickname: true },
+  });
+  const targetNickname = target?.nickname || "Unknown";
+
   await db.$transaction(async (tx) => {
     await tx.adminAuditLog.updateMany({
       where: { targetUserId: userId },
@@ -35,7 +41,15 @@ export async function deleteUserWithDependencies(db: PrismaClient, params: { use
     await tx.gift.deleteMany({ where: { toUserId: userId } });
     await tx.userAchievement.deleteMany({ where: { userId } });
     await tx.achievementAccess.deleteMany({ where: { userId } });
-    await tx.adminAuditLog.deleteMany({ where: { adminId: userId } });
+    await tx.adminAuditLog.updateMany({
+      where: { adminId: userId },
+      data: { adminNickname: `${targetNickname} (удален)` },
+    });
+
+    // Удаляем только те записи, где пользователь был целью, если это необходимо, 
+    // но в схеме AdminAuditLog.targetUserId стоит onDelete: SetNull, 
+    // поэтому Prisma сама очистит targetUserId. 
+    // Мы уже обновили targetUserId и targetNickname в начале транзакции вручную для надежности.
 
     await tx.user.delete({ where: { id: userId } });
   });

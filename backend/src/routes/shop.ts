@@ -36,6 +36,7 @@ shopRouter.get("/items", async (_req, res) => {
     select: { id: true, name: true, type: true, key: true, price: true, rarity: true, description: true, icon: true },
   });
   setCachedShopItems(items);
+  res.setHeader("Cache-Control", "public, max-age=120");
   return ok(res, items);
 });
 
@@ -68,6 +69,7 @@ shopRouter.get("/me", async (req: AuthedRequest, res) => {
     unlockedStatuses: parseJsonStringArray(userRow?.unlockedStatusesJson),
   };
   setCachedShopMe(req.user!.id, payload);
+  res.setHeader("Cache-Control", "private, max-age=45");
   return ok(res, payload);
 });
 

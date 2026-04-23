@@ -257,6 +257,6 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     achievements: { earned: earnedWithShare, locked },
   };
   setCachedUserProfile(targetId, payload);
-  res.setHeader("Cache-Control", "private, max-age=15");
+  res.setHeader("Cache-Control", "private, max-age=60");
   return ok(res, payload);
 });

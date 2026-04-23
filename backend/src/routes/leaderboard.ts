@@ -31,6 +31,9 @@ leaderboardRouter.get("/", requireAuth, async (_req, res) => {
 
   const isSqlite = process.env.DATABASE_URL?.startsWith("file:");
 
+  const cached = getCachedLeaderboard<unknown[]>();
+  if (cached) return ok(res, cached);
+
   let rows: LeaderboardAggRow[];
   if (isSqlite) {
     rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
@@ -98,6 +101,6 @@ leaderboardRouter.get("/", requireAuth, async (_req, res) => {
   });
 
   setCachedLeaderboard(mapped);
-  res.setHeader("Cache-Control", "private, max-age=20");
+  res.setHeader("Cache-Control", "private, max-age=60");
   return ok(res, mapped);
 });

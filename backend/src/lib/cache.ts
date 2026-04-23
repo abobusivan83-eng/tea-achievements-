@@ -34,7 +34,7 @@ export function getCachedLeaderboard<T>(): T | undefined {
 
 export function setCachedLeaderboard<T>(data: T): void {
   // Heavy aggregate; match typical UI background refresh cadence.
-  shopCache.set(LEADERBOARD_KEY, data, 20);
+  shopCache.set(LEADERBOARD_KEY, data, 60);
 }
 
 export function invalidateLeaderboardCache(): void {
@@ -46,7 +46,7 @@ export function getCachedShopMe<T>(userId: string): T | undefined {
 }
 
 export function setCachedShopMe<T>(userId: string, data: T): void {
-  shopCache.set(`${SHOP_ME_PREFIX}${userId}`, data, 20);
+  shopCache.set(`${SHOP_ME_PREFIX}${userId}`, data, 45);
 }
 
 export function invalidateShopMeCache(userId: string): void {
@@ -58,7 +58,7 @@ export function getCachedGiftsUnreadCount(userId: string): number | undefined {
 }
 
 export function setCachedGiftsUnreadCount(userId: string, count: number): void {
-  shopCache.set(`${GIFTS_UNREAD_PREFIX}${userId}`, count, 20);
+  shopCache.set(`${GIFTS_UNREAD_PREFIX}${userId}`, count, 45);
 }
 
 export function invalidateGiftsUnreadCountCache(userId: string): void {
@@ -70,7 +70,7 @@ export function getCachedSupportUnreadCount(cacheKey: string): number | undefine
 }
 
 export function setCachedSupportUnreadCount(cacheKey: string, count: number): void {
-  shopCache.set(`${SUPPORT_UNREAD_PREFIX}${cacheKey}`, count, 20);
+  shopCache.set(`${SUPPORT_UNREAD_PREFIX}${cacheKey}`, count, 45);
 }
 
 export function invalidateSupportUnreadCountCache(cacheKey?: string): void {
@@ -87,7 +87,7 @@ export function getCachedUserProfile<T>(userId: string): T | undefined {
 }
 
 export function setCachedUserProfile<T>(userId: string, payload: T): void {
-  shopCache.set(`${USER_PROFILE_PREFIX}${userId}`, payload, 20);
+  shopCache.set(`${USER_PROFILE_PREFIX}${userId}`, payload, 60);
 }
 
 export function invalidateUserProfileCache(userId: string): void {
@@ -98,8 +98,8 @@ export function getCachedTasksList<T>(userId: string): T | undefined {
   return shopCache.get(`${TASKS_LIST_PREFIX}${userId}`) as T | undefined;
 }
 
-export function setCachedTasksList<T>(userId: string, payload: T): void {
-  shopCache.set(`${TASKS_LIST_PREFIX}${userId}`, payload, 15);
+export function setCachedTasksList<T>(userId: string, data: T): void {
+  shopCache.set(`${TASKS_LIST_PREFIX}${userId}`, data, 45);
 }
 
 export function invalidateTasksListCache(userId: string): void {
