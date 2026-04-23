@@ -14,7 +14,7 @@ import type {
 import { Button } from "../ui/components/Button";
 import { Modal } from "../ui/components/Modal";
 import { motion } from "framer-motion";
-import { FiAward, FiEdit2, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
+import { FiAward, FiChevronDown, FiChevronUp, FiEdit2, FiPlus, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
 import { useToasts } from "../state/toasts";
 import { useAuth } from "../state/auth";
 import { ConfirmModal } from "../ui/components/ConfirmModal";
@@ -248,6 +248,7 @@ export function AdminPage() {
   const [levelDraft, setLevelDraft] = useState<number>(1);
   const [xpDraft, setXpDraft] = useState<number>(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [addTaskExpanded, setAddTaskExpanded] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<AdminAchievement | null>(null);
   const [userDeleteOpen, setUserDeleteOpen] = useState(false);
   const [userDeleteTarget, setUserDeleteTarget] = useState<AdminUserRow | null>(null);
@@ -1534,541 +1535,479 @@ export function AdminPage() {
       ) : null}
 
       {tab === "tasks" ? (
-        <section className="steam-card steam-card--hover p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <div className="text-sm font-semibold">Управление заданиями</div>
-            <Button size="sm" variant="ghost" onClick={() => refreshTasks().catch((e: any) => setError(e?.message ?? "Ошибка загрузки"))}>
-              Обновить
-            </Button>
-          </div>
-
-          <div className="mb-4 grid gap-2 md:grid-cols-2">
-            <input className={inputClass} placeholder="Название задания" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
-            <select className={selectClass} value={taskAchievementId} onChange={(e) => setTaskAchievementId(e.target.value)}>
-              <option value="">Связанное достижение</option>
-              {achievements.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.title} ({a.rarity})
-                </option>
-              ))}
-            </select>
-            <textarea className="min-h-20 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-steam-accent md:col-span-2" placeholder="Описание задания" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
-            <textarea className="min-h-20 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-steam-accent md:col-span-2" placeholder="Условия выполнения" value={taskConditions} onChange={(e) => setTaskConditions(e.target.value)} />
-            <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm">
-              <input type="checkbox" checked={taskIsEvent} onChange={(e) => setTaskIsEvent(e.target.checked)} />
-              <span>Ивентовое</span>
-            </label>
-            <input className={inputClass} type="datetime-local" value={taskStartsAt} onChange={(e) => setTaskStartsAt(e.target.value)} />
-            <input className={inputClass} type="datetime-local" value={taskEndsAt} onChange={(e) => setTaskEndsAt(e.target.value)} />
-            <input
-              className={inputClass}
-              type="number"
-              min={0}
-              step={1}
-              placeholder="Reward coins"
-              value={taskRewardCoins}
-              onChange={(e) => setTaskRewardCoins(Number(e.target.value) || 0)}
-            />
-          </div>
-          <div className="mb-4">
-            <Button
-              onClick={async () => {
-                if (!taskAchievementId) {
-                  setError("Выберите связанное достижение для задания");
-                  return;
-                }
-                try {
-                  await apiJson("/api/admin/tasks", {
-                    title: taskTitle,
-                    description: taskDesc,
-                    conditions: taskConditions,
-                    rewardCoins: taskRewardCoins,
-                    achievementId: taskAchievementId,
-                    isEvent: taskIsEvent,
-                    startsAt: taskStartsAt ? new Date(taskStartsAt).toISOString() : null,
-                    endsAt: taskEndsAt ? new Date(taskEndsAt).toISOString() : null,
-                  });
-                  setTaskTitle("");
-                  setTaskDesc("");
-                  setTaskConditions("");
-                  setTaskAchievementId("");
-                  setTaskRewardCoins(0);
-                  setTaskIsEvent(false);
-                  setTaskStartsAt("");
-                  setTaskEndsAt("");
-                  await refreshTasks();
-                  toast({ kind: "success", title: "Задание добавлено" });
-                } catch (e: any) {
-                  setError(e?.message ?? "Ошибка создания задания");
-                  toast({ kind: "error", title: "Не удалось создать задание", message: e?.message ?? "Ошибка" });
-                }
-              }}
+        <div className="flex flex-col gap-6">
+          <section className="steam-card steam-card--hover overflow-hidden p-0">
+            <button
+              type="button"
+              onClick={() => setAddTaskExpanded(!addTaskExpanded)}
+              className="flex w-full items-center justify-between p-4 transition hover:bg-white/[0.02]"
             >
-              Добавить задание
-            </Button>
-          </div>
+              <div className="flex items-center gap-2">
+                <FiPlus className={clsx("text-steam-accent transition", addTaskExpanded && "rotate-45")} />
+                <span className="text-sm font-semibold">Добавить задание</span>
+              </div>
+              {addTaskExpanded ? <FiChevronUp className="text-steam-muted" /> : <FiChevronDown className="text-steam-muted" />}
+            </button>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="grid gap-2">
-              <div className="text-sm font-semibold">Список заданий</div>
-              {tasks.map((t) => (
-                <div key={t.id} className={clsx("rounded-xl border border-white/10 bg-black/20 p-3", t.isEvent && "task-card--event")}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold">{t.title}</div>
-                    <div className="text-xs text-steam-muted">{t.isEvent ? "Ивент" : "Обычное"}</div>
+            <motion.div
+              initial={false}
+              animate={{ height: addTaskExpanded ? "auto" : 0, opacity: addTaskExpanded ? 1 : 0 }}
+              className="overflow-hidden"
+            >
+              <div className="grid gap-4 border-t border-white/5 p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Название</span>
+                    <input className={inputClass} placeholder="Название задания" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
                   </div>
-                  <div className="mt-1 text-xs text-steam-muted">{t.description}</div>
-                  <div className="mt-1 text-xs text-steam-muted">Связано с: {t.achievement?.title ?? "—"}</div>
-                  <div className="mt-1 text-xs text-amber-100">Награда: +{Math.max(0, t.rewardCoins ?? 0)} 🪙</div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Button size="sm" variant="ghost" leftIcon={<FiEdit2 />} onClick={() => openTaskEditor(t)}>
-                      Редактировать
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/tasks/${t.id}`, { isActive: !t.isActive }, "PATCH"); await refreshTasks(); }}>
-                      {t.isActive ? "Отключить" : "Включить"}
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={async () => { await apiDelete(`/api/admin/tasks/${t.id}`); await refreshTasks(); }}>
-                      Удалить
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-2">
-              <div className="text-sm font-semibold">Отправки пользователей</div>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 border-b border-white/10 px-2 pb-2 text-[11px] uppercase tracking-[0.18em] text-steam-muted">
-                    <div>Заявка</div>
-                    <div>Статус</div>
-                    <div>Файлы</div>
-                    <div>Дата</div>
-                  </div>
-                  <div className="mt-3 grid gap-4">
-                    <div className="grid gap-2">
-                      <div className="flex items-center justify-between gap-2 text-xs uppercase tracking-[0.18em] text-steam-muted">
-                        <span>Входящие</span>
-                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">{unreadTaskSubmissions.length}</span>
-                      </div>
-                      {unreadTaskSubmissions.length ? (
-                        unreadTaskSubmissions.map((submission) => {
-                          const selected = submission.id === selectedTaskSubmission?.id;
-                          return (
-                            <button
-                              key={submission.id}
-                              type="button"
-                              onClick={async () => {
-                                setSelectedTaskSubmissionId(submission.id);
-                                // При клике на непрочитанную заявку - помечаем как прочитанную на сервере
-                                if (!submission.isRead) {
-                                  try {
-                                    await apiJson(`/api/admin/tasks/submissions/${submission.id}`, { isRead: true }, "PATCH");
-                                    await refreshTasks();
-                                  } catch (e) {
-                                    console.error("Failed to mark submission as read", e);
-                                  }
-                                }
-                              }}
-                              className={clsx(
-                                "grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 rounded-xl border px-3 py-3 text-left transition",
-                                selected
-                                  ? "border-steam-accent/50 bg-steam-accent/10 shadow-[0_0_0_1px_rgba(102,192,244,0.18)]"
-                                  : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.04]",
-                              )}
-                            >
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-steam-text">{submission.task.title}</div>
-                                <div className="truncate text-xs text-steam-muted">
-                                  {submission.user?.nickname ?? "Пользователь"} • ID #{submission.userId}
-                                </div>
-                              </div>
-                              <div className="text-xs text-steam-muted">{supportStatusLabel(submission.status)}</div>
-                              <div className="text-xs text-steam-muted">{submission.evidence.length}</div>
-                              <div className="text-xs text-steam-muted">{new Date(submission.createdAt).toLocaleDateString()}</div>
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-5 text-sm text-steam-muted">
-                          Нет входящих отправок.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid gap-2">
-                      <div className="flex items-center justify-between gap-2 text-xs uppercase tracking-[0.18em] text-steam-muted">
-                        <span>Прочитано</span>
-                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">{readTaskSubmissions.length}</span>
-                      </div>
-                      {readTaskSubmissions.length ? (
-                        readTaskSubmissions.map((submission) => {
-                          const selected = submission.id === selectedTaskSubmission?.id;
-                          return (
-                            <button
-                              key={submission.id}
-                              type="button"
-                              onClick={() => setSelectedTaskSubmissionId(submission.id)}
-                              className={clsx(
-                                "grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_auto_auto] items-center gap-3 rounded-xl border px-3 py-3 text-left opacity-90 transition",
-                                selected
-                                  ? "border-steam-accent/50 bg-steam-accent/10 shadow-[0_0_0_1px_rgba(102,192,244,0.18)]"
-                                  : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.04]",
-                              )}
-                            >
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-steam-text">{submission.task.title}</div>
-                                <div className="truncate text-xs text-steam-muted">
-                                  {submission.user?.nickname ?? "Пользователь"} • {submission.adminResponse ? "Есть ответ" : "Без ответа"}
-                                </div>
-                              </div>
-                              <div className="text-xs text-steam-muted">{supportStatusLabel(submission.status)}</div>
-                              <div className="text-xs text-steam-muted">{submission.evidence.length}</div>
-                              <div className="text-xs text-steam-muted">{new Date(submission.createdAt).toLocaleDateString()}</div>
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-5 text-sm text-steam-muted">
-                          Пока нет прочитанных отправок.
-                        </div>
-                      )}
-                    </div>
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Связанное достижение</span>
+                    <select className={selectClass} value={taskAchievementId} onChange={(e) => setTaskAchievementId(e.target.value)}>
+                      <option value="">Выберите достижение</option>
+                      {achievements.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.title} ({a.rarity})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                <div className="grid gap-3">
-                  {selectedTaskSubmission ? (
-                    <>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5 shadow-xl">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                          <div className="flex items-center gap-4">
-                            <div className="relative">
-                              <AvatarFrame
-                                frameKey={selectedTaskSubmission.user.frameKey}
-                                size={54}
-                                src={selectedUser?.avatarUrl || "https://placehold.co/108x108/png?text=?"}
-                              />
-                              {selectedTaskSubmission.user.statusEmoji && (
-                                <div className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-black/80 px-1 py-0.5 text-xs">
-                                  {selectedTaskSubmission.user.statusEmoji}
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg font-bold text-steam-text">{selectedTaskSubmission.user.nickname}</span>
-                                <span
-                                  className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-                                  style={{ backgroundColor: calculateLevelColor(selectedTaskSubmission.user.level), color: "#fff" }}
-                                >
-                                  Lvl {selectedTaskSubmission.user.level}
-                                </span>
-                              </div>
-                              <div className="text-xs text-steam-muted">ID: #{selectedTaskSubmission.userId}</div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs uppercase tracking-widest text-steam-muted">Статус</div>
-                            <div className={clsx(
-                              "mt-1 text-sm font-bold",
-                              selectedTaskSubmission.status === "PENDING" ? "text-steam-accent" :
-                              selectedTaskSubmission.status === "RESOLVED" ? "text-emerald-400" :
-                              selectedTaskSubmission.status === "REJECTED" ? "text-red-400" : "text-steam-muted"
-                            )}>
-                              {statusLabel(selectedTaskSubmission.status).toUpperCase()}
-                            </div>
-                          </div>
-                        </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Описание</span>
+                    <textarea
+                      className="min-h-20 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none transition focus:border-steam-accent"
+                      placeholder="Краткое описание для карточки"
+                      value={taskDesc}
+                      onChange={(e) => setTaskDesc(e.target.value)}
+                      onInput={(e) => {
+                        const t = e.target as HTMLTextAreaElement;
+                        t.style.height = "auto";
+                        t.style.height = t.scrollHeight + "px";
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Условия выполнения</span>
+                    <textarea
+                      className="min-h-20 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none transition focus:border-steam-accent"
+                      placeholder="Что именно должен сделать пользователь"
+                      value={taskConditions}
+                      onChange={(e) => setTaskConditions(e.target.value)}
+                      onInput={(e) => {
+                        const t = e.target as HTMLTextAreaElement;
+                        t.style.height = "auto";
+                        t.style.height = t.scrollHeight + "px";
+                      }}
+                    />
+                  </div>
+                </div>
 
-                        <div className="mt-6 grid gap-6">
-                          <div className="grid gap-2">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Задание</div>
-                            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-                              <div className="text-base font-semibold text-steam-text">{selectedTaskSubmission.task.title}</div>
-                              <div className="mt-2 text-xs leading-relaxed text-steam-muted">{selectedTaskSubmission.task.conditions}</div>
-                              <div className="mt-4 flex flex-wrap items-center gap-3">
-                                {selectedTaskSubmission.task.achievement && (
-                                  <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                                    <AchievementIcon iconUrl={selectedTaskSubmission.task.achievement.iconUrl} size={28} />
-                                    <div className="min-w-0">
-                                      <div className="truncate text-xs font-bold text-steam-text">{selectedTaskSubmission.task.achievement.title}</div>
-                                      <div className="text-[10px] text-steam-muted">Награда за выполнение</div>
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center">
-                                  <div className="text-xs font-bold text-amber-400">+{selectedTaskSubmission.task.rewardCoins}</div>
-                                  <div className="text-[10px] text-amber-400/60">Монет</div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Награда</span>
+                    <div className="relative">
+                      <input
+                        className={clsx(inputClass, "w-full pr-8")}
+                        type="number"
+                        min={0}
+                        placeholder="Монеты"
+                        value={taskRewardCoins}
+                        onChange={(e) => setTaskRewardCoins(Number(e.target.value) || 0)}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs opacity-50">🪙</span>
+                    </div>
+                  </div>
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Тип</span>
+                    <label className="flex h-full items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm">
+                      <input type="checkbox" checked={taskIsEvent} onChange={(e) => setTaskIsEvent(e.target.checked)} />
+                      <span>Ивентовое</span>
+                    </label>
+                  </div>
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Начало</span>
+                    <input className={inputClass} type="datetime-local" value={taskStartsAt} onChange={(e) => setTaskStartsAt(e.target.value)} />
+                  </div>
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-steam-muted">Конец</span>
+                    <input className={inputClass} type="datetime-local" value={taskEndsAt} onChange={(e) => setTaskEndsAt(e.target.value)} />
+                  </div>
+                </div>
 
-                          <div className="grid gap-2">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Доказательства (Evidence)</div>
-                            {selectedTaskSubmission.evidence.length ? (
-                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                {selectedTaskSubmission.evidence.map((file, index) => {
-                                  const isVideo = isVideoMedia(file);
-                                  return (
-                                    <div key={file} className="group relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                                      {isVideo ? (
-                                        <div className="flex h-full w-full flex-col items-center justify-center p-2 text-center">
-                                          <video
-                                            src={file}
-                                            className="absolute inset-0 h-full w-full object-cover opacity-40"
-                                            muted
-                                            onMouseOver={(e) => (e.currentTarget as HTMLVideoElement).play()}
-                                            onMouseOut={(e) => {
-                                              const v = e.currentTarget as HTMLVideoElement;
-                                              v.pause();
-                                              v.currentTime = 0;
-                                            }}
-                                          />
-                                          <div className="relative z-10 rounded-full bg-black/60 p-2 text-white shadow-xl backdrop-blur-md">
-                                            <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
-                                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                                            </svg>
-                                          </div>
-                                          <span className="relative z-10 mt-2 text-[10px] font-bold uppercase tracking-wider text-white">Видео #{index + 1}</span>
-                                          <button
-                                            onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
-                                            className="absolute inset-0 z-20"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <button
-                                          onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
-                                          className="h-full w-full"
-                                        >
-                                          <img src={file} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" alt={`Evidence ${index + 1}`} />
-                                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
-                                          <div className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white opacity-0 transition duration-300 group-hover:opacity-100">
-                                            Скриншот #{index + 1}
-                                          </div>
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="rounded-xl border border-dashed border-white/10 bg-black/15 py-8 text-center">
-                                <div className="text-sm text-steam-muted">Пользователь не приложил медиафайлы</div>
-                              </div>
-                            )}
-                          </div>
+                <div className="flex justify-end pt-2">
+                  <Button
+                    onClick={async () => {
+                      if (!taskAchievementId) {
+                        setError("Выберите связанное достижение для задания");
+                        return;
+                      }
+                      try {
+                        await apiJson("/api/admin/tasks", {
+                          title: taskTitle,
+                          description: taskDesc,
+                          conditions: taskConditions,
+                          rewardCoins: taskRewardCoins,
+                          achievementId: taskAchievementId,
+                          isEvent: taskIsEvent,
+                          startsAt: taskStartsAt ? new Date(taskStartsAt).toISOString() : null,
+                          endsAt: taskEndsAt ? new Date(taskEndsAt).toISOString() : null,
+                        });
+                        setTaskTitle("");
+                        setTaskDesc("");
+                        setTaskConditions("");
+                        setTaskAchievementId("");
+                        setTaskRewardCoins(0);
+                        setTaskIsEvent(false);
+                        setTaskStartsAt("");
+                        setTaskEndsAt("");
+                        setAddTaskExpanded(false);
+                        await refreshTasks();
+                        toast({ kind: "success", title: "Задание добавлено" });
+                      } catch (e: any) {
+                        setError(e?.message ?? "Ошибка создания задания");
+                        toast({ kind: "error", title: "Не удалось создать задание", message: e?.message ?? "Ошибка" });
+                      }
+                    }}
+                  >
+                    Создать задание
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </section>
 
-                          <div className="grid gap-2">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Ответ пользователя</div>
-                            <div className="whitespace-pre-line rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm leading-relaxed text-steam-text shadow-inner">
-                              {selectedTaskSubmission.message || "Без текстового сообщения."}
-                            </div>
-                          </div>
-
-                          <div className="grid gap-2 border-t border-white/5 pt-4">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Решение администрации</div>
-                            <textarea
-                              className="min-h-32 w-full rounded-xl border border-white/10 bg-black/40 p-4 text-sm outline-none transition focus:border-steam-accent/50 focus:bg-black/60 focus:ring-1 focus:ring-steam-accent/20"
-                              value={taskResponses[selectedTaskSubmission.id] ?? selectedTaskSubmission.adminResponse ?? ""}
-                              onChange={(e) =>
-                                setTaskResponses((prev) => ({
-                                  ...prev,
-                                  [selectedTaskSubmission.id]: e.target.value,
-                                }))
-                              }
-                              placeholder="Напишите комментарий для пользователя (необязательно при одобрении, желательно при отклонении)"
-                            />
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-                            <Button
-                              className="h-11 px-8 text-sm font-bold shadow-lg shadow-emerald-500/10"
-                              onClick={async () => {
-                                try {
-                                  await grantTaskSubmission(selectedTaskSubmission);
-                                } catch (e: any) {
-                                  setError(e?.message ?? "Ошибка выдачи");
-                                  toast({ kind: "error", title: "Не удалось выдать награду", message: e?.message ?? "Ошибка" });
-                                }
-                              }}
-                            >
-                              Одобрить и выдать
-                            </Button>
-                            <Button
-                              variant="danger"
-                              className="h-11 px-8 text-sm font-bold shadow-lg shadow-red-500/10"
-                              onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}
-                            >
-                              Отклонить
-                            </Button>
-                          </div>
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[25%_45%_30%]">
+            {/* Left Column: Tasks List */}
+            <section className="sticky top-6 grid gap-3">
+              <div className="flex items-center justify-between px-1">
+                <div className="text-xs font-bold uppercase tracking-widest text-steam-muted">Все задания</div>
+                <Button size="sm" variant="ghost" onClick={() => refreshTasks()}>
+                  Обновить
+                </Button>
+              </div>
+              <div className="grid gap-3">
+                {tasks.map((t) => (
+                  <div
+                    key={t.id}
+                    className={clsx(
+                      "group relative rounded-xl border border-white/10 bg-black/25 p-3 transition hover:bg-white/[0.04]",
+                      t.isEvent && "border-amber-500/20 bg-amber-500/5",
+                      !t.isActive && "opacity-60 grayscale",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold text-steam-text">{t.title}</div>
+                        <div className="mt-0.5 text-[10px] text-steam-muted">
+                          {t.isEvent ? "Ивентовое" : "Обычное"} • {t.submissionsCount ?? 0} заявок
                         </div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/15 px-5 py-8 text-sm text-steam-muted">
-                      Выбери заявку слева, чтобы открыть карточку задания, посмотреть Application Info и принять решение.
+                      <div className="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
+                        <button
+                          title="Редактировать"
+                          className="rounded p-1 text-steam-muted hover:bg-white/10 hover:text-steam-text"
+                          onClick={() => openTaskEditor(t)}
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
+                        <button
+                          title="Удалить"
+                          className="rounded p-1 text-steam-muted hover:bg-red-400/10 hover:text-red-400"
+                          onClick={async () => {
+                            if (confirm("Удалить задание? Все связанные заявки также будут удалены.")) {
+                              await apiDelete(`/api/admin/tasks/${t.id}`);
+                              await refreshTasks();
+                            }
+                          }}
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                  )}
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        className={clsx(
+                          "rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-tighter transition",
+                          t.isActive
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                            : "border-white/10 bg-white/5 text-steam-muted hover:bg-white/10",
+                        )}
+                        onClick={async () => {
+                          await apiJson(`/api/admin/tasks/${t.id}`, { isActive: !t.isActive }, "PATCH");
+                          await refreshTasks();
+                        }}
+                      >
+                        {t.isActive ? "Активно" : "Выключено"}
+                      </button>
+                      <span className="text-[10px] font-bold text-amber-400/80">+{t.rewardCoins} 🪙</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Center Column: Submissions Feed */}
+            <section className="grid gap-4">
+              <div className="flex items-center justify-between px-1">
+                <div className="text-xs font-bold uppercase tracking-widest text-steam-muted">Отправки пользователей</div>
+                <div className="flex gap-2">
+                  <span className="rounded-full border border-steam-accent/20 bg-steam-accent/10 px-2 py-0.5 text-[10px] font-bold text-steam-accent">
+                    {unreadTaskSubmissions.length} новых
+                  </span>
                 </div>
               </div>
 
-              {false && <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <div className="text-xs uppercase tracking-[0.18em] text-steam-muted">Входящие</div>
-                  {taskSubmissions.filter((s) => !s.isRead).map((s) => (
-                    <div key={s.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold">
-                          {s.task.title} • {s.user.nickname}
-                        </div>
-                        <span className="text-xs text-steam-muted">{supportStatusLabel(s.status)}</span>
-                      </div>
-                      <div className="mt-1 text-sm text-steam-muted">{s.message}</div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-amber-100">
-                          +{Math.max(0, s.task.rewardCoins ?? 0)} 🪙
-                        </span>
-                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-steam-muted">
-                          Достижение: {s.task.achievement?.title ?? "—"}
-                        </span>
-                      </div>
-                      {s.evidence?.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {s.evidence.map((file, i) => (
-                            <button
-                              key={file}
-                              type="button"
-                              onClick={() => openViewer(s.evidence, i)}
-                              className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs"
-                            >
-                              {isVideoMedia(file) ? `Видео ${i + 1}` : `Фото ${i + 1}`}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                      <textarea
-                        className="mt-2 min-h-20 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-steam-accent"
-                        value={taskResponses[s.id] ?? s.adminResponse ?? ""}
-                        onChange={(e) => setTaskResponses((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                        placeholder="Ответ пользователю"
-                      />
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          onClick={async () => {
-                            await apiJson(
-                              `/api/admin/tasks/submissions/${s.id}`,
-                              { status: "RESOLVED", isRead: true, adminResponse: taskResponses[s.id] ?? "" },
-                              "PATCH",
-                            );
+              <div className="grid gap-3">
+                {[...unreadTaskSubmissions, ...readTaskSubmissions].map((submission) => {
+                  const selected = submission.id === selectedTaskSubmission?.id;
+                  const isPending = submission.status === "PENDING";
+                  return (
+                    <motion.button
+                      layout
+                      key={submission.id}
+                      type="button"
+                      onClick={async () => {
+                        setSelectedTaskSubmissionId(submission.id);
+                        if (!submission.isRead) {
+                          try {
+                            await apiJson(`/api/admin/tasks/submissions/${submission.id}`, { isRead: true }, "PATCH");
                             await refreshTasks();
-                          }}
-                        >
-                          Выдать достижение
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => {
-                            setRejectTarget(s);
-                            setRejectReasonDraft(taskResponses[s.id] ?? "");
-                            setRejectOpen(true);
-                          }}
-                        >
-                          Отклонить
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  {!taskSubmissions.filter((s) => !s.isRead).length ? (
-                    <div className="text-sm text-steam-muted">Нет входящих отправок.</div>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-2">
-                  <div className="text-xs uppercase tracking-[0.18em] text-steam-muted">Прочитано</div>
-                  {taskSubmissions.filter((s) => s.isRead).map((s) => (
-                    <div key={s.id} className="rounded-xl border border-white/10 bg-black/20 p-3 opacity-90">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold">
-                          {s.task.title} • {s.user.nickname}
+                          } catch (e) {
+                            console.error("Failed to mark submission as read", e);
+                          }
+                        }
+                      }}
+                      className={clsx(
+                        "relative flex w-full flex-col gap-3 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300",
+                        selected
+                          ? "border-steam-accent/40 bg-steam-accent/5 shadow-lg shadow-steam-accent/5"
+                          : "border-white/5 bg-black/20 hover:border-white/10 hover:bg-white/[0.03]",
+                        !submission.isRead && "ring-1 ring-steam-accent/20",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <AvatarFrame frameKey={submission.user.frameKey} size={40} src={submission.user.avatarUrl} />
+                            {submission.user.statusEmoji && (
+                              <div className="absolute -bottom-1 -right-1 rounded-full bg-black/80 px-1 py-0.5 text-[10px]">
+                                {submission.user.statusEmoji}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-bold text-steam-text">{submission.user.nickname}</span>
+                              <span
+                                className="rounded px-1 py-0.5 text-[9px] font-bold text-white"
+                                style={{ backgroundColor: calculateLevelColor(submission.user.level) }}
+                              >
+                                Lvl {submission.user.level}
+                              </span>
+                            </div>
+                            <div className="truncate text-xs text-steam-muted">
+                              ID: #{submission.userId} • {new Date(submission.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-xs text-steam-muted">{supportStatusLabel(s.status)}</span>
+
+                        <div
+                          className={clsx(
+                            "rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                            submission.status === "PENDING"
+                              ? "border-amber-400/20 bg-amber-400/10 text-amber-400"
+                              : submission.status === "RESOLVED"
+                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-400"
+                                : "border-red-400/20 bg-red-400/10 text-red-400",
+                          )}
+                        >
+                          {supportStatusLabel(submission.status)}
+                        </div>
                       </div>
-                      <div className="mt-1 text-sm text-steam-muted">{s.message}</div>
-                      {s.evidence?.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {s.evidence.map((file, i) => (
-                            <button
-                              key={file}
-                              type="button"
-                              onClick={() => openViewer(s.evidence, i)}
-                              className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs"
-                            >
-                              {isVideoMedia(file) ? `Видео ${i + 1}` : `Фото ${i + 1}`}
-                            </button>
+
+                      <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+                        <div className="text-xs font-bold text-steam-text">{submission.task.title}</div>
+                        <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-steam-muted">
+                          {submission.message || "Текстовое сообщение отсутствует"}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex -space-x-2">
+                          {submission.evidence.slice(0, 3).map((file, i) => (
+                            <div key={i} className="h-8 w-12 overflow-hidden rounded-md border border-black/40 bg-black/20 shadow-sm">
+                              {isVideoMedia(file) ? (
+                                <div className="flex h-full w-full items-center justify-center bg-black/40 text-[8px] text-white">VID</div>
+                              ) : (
+                                <img src={file} className="h-full w-full object-cover" />
+                              )}
+                            </div>
                           ))}
+                          {submission.evidence.length > 3 && (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-white/5 bg-black/40 text-[10px] font-bold text-steam-muted">
+                              +{submission.evidence.length - 3}
+                            </div>
+                          )}
                         </div>
-                      ) : null}
-                      {s.adminResponse ? (
-                        <div className="mt-2 rounded-lg border border-steam-accent/20 bg-steam-accent/10 p-2 text-sm">
-                          {s.adminResponse}
+                        <div className="text-[10px] font-bold text-steam-muted">
+                          {submission.evidence.length} вложений
                         </div>
-                      ) : null}
-                    </div>
-                  ))}
-                  {!taskSubmissions.filter((s) => s.isRead).length ? (
-                    <div className="text-sm text-steam-muted">Пока нет прочитанных отправок.</div>
-                  ) : null}
-                </div>
-              </div>}
+                      </div>
 
-              {false && taskSubmissions.map((s) => (
-                <div key={s.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-semibold">{s.task.title} • {s.user.nickname}</div>
-                    <span className="text-xs text-steam-muted">{supportStatusLabel(s.status)}</span>
+                      {selected && (
+                        <motion.div
+                          layoutId="selected-indicator"
+                          className="absolute inset-y-0 left-0 w-1 bg-steam-accent"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                        />
+                      )}
+                    </motion.button>
+                  );
+                })}
+
+                {taskSubmissions.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-white/10 py-12 text-center">
+                    <div className="text-sm text-steam-muted">Заявок пока нет</div>
                   </div>
-                  <div className="mt-1 text-sm text-steam-muted">{s.message}</div>
-                  {s.evidence?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {s.evidence.map((file, i) => (
-                        <button key={file} type="button" onClick={() => openViewer(s.evidence, i)} className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs">
-                          Файл {i + 1}
-                        </button>
-                      ))}
+                )}
+              </div>
+            </section>
+
+            {/* Right Column: Submission Details (Sticky) */}
+            <section className="sticky top-6">
+              {selectedTaskSubmission ? (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  key={selectedTaskSubmission.id}
+                  className="rounded-2xl border border-white/10 bg-black/20 p-5 shadow-2xl backdrop-blur-sm"
+                >
+                  <div className="flex flex-col gap-6">
+                    {/* Header Details */}
+                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Выбранная заявка</div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className={clsx(
+                            "h-2 w-2 rounded-full",
+                            selectedTaskSubmission.status === "PENDING" ? "bg-amber-400 animate-pulse" :
+                            selectedTaskSubmission.status === "RESOLVED" ? "bg-emerald-400" : "bg-red-400"
+                          )} />
+                          <span className="text-sm font-bold text-steam-text">{supportStatusLabel(selectedTaskSubmission.status)}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Создана</div>
+                        <div className="mt-1 text-xs text-steam-text">{new Date(selectedTaskSubmission.createdAt).toLocaleString()}</div>
+                      </div>
                     </div>
-                  ) : null}
-                  <textarea
-                    className="mt-2 min-h-20 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-steam-accent"
-                    value={taskResponses[s.id] ?? s.adminResponse ?? ""}
-                    onChange={(e) => setTaskResponses((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                    placeholder="Ответ пользователю"
-                  />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(["PENDING", "REVIEWED", "RESOLVED", "REJECTED"] as const).map((st) => (
-                      <Button key={st} size="sm" variant={s.status === st ? "primary" : "ghost"} onClick={async () => {
-                        await apiJson(`/api/admin/tasks/submissions/${s.id}`, { status: st, isRead: true }, "PATCH");
-                        await refreshTasks();
-                      }}>
-                        {supportStatusLabel(st)}
+
+                    {/* Media Area */}
+                    <div className="grid gap-2">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Медиа-вложения</div>
+                      {selectedTaskSubmission.evidence.length ? (
+                        <div className="grid grid-cols-1 gap-3">
+                          {selectedTaskSubmission.evidence.map((file, index) => {
+                            const isVideo = isVideoMedia(file);
+                            return (
+                              <div key={file} className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                                {isVideo ? (
+                                  <div className="aspect-video w-full bg-black">
+                                    <video
+                                      src={file}
+                                      controls
+                                      className="h-full w-full object-contain"
+                                      poster={`${file}?thumb=1`}
+                                    />
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
+                                    className="block w-full"
+                                  >
+                                    <img src={file} className="w-full object-contain transition duration-500 hover:scale-[1.02]" alt={`Evidence ${index + 1}`} />
+                                    <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm">
+                                      Скриншот #{index + 1}
+                                    </div>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-white/10 bg-black/15 py-8 text-center">
+                          <div className="text-sm text-steam-muted">Без вложений</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* User Message */}
+                    <div className="grid gap-2">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Ответ пользователя</div>
+                      <div className="max-h-40 overflow-auto whitespace-pre-line rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm leading-relaxed text-steam-text">
+                        {selectedTaskSubmission.message || "Без текстового сообщения."}
+                      </div>
+                    </div>
+
+                    {/* Admin Response */}
+                    <div className="grid gap-2 border-t border-white/5 pt-4">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-steam-muted">Ваш комментарий</div>
+                      <textarea
+                        className="min-h-24 w-full rounded-xl border border-white/10 bg-black/40 p-3 text-sm outline-none transition focus:border-steam-accent/50 focus:bg-black/60"
+                        value={taskResponses[selectedTaskSubmission.id] ?? selectedTaskSubmission.adminResponse ?? ""}
+                        onChange={(e) =>
+                          setTaskResponses((prev) => ({
+                            ...prev,
+                            [selectedTaskSubmission.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Причина отклонения или поздравление..."
+                      />
+                    </div>
+
+                    {/* Actions */}
+                    <div className="grid gap-3 pt-2">
+                      <Button
+                        className="h-12 w-full text-base font-bold shadow-lg shadow-emerald-500/20"
+                        variant="primary"
+                        onClick={async () => {
+                          try {
+                            await grantTaskSubmission(selectedTaskSubmission);
+                          } catch (e: any) {
+                            setError(e?.message ?? "Ошибка выдачи");
+                            toast({ kind: "error", title: "Не удалось выдать награду", message: e?.message ?? "Ошибка" });
+                          }
+                        }}
+                      >
+                        Принять заявку
                       </Button>
-                    ))}
-                    <Button size="sm" onClick={async () => {
-                      await apiJson(`/api/admin/tasks/submissions/${s.id}`, { adminResponse: taskResponses[s.id] ?? "", isRead: true, status: s.status === "PENDING" ? "REVIEWED" : s.status }, "PATCH");
-                      await refreshTasks();
-                    }}>
-                      Отправить ответ
-                    </Button>
+                      <Button
+                        variant="danger"
+                        className="h-12 w-full text-base font-bold shadow-lg shadow-red-500/20"
+                        onClick={() => openRejectTaskSubmission(selectedTaskSubmission)}
+                      >
+                        Отклонить
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/10 px-6 py-12 text-center">
+                  <div className="mb-4 rounded-full bg-white/5 p-4">
+                    <FiSearch className="h-8 w-8 text-steam-muted" />
+                  </div>
+                  <div className="text-sm font-medium text-steam-muted">
+                    Выберите заявку из центральной колонки для детального просмотра и принятия решения.
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </section>
           </div>
-        </section>
+        </div>
       ) : null}
 
       {tab === "audit" ? (
