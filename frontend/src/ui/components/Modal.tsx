@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function Modal(props: { open: boolean; title?: string; children: ReactNode; onClose: () => void }) {
   const reduce = useReducedMotion();
@@ -20,7 +21,7 @@ export function Modal(props: { open: boolean; title?: string; children: ReactNod
     };
   }, [props.open]);
 
-  return (
+  const content = (
     <AnimatePresence>
       {props.open ? (
         <motion.div
@@ -58,5 +59,8 @@ export function Modal(props: { open: boolean; title?: string; children: ReactNod
       ) : null}
     </AnimatePresence>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(content, document.body);
 }
 
