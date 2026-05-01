@@ -51,14 +51,21 @@ export function AchievementCard(props: {
           sizeClassName="ach-icon"
           className="border-[2px] border-[rgba(61,68,80,0.85)] bg-[rgba(0,0,0,0.35)]"
         />
-        {props.onOpenIcon && props.a.iconUrl ? (
+        {props.onOpenIcon ? (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              if (!props.a.iconUrl) return;
               props.onOpenIcon?.();
             }}
-            className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white/85 backdrop-blur hover:border-steam-accent/35 hover:bg-steam-accent/15"
+            disabled={!props.a.iconUrl}
+            className={clsx(
+              "absolute bottom-1 right-1 z-20 inline-flex h-7 w-7 items-center justify-center rounded-md border text-white/90 backdrop-blur",
+              props.a.iconUrl
+                ? "border-white/15 bg-black/70 hover:border-steam-accent/45 hover:bg-steam-accent/20"
+                : "cursor-not-allowed border-white/10 bg-black/40 opacity-50",
+            )}
             title="Открыть иконку"
             aria-label="Открыть иконку"
           >
