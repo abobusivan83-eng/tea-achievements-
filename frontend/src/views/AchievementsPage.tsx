@@ -202,6 +202,14 @@ export function AchievementsPage() {
             <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
               <AchievementCard a={selectedAchievement} />
             </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Описание</div>
+              <div className="mt-2 text-sm leading-7 text-steam-text">{selectedAchievement.description}</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Условия выполнения</div>
+              <div className="mt-2 text-sm leading-7 text-steam-text">{selectedAchievement.description}</div>
+            </div>
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>
                 Закрыть

@@ -182,6 +182,15 @@ export function Layout(props: { children: ReactNode }) {
     });
   }, [notificationsOpen, me]);
 
+  useEffect(() => {
+    const hasOpenModal = notificationsOpen || suggestOpen || reportOpen;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = hasOpenModal ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [notificationsOpen, suggestOpen, reportOpen]);
+
   const scene: SceneId =
     loc.pathname.startsWith("/profile")
       ? "profile"

@@ -16,6 +16,10 @@ import { Button } from "../ui/components/Button";
 
 type TasksTab = "available" | "completed";
 const MAX_TASK_MEDIA_BYTES = 100 * 1024 * 1024;
+type TaskAchievementDetails = {
+  achievement: Achievement;
+  conditions: string;
+};
 
 function isCompletedForUser(t: TaskItem) {
   return t.mySubmission?.status === "RESOLVED";
@@ -34,7 +38,7 @@ export function TasksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
-  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+  const [selectedAchievement, setSelectedAchievement] = useState<TaskAchievementDetails | null>(null);
   const toast = useToasts((s) => s.push);
   const reduce = useReducedMotion();
 
@@ -235,14 +239,17 @@ export function TasksPage() {
                 viewAchievementLabel="Посмотреть достижение"
                 onViewAchievement={(achievement) =>
                   setSelectedAchievement({
-                    ...achievement,
-                    description: achievement.description ?? "",
-                    frameKey: achievement.frameKey ?? null,
-                    isPublic: achievement.isPublic ?? true,
-                    createdAt: achievement.createdAt ?? new Date().toISOString(),
-                    iconUrl: achievement.iconUrl ?? null,
-                    earned: isCompletedForUser(t),
-                    awardedAt: t.mySubmission?.reviewedAt ?? t.mySubmission?.createdAt ?? null,
+                    achievement: {
+                      ...achievement,
+                      description: achievement.description ?? "",
+                      frameKey: achievement.frameKey ?? null,
+                      isPublic: achievement.isPublic ?? true,
+                      createdAt: achievement.createdAt ?? new Date().toISOString(),
+                      iconUrl: achievement.iconUrl ?? null,
+                      earned: isCompletedForUser(t),
+                      awardedAt: t.mySubmission?.reviewedAt ?? t.mySubmission?.createdAt ?? null,
+                    },
+                    conditions: t.conditions,
                   })
                 }
               />
@@ -388,13 +395,21 @@ export function TasksPage() {
 
       <Modal
         open={Boolean(selectedAchievement)}
-        title={selectedAchievement ? `Достижение: ${selectedAchievement.title}` : "Достижение"}
+        title={selectedAchievement ? `Достижение: ${selectedAchievement.achievement.title}` : "Достижение"}
         onClose={() => setSelectedAchievement(null)}
       >
         {selectedAchievement ? (
           <div className="grid gap-4">
             <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-              <AchievementCard a={selectedAchievement} />
+              <AchievementCard a={selectedAchievement.achievement} />
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Описание</div>
+              <div className="mt-2 text-sm leading-7 text-steam-text">{selectedAchievement.achievement.description}</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Условия выполнения</div>
+              <div className="mt-2 whitespace-pre-line text-sm leading-7 text-steam-text">{selectedAchievement.conditions}</div>
             </div>
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>
