@@ -208,7 +208,9 @@ export function AchievementsPage() {
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Условия выполнения</div>
-              <div className="mt-2 text-sm leading-7 text-steam-text">{selectedAchievement.description}</div>
+              <div className="mt-2 text-sm leading-7 text-steam-text">
+                {selectedAchievement.description?.trim() || "Условия выполнения появятся после публикации администратором."}
+              </div>
             </div>
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>

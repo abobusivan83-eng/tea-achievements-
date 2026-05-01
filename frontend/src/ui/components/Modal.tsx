@@ -17,7 +17,7 @@ export function Modal(props: { open: boolean; title?: string; children: ReactNod
     <AnimatePresence>
       {props.open ? (
         <motion.div
-          className="fixed inset-0 z-50"
+          className="fixed inset-0 z-[9998]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -32,7 +32,7 @@ export function Modal(props: { open: boolean; title?: string; children: ReactNod
           />
 
           <motion.div
-            className="steam-card glow--active fixed left-1/2 top-1/2 z-[1] w-[min(42rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto"
+            className="steam-card glow--active viewport-modal-content"
             initial={reduce ? { opacity: 0 } : { y: 18, scale: 0.985, opacity: 0, filter: "blur(8px)" }}
             animate={reduce ? { opacity: 1 } : { y: 0, scale: 1, opacity: 1, filter: "blur(0px)" }}
             exit={reduce ? { opacity: 0 } : { y: 18, scale: 0.985, opacity: 0, filter: "blur(8px)" }}

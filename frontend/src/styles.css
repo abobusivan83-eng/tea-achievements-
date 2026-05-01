@@ -398,10 +398,10 @@ body {
 /* ===== Modals + forms (ported from old site) ===== */
 .modal {
   display: none;
-  position: fixed;
+  position: fixed !important;
   inset: 0;
   background: rgba(0, 0, 0, 0.85);
-  z-index: var(--z-modal);
+  z-index: 9998 !important;
   align-items: center;
   justify-content: center;
   padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
@@ -409,23 +409,25 @@ body {
 }
 .modal.active { display: flex; }
 .modal-content {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 9999 !important;
   background: rgba(27, 40, 56, 0.98);
   border: 2px solid rgba(61, 68, 80, 0.85);
   border-radius: 12px;
-  width: 100%;
+  width: min(560px, calc(100vw - 24px));
   max-width: 560px;
-  max-height: min(92dvh, 900px);
-  overflow-y: auto;
+  max-height: 85vh !important;
+  overflow-y: auto !important;
   box-shadow: 0 18px 60px rgba(0,0,0,0.65);
-  animation: modalSlideUp 0.3s ease;
+  animation: none;
   -webkit-overflow-scrolling: touch;
 }
 .notifications-modal {
-  max-width: min(980px, 100%);
+  width: min(980px, calc(100vw - 24px));
+  max-width: min(980px, calc(100vw - 24px));
 }
 @media (max-width: 480px) {
   .modal-header h3 {
@@ -440,6 +442,17 @@ body {
 @keyframes modalSlideUp {
   from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.viewport-modal-content {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 9999 !important;
+  width: min(42rem, calc(100vw - 2rem)) !important;
+  max-height: 85vh !important;
+  overflow-y: auto !important;
 }
 .modal-header {
   padding: 18px 20px;
