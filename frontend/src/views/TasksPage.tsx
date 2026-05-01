@@ -3,13 +3,16 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import { apiFetch } from "../lib/api";
 import { API_BASE_URL } from "../lib/config";
-import type { TaskItem } from "../lib/types";
+import type { Achievement, TaskItem } from "../lib/types";
 import { Reveal } from "../ui/components/Reveal";
 import { Skeleton } from "../ui/components/Skeleton";
 import { TaskQuestCard, type TaskQuestCardVariant } from "../ui/components/TaskQuestCard";
 import { FiCheckCircle, FiCheckSquare } from "react-icons/fi";
 import { useToasts } from "../state/toasts";
 import { getStoredAuthToken } from "../lib/authStorage";
+import { Modal } from "../ui/components/Modal";
+import { AchievementCard } from "../ui/components/AchievementCard";
+import { Button } from "../ui/components/Button";
 
 type TasksTab = "available" | "completed";
 const MAX_TASK_MEDIA_BYTES = 100 * 1024 * 1024;
@@ -31,6 +34,7 @@ export function TasksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const toast = useToasts((s) => s.push);
   const reduce = useReducedMotion();
 
@@ -228,6 +232,19 @@ export function TasksPage() {
                 uploadProgress={uploadProgress}
                 uploadStatus={uploadStatus}
                 onSubmit={() => submit(t.id)}
+                viewAchievementLabel="Посмотреть достижение"
+                onViewAchievement={(achievement) =>
+                  setSelectedAchievement({
+                    ...achievement,
+                    description: achievement.description ?? "",
+                    frameKey: achievement.frameKey ?? null,
+                    isPublic: achievement.isPublic ?? true,
+                    createdAt: achievement.createdAt ?? new Date().toISOString(),
+                    iconUrl: achievement.iconUrl ?? null,
+                    earned: isCompletedForUser(t),
+                    awardedAt: t.mySubmission?.reviewedAt ?? t.mySubmission?.createdAt ?? null,
+                  })
+                }
               />
             </motion.div>
           ))}
@@ -368,6 +385,25 @@ export function TasksPage() {
           ) : null}
         </div>
       </Reveal>
+
+      <Modal
+        open={Boolean(selectedAchievement)}
+        title={selectedAchievement ? `Достижение: ${selectedAchievement.title}` : "Достижение"}
+        onClose={() => setSelectedAchievement(null)}
+      >
+        {selectedAchievement ? (
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <AchievementCard a={selectedAchievement} />
+            </div>
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>
+                Закрыть
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -878,6 +878,40 @@ body {
   50% { box-shadow: 0 0 0 1px rgba(255,190,70,0.36), 0 0 34px rgba(255,190,70,0.16), 0 18px 48px rgba(0,0,0,0.68); }
 }
 
+@keyframes legendaryCardGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 225, 160, 0.10) inset,
+      0 0 20px rgba(255, 196, 70, 0.12),
+      0 14px 38px rgba(0, 0, 0, 0.62);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 232, 180, 0.18) inset,
+      0 0 34px rgba(255, 196, 70, 0.20),
+      0 16px 42px rgba(0, 0, 0, 0.66);
+  }
+}
+
+@keyframes legendaryShine {
+  0% {
+    transform: translateX(-78%) rotate(14deg);
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  44% {
+    transform: translateX(78%) rotate(14deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(78%) rotate(14deg);
+    opacity: 0;
+  }
+}
+
 /* ===== Achievements (Steam-like cards from old site) ===== */
 .section-title {
   font-size: 22px;
@@ -930,6 +964,31 @@ body {
 .achievement-card.rarity-rare::before { background: rgba(75,105,255,0.95); }
 .achievement-card.rarity-epic::before { background: rgba(136,71,255,0.95); }
 .achievement-card.rarity-legendary::before { background: rgba(255,215,0,0.95); }
+.achievement-card.rarity-legendary {
+  border-color: rgba(255, 215, 120, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(255, 225, 160, 0.10) inset,
+    0 0 24px rgba(255, 196, 70, 0.16),
+    0 14px 38px rgba(0, 0, 0, 0.62);
+  animation: legendaryCardGlow 3.2s ease-in-out infinite;
+}
+.achievement-card.rarity-legendary::after {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  background: linear-gradient(
+    112deg,
+    transparent 38%,
+    rgba(255, 240, 190, 0.06) 45%,
+    rgba(255, 240, 190, 0.30) 50%,
+    rgba(255, 240, 190, 0.06) 55%,
+    transparent 62%
+  );
+  transform: translateX(-75%) rotate(14deg);
+  opacity: 0;
+  animation: legendaryShine 4.8s ease-in-out infinite;
+}
 
 .achievement-card.rarity-exclusive::before {
   height: 4px;
@@ -1498,6 +1557,7 @@ body {
   .avatar-frame--animated { animation: none !important; }
   .title-icon { animation: none !important; }
   .achievement-card { animation: none !important; transition: none !important; }
+  .achievement-card.rarity-legendary::after { animation: none !important; }
   .rank-row.top-rank { animation: none !important; }
   .medal-gold, .medal-silver, .medal-bronze { animation: none !important; }
   .skeleton::after { animation: none !important; }

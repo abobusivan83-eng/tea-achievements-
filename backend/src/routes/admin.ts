@@ -16,7 +16,13 @@ import {
   revokeAchievementsFromUser,
 } from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
-import { invalidateShopItemsCache, invalidateSupportUnreadCountCache } from "../lib/cache.js";
+import {
+  invalidateLeaderboardCache,
+  invalidateShopItemsCache,
+  invalidateSupportUnreadCountCache,
+  invalidateTasksListCache,
+  invalidateUserProfileCache,
+} from "../lib/cache.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import { deleteUserWithDependencies } from "../lib/userDeletion.js";
 
@@ -189,6 +195,14 @@ adminRouter.post("/achievements", async (req: AuthedRequest, res) => {
     return created;
   });
 
+  if (uniqueAwardUserIds.length) {
+    uniqueAwardUserIds.forEach((userId) => {
+      invalidateUserProfileCache(userId);
+      invalidateTasksListCache(userId);
+    });
+    invalidateLeaderboardCache();
+  }
+
   return ok(res, { ...a, awardedUserIds: uniqueAwardUserIds });
 });
 
@@ -299,6 +313,9 @@ adminRouter.post("/achievements/:id/award", async (req: AuthedRequest, res) => {
   await prisma.$transaction(async (tx) => {
     await awardAchievementToUser(tx, { achievementId, userId: parsed.data.userId });
   });
+  invalidateUserProfileCache(parsed.data.userId);
+  invalidateTasksListCache(parsed.data.userId);
+  invalidateLeaderboardCache();
 
   const target = await prisma.user.findUnique({
     where: { id: parsed.data.userId },
@@ -329,6 +346,9 @@ adminRouter.post("/achievements/:id/revoke", async (req: AuthedRequest, res) => 
   await prisma.$transaction(async (tx) => {
     await revokeAchievementFromUser(tx, { achievementId, userId: parsed.data.userId });
   });
+  invalidateUserProfileCache(parsed.data.userId);
+  invalidateTasksListCache(parsed.data.userId);
+  invalidateLeaderboardCache();
 
   const target = await prisma.user.findUnique({
     where: { id: parsed.data.userId },
@@ -413,6 +433,9 @@ adminRouter.post("/users/:id/revoke-achievements", async (req: AuthedRequest, re
       userId: target.id,
     });
   });
+  invalidateUserProfileCache(target.id);
+  invalidateTasksListCache(target.id);
+  invalidateLeaderboardCache();
 
   if (req.user?.id) {
     await logAdminAction(prisma, {
@@ -1340,6 +1363,11 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
   if (result.shouldInvalidate) {
     invalidateSupportUnreadCountCache(result.existing.user.id);
+    invalidateUserProfileCache(result.existing.user.id);
+    invalidateTasksListCache(result.existing.user.id);
+    if (result.nextStatus === "RESOLVED") {
+      invalidateLeaderboardCache();
+    }
   }
 
   const auditWorthy =

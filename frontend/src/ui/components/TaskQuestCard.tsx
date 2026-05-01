@@ -135,6 +135,8 @@ export function TaskQuestCard(props: {
   uploadProgress: number;
   uploadStatus: string | null;
   onSubmit: () => void;
+  onViewAchievement?: (achievement: NonNullable<TaskItem["achievement"]>) => void;
+  viewAchievementLabel?: string;
 }) {
   const variant = props.variant ?? "available";
   const reduce = useReducedMotion();
@@ -321,6 +323,20 @@ export function TaskQuestCard(props: {
                     </div>
                   )}
                 </div>
+                {props.onViewAchievement ? (
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (ach) props.onViewAchievement?.(ach);
+                      }}
+                    >
+                      {props.viewAchievementLabel ?? "Посмотреть достижение"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

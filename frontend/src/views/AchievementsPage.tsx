@@ -9,6 +9,7 @@ import { FiFilter, FiSearch } from "react-icons/fi";
 import { AchievementCard } from "../ui/components/AchievementCard";
 import { Reveal } from "../ui/components/Reveal";
 import { Skeleton } from "../ui/components/Skeleton";
+import { Modal } from "../ui/components/Modal";
 
 export function AchievementsPage() {
   const [rarity, setRarity] = useState<Rarity | "">("");
@@ -17,6 +18,7 @@ export function AchievementsPage() {
   const [q, setQ] = useState("");
   const [burstKey, setBurstKey] = useState(0);
   const [page, setPage] = useState(1);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [seenNew, setSeenNew] = useState<Record<string, true>>(() => {
     try {
       return JSON.parse(localStorage.getItem("seen_achievements") || "{}") || {};
@@ -164,6 +166,8 @@ export function AchievementsPage() {
             >
               <AchievementCard
                 a={a}
+                actionLabel="Посмотреть достижение"
+                onAction={() => setSelectedAchievement(a)}
                 isNew={Boolean(a.earned && a.awardedAt && !seenNew[a.id])}
                 onSeenNew={() => {
                   setSeenNew((prev) => {
@@ -187,6 +191,25 @@ export function AchievementsPage() {
       ) : null}
 
       <ConfettiBurst burstKey={burstKey} />
+
+      <Modal
+        open={Boolean(selectedAchievement)}
+        title={selectedAchievement ? `Достижение: ${selectedAchievement.title}` : "Достижение"}
+        onClose={() => setSelectedAchievement(null)}
+      >
+        {selectedAchievement ? (
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <AchievementCard a={selectedAchievement} />
+            </div>
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>
+                Закрыть
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

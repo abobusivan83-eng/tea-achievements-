@@ -2068,12 +2068,12 @@ export function AdminPage() {
                             try {
                               await deleteTaskSubmission(selectedTaskSubmission);
                             } catch (e: any) {
-                              setError(e?.message ?? "Ошибка удаления");
-                              toast({ kind: "error", title: "Не удалось удалить заявку", message: e?.message ?? "Ошибка" });
+                              setError(e?.message ?? "пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ");
+                              toast({ kind: "error", title: "пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ", message: e?.message ?? "пїЅпїЅпїЅпїЅпїЅпїЅ" });
                             }
                           }}
                         >
-                          Удалить заявку
+                          пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
                         </Button>
                       ) : null}
                     </div>
