@@ -83,6 +83,7 @@ export function ProfilePage() {
   const [statusEmoji, setStatusEmoji] = useState<string | null>(null);
   const [ownedShopKeys, setOwnedShopKeys] = useState<Set<string> | null>(null);
   const [selectedAchievement, setSelectedAchievement] = useState<(Achievement & { ownerPct?: number }) | null>(null);
+  const [iconLightboxUrl, setIconLightboxUrl] = useState<string | null>(null);
   const [lbPos, setLbPos] = useState<{ pos: number | null; totalPoints: number; achievementCount: number } | null>(
     null,
   );
@@ -807,7 +808,7 @@ export function ProfilePage() {
             >
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.12),transparent_30%),radial-gradient(circle_at_85%_100%,rgba(102,192,244,0.12),transparent_34%)]" />
               <div className="relative">
-                <AchievementCard a={selectedAchievement} />
+                <AchievementCard a={selectedAchievement} onOpenIcon={() => setIconLightboxUrl(selectedAchievement.iconUrl ?? null)} />
               </div>
             </motion.div>
 
@@ -848,6 +849,22 @@ export function ProfilePage() {
                 Закрыть
               </Button>
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(iconLightboxUrl)} title="Иконка достижения" onClose={() => setIconLightboxUrl(null)}>
+        {iconLightboxUrl ? (
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <img
+                src={iconLightboxUrl}
+                alt="achievement icon"
+                className="mx-auto max-h-[70vh] w-auto rounded-xl border border-white/10 bg-black/30"
+                style={{ imageRendering: "pixelated" }}
+              />
+            </div>
+            <div className="text-xs text-steam-muted">Открывается исходный URL иконки.</div>
           </div>
         ) : null}
       </Modal>

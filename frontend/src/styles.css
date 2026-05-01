@@ -70,6 +70,11 @@ body {
     linear-gradient(135deg, var(--bg1) 0%, rgba(27, 40, 56, 0.35) 50%, var(--bg1) 100%);
 }
 
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* ===== Steam-style navbar (ported) ===== */
 .navbar {
   position: sticky;
@@ -453,6 +458,8 @@ body {
   width: min(42rem, calc(100vw - 2rem)) !important;
   max-height: 85vh !important;
   overflow-y: auto !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 .modal-header {
   padding: 18px 20px;
@@ -963,6 +970,21 @@ body {
   position: relative;
   overflow: hidden;
   animation: cardFadeIn 0.5s ease;
+}
+
+.achievement-card,
+.ach-title,
+.ach-desc,
+.ach-footer {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.achievement-icon-img,
+.ach-icon img,
+.task-reward-ach__icon img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 @keyframes cardFadeIn {
   from { opacity: 0; transform: translateY(20px); }

@@ -39,6 +39,7 @@ export function TasksPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [selectedAchievement, setSelectedAchievement] = useState<TaskAchievementDetails | null>(null);
+  const [iconLightboxUrl, setIconLightboxUrl] = useState<string | null>(null);
   const toast = useToasts((s) => s.push);
   const reduce = useReducedMotion();
 
@@ -401,7 +402,10 @@ export function TasksPage() {
         {selectedAchievement ? (
           <div className="grid gap-4">
             <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-              <AchievementCard a={selectedAchievement.achievement} />
+              <AchievementCard
+                a={selectedAchievement.achievement}
+                onOpenIcon={() => setIconLightboxUrl(selectedAchievement.achievement.iconUrl ?? null)}
+              />
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Описание</div>
@@ -416,6 +420,22 @@ export function TasksPage() {
                 Закрыть
               </Button>
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(iconLightboxUrl)} title="Иконка достижения" onClose={() => setIconLightboxUrl(null)}>
+        {iconLightboxUrl ? (
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <img
+                src={iconLightboxUrl}
+                alt="achievement icon"
+                className="mx-auto max-h-[70vh] w-auto rounded-xl border border-white/10 bg-black/30"
+                style={{ imageRendering: "pixelated" }}
+              />
+            </div>
+            <div className="text-xs text-steam-muted">Открывается исходный URL иконки.</div>
           </div>
         ) : null}
       </Modal>

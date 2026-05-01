@@ -6,10 +6,17 @@ export function Modal(props: { open: boolean; title?: string; children: ReactNod
 
   useEffect(() => {
     if (!props.open) return;
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+
     document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow || "auto";
+      document.body.style.paddingRight = prevPaddingRight;
     };
   }, [props.open]);
 

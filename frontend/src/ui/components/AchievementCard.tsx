@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { Achievement } from "../../lib/types";
 import { rarityGlowClass } from "../../ui/rarityStyles";
 import { AchievementIcon } from "./AchievementIcon";
+import { FiZoomIn } from "react-icons/fi";
 
 export function AchievementCard(props: {
   a: Achievement;
@@ -10,6 +11,7 @@ export function AchievementCard(props: {
   onSeenNew?: () => void;
   actionLabel?: string;
   onAction?: () => void;
+  onOpenIcon?: () => void;
 }) {
   const glow = rarityGlowClass(props.a.rarity, props.a.earned);
   const reduce = useReducedMotion();
@@ -49,6 +51,20 @@ export function AchievementCard(props: {
           sizeClassName="ach-icon"
           className="border-[2px] border-[rgba(61,68,80,0.85)] bg-[rgba(0,0,0,0.35)]"
         />
+        {props.onOpenIcon && props.a.iconUrl ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onOpenIcon?.();
+            }}
+            className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white/85 backdrop-blur hover:border-steam-accent/35 hover:bg-steam-accent/15"
+            title="Открыть иконку"
+            aria-label="Открыть иконку"
+          >
+            <FiZoomIn className="h-4 w-4" />
+          </button>
+        ) : null}
         {props.a.earned ? <div className="ach-check">✓</div> : null}
       </div>
 

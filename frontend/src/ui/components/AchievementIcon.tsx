@@ -34,7 +34,7 @@ export function AchievementIcon(props: {
       {showImage ? (
         <img
           className={clsx(
-            "absolute inset-0 h-full w-full object-cover object-center",
+            "absolute inset-0 h-full w-full object-cover object-center achievement-icon-img",
             props.imageClassName,
           )}
           src={normalizedSrc}
