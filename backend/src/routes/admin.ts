@@ -25,6 +25,7 @@ import {
 } from "../lib/cache.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import { deleteUserWithDependencies } from "../lib/userDeletion.js";
+import { telegramSendMessage } from "../lib/telegram.js";
 
 export const adminRouter = Router();
 
@@ -63,6 +64,10 @@ function parseRichDescription(value: string): { text: string; images: string[] }
 }
 
 const SupportStatusSchema = z.enum(["PENDING", "REVIEWED", "RESOLVED", "REJECTED"]);
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function supportStatusLabel(status: z.infer<typeof SupportStatusSchema>) {
   switch (status) {
@@ -125,6 +130,57 @@ async function createSupportNotification(params: {
   });
   invalidateSupportUnreadCountCache(params.userId);
 }
+
+const TelegramBroadcastSchema = z.object({
+  message: z.string().trim().min(1, "Сообщение не может быть пустым").max(3500, "Сообщение слишком длинное"),
+});
+
+adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
+  if (!adminOnly(req, res)) return;
+  const parsed = TelegramBroadcastSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
+
+  const message = parsed.data.message.trim();
+  const users = await prisma.user.findMany({
+    where: { telegramChatId: { not: null } },
+    select: { id: true, telegramChatId: true, nickname: true },
+    take: 50_000,
+  });
+
+  let attempted = 0;
+  let sent = 0;
+  let failed = 0;
+  const failedUserIds: string[] = [];
+
+  // Small delay helps avoid Telegram flood limits.
+  const delayMs = 85;
+
+  for (const u of users) {
+    const chatId = (u.telegramChatId ?? "").trim();
+    if (!chatId) continue;
+    attempted++;
+    try {
+      await telegramSendMessage(chatId, message);
+      sent++;
+    } catch {
+      failed++;
+      if (failedUserIds.length < 50) failedUserIds.push(u.id);
+      // Ignore: user blocked bot / invalid chat id / transient telegram errors.
+    }
+    await sleep(delayMs);
+  }
+
+  if (req.user?.id) {
+    await logAdminAction(prisma, {
+      adminId: req.user.id,
+      action: "telegram.broadcast",
+      summary: `Telegram-рассылка: отправлено ${sent}/${attempted} (ошибок: ${failed})`,
+      meta: { attempted, sent, failed, failedUserIds },
+    });
+  }
+
+  return ok(res, { attempted, sent, failed });
+});
 
 const CreateAchievementSchema = z.object({
   title: z.string().min(2).max(64),

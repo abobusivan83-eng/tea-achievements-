@@ -14,7 +14,7 @@ import type {
 import { Button } from "../ui/components/Button";
 import { Modal } from "../ui/components/Modal";
 import { AnimatePresence, motion } from "framer-motion";
-import { FiAward, FiChevronDown, FiChevronUp, FiEdit2, FiPlus, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
+import { FiAward, FiChevronDown, FiChevronUp, FiEdit2, FiMessageCircle, FiPlus, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
 import { useToasts } from "../state/toasts";
 import { useAuth } from "../state/auth";
 import { ConfirmModal } from "../ui/components/ConfirmModal";
@@ -178,7 +178,9 @@ export function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<"achievements" | "users" | "xp" | "customization" | "reports" | "suggestions" | "shop" | "tasks" | "audit">("achievements");
+  const [tab, setTab] = useState<
+    "achievements" | "users" | "xp" | "customization" | "reports" | "suggestions" | "shop" | "tasks" | "audit" | "telegram"
+  >("achievements");
   const [userQuery, setUserQuery] = useState("");
   const [xpAmount, setXpAmount] = useState<number>(100);
   const [lvlAmount, setLvlAmount] = useState<number>(1);
@@ -267,6 +269,9 @@ export function AdminPage() {
   const [confirmTarget, setConfirmTarget] = useState<AdminAchievement | null>(null);
   const [userDeleteOpen, setUserDeleteOpen] = useState(false);
   const [userDeleteTarget, setUserDeleteTarget] = useState<AdminUserRow | null>(null);
+  const [tgMessage, setTgMessage] = useState("");
+  const [tgSending, setTgSending] = useState(false);
+  const [tgResult, setTgResult] = useState<{ attempted: number; sent: number; failed: number } | null>(null);
   const selectClass =
     "rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base";
   const inputClass =
@@ -660,6 +665,9 @@ export function AdminPage() {
                 <Button variant={tab === "audit" ? "primary" : "ghost"} size="sm" onClick={() => setTab("audit")}>
                   Действия администрации
                 </Button>
+                <Button variant={tab === "telegram" ? "primary" : "ghost"} size="sm" leftIcon={<FiMessageCircle />} onClick={() => setTab("telegram")}>
+                  Бот Telegram
+                </Button>
               </>
             ) : null}
           </div>
@@ -668,7 +676,68 @@ export function AdminPage() {
 
       {error ? <div className="steam-card p-4">{error}</div> : null}
 
-      {tab === "achievements" ? (
+      {tab === "telegram" ? (
+        <section className="steam-card steam-card--hover p-4">
+          <div className="text-lg font-semibold">Рассылка уведомлений</div>
+          <div className="mt-1 text-sm text-steam-muted">
+            Сообщение будет отправлено всем пользователям, у которых привязан Telegram (поле <span className="font-mono">telegramChatId</span>).
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <label className="grid gap-1 text-sm">
+              <span className="text-steam-muted">Сообщение</span>
+              <textarea
+                className="min-h-[140px] rounded-lg border border-white/10 bg-black/35 px-3 py-2 outline-none focus:border-steam-accent glow--base"
+                placeholder="Введите текст рассылки…"
+                value={tgMessage}
+                onChange={(e) => setTgMessage(e.target.value)}
+              />
+            </label>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-steam-muted">
+                {tgResult ? (
+                  <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                    Сообщение отправлено: <span className="font-semibold text-steam-text">{tgResult.sent}</span> /{" "}
+                    <span className="font-semibold text-steam-text">{tgResult.attempted}</span>, ошибок:{" "}
+                    <span className="font-semibold text-red-200">{tgResult.failed}</span>
+                  </span>
+                ) : (
+                  "Пустое сообщение отправить нельзя."
+                )}
+              </div>
+
+              <Button
+                loading={tgSending}
+                leftIcon={<FiMessageCircle />}
+                onClick={async () => {
+                  const msg = tgMessage.trim();
+                  if (!msg) {
+                    toast({ kind: "error", title: "Сообщение пустое" });
+                    return;
+                  }
+                  setTgSending(true);
+                  setTgResult(null);
+                  try {
+                    const result = await apiJson<{ attempted: number; sent: number; failed: number }>(
+                      "/api/admin/telegram-broadcast",
+                      { message: msg },
+                    );
+                    setTgResult(result);
+                    toast({ kind: "success", title: "Рассылка завершена" });
+                  } catch (e: any) {
+                    toast({ kind: "error", title: "Не удалось отправить", message: e?.message ?? "Ошибка" });
+                  } finally {
+                    setTgSending(false);
+                  }
+                }}
+              >
+                Отправить всем пользователям
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : tab === "achievements" ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="steam-card steam-card--hover p-4">
             <div className="text-sm font-semibold">Создать достижение</div>
