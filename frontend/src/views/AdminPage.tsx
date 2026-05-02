@@ -2187,12 +2187,12 @@ export function AdminPage() {
                             try {
                               await deleteTaskSubmission(selectedTaskSubmission);
                             } catch (e: any) {
-                              setError(e?.message ?? "������ ��������");
-                              toast({ kind: "error", title: "�� ������� ������� ������", message: e?.message ?? "������" });
+                              setError(e?.message ?? "Ошибка удаления");
+                              toast({ kind: "error", title: "Не удалось удалить заявку", message: e?.message ?? "Ошибка" });
                             }
                           }}
                         >
-                          ������� ������
+                          Удалить заявку
                         </Button>
                       ) : null}
                     </div>
