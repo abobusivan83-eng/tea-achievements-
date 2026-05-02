@@ -86,9 +86,12 @@ export function AchievementsPage() {
             <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-steam-muted" />
             <input
               className="w-full rounded-lg border border-white/10 bg-black/30 py-2 pl-9 pr-3 text-sm outline-none focus:border-steam-accent"
-              placeholder="Search achievements…"
+              placeholder="Поиск по названию или описанию…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="Поиск достижений"
             />
           </div>
 
@@ -207,12 +210,12 @@ export function AchievementsPage() {
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Описание</div>
               <div className="mt-2 text-sm leading-7 text-steam-text">{selectedAchievement.description}</div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Условия выполнения</div>
-              <div className="mt-2 text-sm leading-7 text-steam-text">
-                {selectedAchievement.description?.trim() || "Условия выполнения появятся после публикации администратором."}
+            {selectedAchievement.taskConditions?.trim() ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Условия выполнения</div>
+                <div className="mt-2 whitespace-pre-line text-sm leading-7 text-steam-text">{selectedAchievement.taskConditions.trim()}</div>
               </div>
-            </div>
+            ) : null}
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>
                 Закрыть

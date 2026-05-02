@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -25,13 +26,17 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
   const userId = req.user!.id;
   const now = new Date();
-  const searchWhere =
-    q?.trim()
+  /** Несколько слов через пробел — все должны встречаться в названии или описании (удобно для русского текста). */
+  const searchTokens = q?.trim() ? q.trim().split(/\s+/).filter((t) => t.length > 0).slice(0, 8) : [];
+  const searchWhere: Prisma.AchievementWhereInput | null =
+    searchTokens.length > 0
       ? {
-          OR: [
-            { title: { contains: q.trim() } },
-            { description: { contains: q.trim() } },
-          ],
+          AND: searchTokens.map((token) => ({
+            OR: [
+              { title: { contains: token, mode: "insensitive" } },
+              { description: { contains: token, mode: "insensitive" } },
+            ],
+          })),
         }
       : null;
 
@@ -50,6 +55,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
       frameKey: true,
       isPublic: true,
       createdAt: true,
+      task: { select: { conditions: true } },
     },
   });
 
@@ -61,6 +67,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
   const mapped = achievements.map((a) => {
     const award = awardsMap.get(a.id) ?? null;
+    const taskConditions = a.task?.conditions?.trim() ? a.task.conditions.trim() : null;
     return {
       id: a.id,
       title: a.title,
@@ -73,6 +80,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
       createdAt: a.createdAt,
       earned: Boolean(award),
       awardedAt: award ?? null,
+      taskConditions,
     };
   });
 

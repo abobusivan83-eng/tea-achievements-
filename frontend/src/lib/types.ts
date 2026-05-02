@@ -36,6 +36,8 @@ export type Achievement = {
   createdAt: string;
   earned: boolean;
   awardedAt: string | null;
+  /** Текст из связанного задания (условия выполнения), если задание есть */
+  taskConditions?: string | null;
 };
 
 export type LeaderboardRow = {
