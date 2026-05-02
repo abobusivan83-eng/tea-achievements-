@@ -118,7 +118,8 @@ export function GiftsPage() {
             <label className="grid gap-1">
               <span className="text-steam-muted">Кому</span>
               <select
-                className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-steam-accent"
+                className="steam-select w-full"
+                aria-label="Получатель подарка"
                 value={toUserId}
                 onChange={(e) => setToUserId(e.target.value)}
               >

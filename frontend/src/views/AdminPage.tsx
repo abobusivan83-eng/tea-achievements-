@@ -299,7 +299,7 @@ export function AdminPage() {
   const [tgSending, setTgSending] = useState(false);
   const [tgResult, setTgResult] = useState<{ attempted: number; sent: number; failed: number } | null>(null);
   const selectClass =
-    "rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base";
+    "steam-select w-full min-w-0 text-sm text-steam-text outline-none focus:border-steam-accent glow--base";
   const inputClass =
     "rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base";
 
@@ -793,6 +793,7 @@ export function AdminPage() {
             <div className="flex flex-wrap items-center gap-2">
               <select
                 className={selectClass}
+                aria-label="Редкость нового достижения"
                 value={rarity}
                 onChange={(e) => setRarity(e.target.value as Rarity)}
               >
@@ -901,6 +902,7 @@ export function AdminPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <select
                     className={selectClass}
+                    aria-label="Пользователь для выдачи достижения"
                     value={awardUserId}
                     onChange={(e) => setAwardUserId(e.target.value)}
                   >
@@ -1080,7 +1082,8 @@ export function AdminPage() {
 
                   <div className="ml-auto flex flex-wrap items-center gap-2">
                     <select
-                      className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs outline-none focus:border-steam-accent"
+                      className="steam-select steam-select--compact max-w-[9.5rem] shrink-0"
+                      aria-label={`Роль пользователя ${u.nickname}`}
                       value={u.role}
                       onClick={(e) => e.stopPropagation()}
                       onChange={async (e) => {
@@ -1164,7 +1167,7 @@ export function AdminPage() {
         <section className="steam-card steam-card--hover p-4">
           <div className="mb-3 text-sm font-semibold">Кастомизация профиля</div>
           <div className="mb-3 grid gap-2 md:grid-cols-3">
-            <select className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm" value={customFrame} onChange={(e) => setCustomFrame(e.target.value)}>
+            <select className={selectClass} aria-label="Рамка профиля" value={customFrame} onChange={(e) => setCustomFrame(e.target.value)}>
               <option value="">Без рамки</option>
               {frames.map((f) => (
                 <option key={f.key} value={f.key}>
@@ -1172,7 +1175,7 @@ export function AdminPage() {
                 </option>
               ))}
             </select>
-            <select className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm" value={customEmoji} onChange={(e) => setCustomEmoji(e.target.value)}>
+            <select className={selectClass} aria-label="Эмодзи статуса" value={customEmoji} onChange={(e) => setCustomEmoji(e.target.value)}>
               {["😀","😎","🥷","🔥","✨","💎","🏆","⚡","🌙","🌟","🎯","🧠","🛡️","💀","🦊","🐍"].map((e) => (
                 <option key={e} value={e}>{e}</option>
               ))}
@@ -1549,7 +1552,7 @@ export function AdminPage() {
                 value={shopPrice}
                 onChange={(e) => setShopPrice(Number(e.target.value) || 0)}
               />
-              <select className={selectClass} value={shopRarity} onChange={(e) => setShopRarity(e.target.value as Rarity)}>
+              <select className={selectClass} aria-label="Редкость товара магазина" value={shopRarity} onChange={(e) => setShopRarity(e.target.value as Rarity)}>
                 <option value="COMMON">Обычная</option>
                 <option value="RARE">Редкая</option>
                 <option value="EPIC">Эпическая</option>
@@ -1690,7 +1693,12 @@ export function AdminPage() {
                   </div>
                   <div className="grid gap-1.5">
                     <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Связанное достижение</span>
-                    <select className="rounded-lg border border-white/10 bg-[#1e293b]/60 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base" value={taskAchievementId} onChange={(e) => setTaskAchievementId(e.target.value)}>
+                    <select
+                      className={clsx(selectClass, "border-white/15 bg-[#1e293b]/90")}
+                      aria-label="Связанное достижение для задания"
+                      value={taskAchievementId}
+                      onChange={(e) => setTaskAchievementId(e.target.value)}
+                    >
                       <option value="">Выберите достижение...</option>
                       {achievements.map((a) => (
                         <option key={a.id} value={a.id}>
@@ -2265,6 +2273,7 @@ export function AdminPage() {
             <div className="flex flex-wrap gap-2">
               <select
                 className={selectClass}
+                aria-label="Редкость достижения"
                 value={editing.rarity}
                 onChange={(e) => setEditing({ ...editing, rarity: e.target.value as Rarity })}
               >
@@ -2358,7 +2367,8 @@ export function AdminPage() {
                 <label className="grid gap-1 text-sm">
                   <span className="text-steam-muted">Level</span>
                   <select
-                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+                    className={selectClass}
+                    aria-label="Уровень пользователя"
                     value={levelDraft}
                     onChange={(e) => setLevelDraft(Number(e.target.value))}
                     style={{ color: calculateLevelColor(levelDraft) }}
@@ -2425,6 +2435,7 @@ export function AdminPage() {
             <span className="text-steam-muted">Пользователь</span>
             <select
               className={selectClass}
+              aria-label="Пользователь для выдачи достижения"
               value={awardUserId2}
               onChange={(e) => setAwardUserId2(e.target.value)}
             >
@@ -2490,6 +2501,7 @@ export function AdminPage() {
             <span className="text-steam-muted">Пользователь</span>
             <select
               className={selectClass}
+              aria-label="Пользователь для отзыва достижений"
               value={revokeUserId}
               onChange={async (e) => {
                 const nextUserId = e.target.value;
@@ -2720,7 +2732,12 @@ export function AdminPage() {
           <div className="grid gap-3">
             <input className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm" value={editingShop.name} onChange={(e) => setEditingShop({ ...editingShop, name: e.target.value })} />
             <div className="grid gap-2 md:grid-cols-2">
-              <select className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm" value={editingShop.type} onChange={(e) => setEditingShop({ ...editingShop, type: e.target.value as any })}>
+              <select
+                className={selectClass}
+                aria-label="Тип товара"
+                value={editingShop.type}
+                onChange={(e) => setEditingShop({ ...editingShop, type: e.target.value as any })}
+              >
                 <option value="FRAME">FRAME</option>
                 <option value="BADGE">BADGE</option>
               </select>
@@ -2728,7 +2745,12 @@ export function AdminPage() {
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               <input className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm" value={editingShop.price} onChange={(e) => setEditingShop({ ...editingShop, price: Number(e.target.value) || 0 })} />
-              <select className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm" value={editingShop.rarity} onChange={(e) => setEditingShop({ ...editingShop, rarity: e.target.value as Rarity })}>
+              <select
+                className={selectClass}
+                aria-label="Редкость товара"
+                value={editingShop.rarity}
+                onChange={(e) => setEditingShop({ ...editingShop, rarity: e.target.value as Rarity })}
+              >
                 <option value="COMMON">COMMON</option>
                 <option value="RARE">RARE</option>
                 <option value="EPIC">EPIC</option>
@@ -2797,6 +2819,7 @@ export function AdminPage() {
                 <span className="text-steam-muted">Достижение в награде</span>
                 <select
                   className={selectClass}
+                  aria-label="Достижение за выполнение задания"
                   value={editingTask.achievementId}
                   onChange={(e) => {
                     const selected = achievements.find((a) => a.id === e.target.value);

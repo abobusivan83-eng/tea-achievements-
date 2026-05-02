@@ -550,6 +550,21 @@ body {
   color: var(--steam-text);
 }
 
+/** Компактный select (строчки таблицы, узкие панели) */
+.steam-select.steam-select--compact {
+  min-height: 2rem;
+  padding: 0.28rem 1.85rem 0.28rem 0.55rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  background-size: 0.85rem;
+  background-position: right 0.45rem center;
+}
+
+/** Совместимость с модалкой жалобы (.form-group select) */
+.form-group select.steam-select {
+  width: 100%;
+}
+
 .modal-actions {
   display: flex;
   gap: 12px;

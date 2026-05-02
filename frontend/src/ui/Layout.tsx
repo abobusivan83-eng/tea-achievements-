@@ -583,7 +583,12 @@ export function Layout(props: { children: ReactNode }) {
             <div className="edit-form">
               <div className="form-group">
                 <label>На кого жалоба</label>
-                <select value={reportUserId} onChange={(e) => setReportUserId(e.target.value)}>
+                <select
+                  className="steam-select w-full"
+                  aria-label="На кого жалоба"
+                  value={reportUserId}
+                  onChange={(e) => setReportUserId(e.target.value)}
+                >
                   <option value="" disabled>
                     Выберите игрока
                   </option>
@@ -598,7 +603,12 @@ export function Layout(props: { children: ReactNode }) {
               </div>
               <div className="form-group">
                 <label>Причина</label>
-                <select value={reportReason} onChange={(e) => setReportReason(e.target.value as typeof reportReason)}>
+                <select
+                  className="steam-select w-full"
+                  aria-label="Причина жалобы"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as typeof reportReason)}
+                >
                   <option value="spam">Спам</option>
                   <option value="insult">Оскорбления</option>
                   <option value="cheat">Читерство</option>

@@ -143,7 +143,8 @@ export function LeaderboardPage() {
             />
           </div>
           <select
-            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+            className="steam-select min-w-[13rem]"
+            aria-label="Сортировка таблицы лидеров"
             value={sort}
             onChange={(e) => setSort(e.target.value as "points" | "achievements" | "level")}
           >
