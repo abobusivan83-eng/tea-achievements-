@@ -209,6 +209,10 @@ function detectTelegramMediaType(file: Express.Multer.File): TelegramMediaType {
   return "photo";
 }
 
+function normalizeTelegramUsername(value: string) {
+  return value.replace(/^@+/, "").trim().toLowerCase();
+}
+
 async function uploadTelegramAttachment(file: Express.Multer.File) {
   const mediaType = detectTelegramMediaType(file);
   const extFromName = path.extname(file.originalname || "").toLowerCase();
@@ -247,10 +251,28 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
   const uploadedMedia = req.file ? await uploadTelegramAttachment(req.file) : null;
   const mediaToSend = uploadedMedia ?? selectedTemplate;
   const users = await prisma.user.findMany({
-    where: { telegramChatId: { not: null } },
-    select: { id: true, telegramChatId: true, nickname: true },
+    where: {
+      OR: [{ telegramChatId: { not: null } }, { telegramUsername: { not: null } }],
+    },
+    select: { id: true, telegramChatId: true, telegramUsername: true, nickname: true },
     take: 50_000,
   });
+
+  const usernamesToResolve = [
+    ...new Set(
+      users
+        .filter((u) => !u.telegramChatId?.trim() && u.telegramUsername?.trim())
+        .map((u) => normalizeTelegramUsername(u.telegramUsername!)),
+    ),
+  ];
+
+  const lookupRows = usernamesToResolve.length
+    ? await prisma.telegramChatLookup.findMany({
+        where: { usernameLower: { in: usernamesToResolve } },
+        select: { usernameLower: true, chatId: true },
+      })
+    : [];
+  const lookupByUsername = new Map(lookupRows.map((x) => [x.usernameLower, x.chatId]));
 
   let attempted = 0;
   let sent = 0;
@@ -261,8 +283,19 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
   const delayMs = 85;
 
   for (const u of users) {
-    const chatId = (u.telegramChatId ?? "").trim();
+    const directChatId = (u.telegramChatId ?? "").trim();
+    const usernameLower = u.telegramUsername ? normalizeTelegramUsername(u.telegramUsername) : "";
+    const resolvedByUsername = usernameLower ? (lookupByUsername.get(usernameLower) ?? "").trim() : "";
+    const chatId = directChatId || resolvedByUsername;
     if (!chatId) continue;
+    if (!directChatId && resolvedByUsername) {
+      await prisma.user
+        .update({
+          where: { id: u.id },
+          data: { telegramChatId: resolvedByUsername },
+        })
+        .catch(() => {});
+    }
     attempted++;
     try {
       await sendTelegramBroadcastMessage({
@@ -281,6 +314,14 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
       // Ignore: user blocked bot / invalid chat id / transient telegram errors.
     }
     await sleep(delayMs);
+  }
+
+  if (attempted === 0) {
+    return fail(
+      res,
+      400,
+      "Не найдено получателей с активной Telegram-привязкой (chat_id). Попросите пользователей открыть бота и нажать /start.",
+    );
   }
 
   if (req.user?.id) {
