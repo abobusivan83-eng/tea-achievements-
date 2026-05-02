@@ -11,8 +11,19 @@ import { Reveal } from "../ui/components/Reveal";
 import { Skeleton } from "../ui/components/Skeleton";
 import { Modal } from "../ui/components/Modal";
 
+/** Редкости в фильтре каталога (SECRET скрыт намеренно). */
+const ACHIEVEMENT_RARITY_FILTERS: { value: Exclude<Rarity, "SECRET">; label: string }[] = [
+  { value: "COMMON", label: "Обычное" },
+  { value: "RARE", label: "Редкое" },
+  { value: "EPIC", label: "Эпическое" },
+  { value: "LEGENDARY", label: "Легендарное" },
+  { value: "EXCLUSIVE", label: "Эксклюзив" },
+];
+
+type AchievementCatalogFilterRarity = (typeof ACHIEVEMENT_RARITY_FILTERS)[number]["value"];
+
 export function AchievementsPage() {
-  const [rarity, setRarity] = useState<Rarity | "">("");
+  const [rarity, setRarity] = useState<AchievementCatalogFilterRarity | "">("");
   const [only, setOnly] = useState<"all" | "earned" | "locked">("all");
   const [sort, setSort] = useState<"new" | "rarity" | "points">("new");
   const [q, setQ] = useState("");
@@ -112,14 +123,17 @@ export function AchievementsPage() {
           <select
             className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
             value={rarity}
-            onChange={(e) => setRarity(e.target.value as any)}
+            onChange={(e) =>
+              setRarity((e.target.value || "") as AchievementCatalogFilterRarity | "")
+            }
+            aria-label="Фильтр по редкости"
           >
             <option value="">Любая редкость</option>
-            <option value="COMMON">COMMON</option>
-            <option value="RARE">RARE</option>
-            <option value="EPIC">EPIC</option>
-            <option value="LEGENDARY">LEGENDARY</option>
-            <option value="EXCLUSIVE">EXCLUSIVE</option>
+            {ACHIEVEMENT_RARITY_FILTERS.map((x) => (
+              <option key={x.value} value={x.value}>
+                {x.label}
+              </option>
+            ))}
           </select>
 
           <select

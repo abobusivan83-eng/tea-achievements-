@@ -12,7 +12,8 @@ export const achievementsRouter = Router();
 // List achievements visible to current user (public + private granted to them).
 // Includes "earned" flag for UI.
 achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
-  const RarityEnum = z.enum(["COMMON", "RARE", "EPIC", "LEGENDARY", "SECRET", "EXCLUSIVE"]);
+  /* SECRET не используется в фильтре каталога на клиенте */
+  const RarityEnum = z.enum(["COMMON", "RARE", "EPIC", "LEGENDARY", "EXCLUSIVE"]);
   const QuerySchema = z.object({
     rarity: RarityEnum.optional(),
     q: z.string().min(1).max(64).optional(),
