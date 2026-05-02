@@ -5,7 +5,7 @@ import type { Rarity, SupportStatus, TaskItem } from "../../lib/types";
 import { rarityGlowClass } from "../rarityStyles";
 import { Button } from "./Button";
 import { AchievementIcon } from "./AchievementIcon";
-import { FiAward, FiChevronDown, FiClock, FiLock, FiUpload } from "react-icons/fi";
+import { FiAward, FiChevronDown, FiClock, FiEdit2, FiLock, FiUpload } from "react-icons/fi";
 
 function statusLabel(s: SupportStatus) {
   switch (s) {
@@ -137,6 +137,9 @@ export function TaskQuestCard(props: {
   onSubmit: () => void;
   onViewAchievement?: (achievement: NonNullable<TaskItem["achievement"]>) => void;
   viewAchievementLabel?: string;
+  /** Роль CREATOR: быстрый переход в админку с открытым редактором задания */
+  creatorQuickEdit?: boolean;
+  onCreatorEditTask?: () => void;
 }) {
   const variant = props.variant ?? "available";
   const reduce = useReducedMotion();
@@ -290,6 +293,22 @@ export function TaskQuestCard(props: {
               <div className="task-conditions-block__label">Условия выполнения</div>
               <div className="whitespace-pre-line">{t.conditions}</div>
             </div>
+
+            {props.creatorQuickEdit && props.onCreatorEditTask ? (
+              <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  leftIcon={<FiEdit2 className="h-3.5 w-3.5" aria-hidden />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onCreatorEditTask?.();
+                  }}
+                >
+                  Редактировать задание
+                </Button>
+              </div>
+            ) : null}
 
             {(t.startsAt || t.endsAt) && (
               <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black/22 px-3 py-2 text-[12px] text-steam-muted">

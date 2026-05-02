@@ -13,6 +13,8 @@ import { getStoredAuthToken } from "../lib/authStorage";
 import { Modal } from "../ui/components/Modal";
 import { AchievementCard } from "../ui/components/AchievementCard";
 import { Button } from "../ui/components/Button";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../state/auth";
 
 type TasksTab = "available" | "completed";
 const MAX_TASK_MEDIA_BYTES = 100 * 1024 * 1024;
@@ -42,6 +44,9 @@ export function TasksPage() {
   const [iconLightboxUrl, setIconLightboxUrl] = useState<string | null>(null);
   const toast = useToasts((s) => s.push);
   const reduce = useReducedMotion();
+  const navigate = useNavigate();
+  const me = useAuth((s) => s.me);
+  const isCreator = me?.role === "CREATOR";
 
   const { availableTasks, completedTasks } = useMemo(() => {
     const available: TaskItem[] = [];
@@ -237,6 +242,16 @@ export function TasksPage() {
                 uploadProgress={uploadProgress}
                 uploadStatus={uploadStatus}
                 onSubmit={() => submit(t.id)}
+                creatorQuickEdit={isCreator}
+                onCreatorEditTask={
+                  isCreator
+                    ? () =>
+                        navigate({
+                          pathname: "/admin",
+                          search: `?tab=tasks&editTask=${encodeURIComponent(t.id)}`,
+                        })
+                    : undefined
+                }
                 viewAchievementLabel="Посмотреть достижение"
                 onViewAchievement={(achievement) =>
                   setSelectedAchievement({

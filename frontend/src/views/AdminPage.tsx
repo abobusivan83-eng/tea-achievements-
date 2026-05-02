@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiFetch, apiJson, apiUpload } from "../lib/api";
 import type {
@@ -30,6 +30,45 @@ import { AchievementCard } from "../ui/components/AchievementCard";
 import { TaskQuestCard } from "../ui/components/TaskQuestCard";
 import { calculateLevelColor } from "../lib/levelColor";
 import { profileQueryKey } from "../lib/queryKeys";
+import { useSearchParams } from "react-router-dom";
+
+function adminTaskCardRarityClass(r: Rarity | undefined) {
+  if (!r) return "rarity-common";
+  switch (r) {
+    case "EXCLUSIVE":
+      return "rarity-exclusive";
+    case "SECRET":
+      return "rarity-secret";
+    case "LEGENDARY":
+      return "rarity-legendary";
+    case "EPIC":
+      return "rarity-epic";
+    case "RARE":
+      return "rarity-rare";
+    default:
+      return "rarity-common";
+  }
+}
+
+function taskLinkedAchievementRarityLabel(r: Rarity | undefined) {
+  if (!r) return "Приз не привязан";
+  switch (r) {
+    case "COMMON":
+      return "Обычное";
+    case "RARE":
+      return "Редкое";
+    case "EPIC":
+      return "Эпическое";
+    case "LEGENDARY":
+      return "Легендарное";
+    case "EXCLUSIVE":
+      return "Эксклюзив";
+    case "SECRET":
+      return "Секретное";
+    default:
+      return r;
+  }
+}
 
 type SupportSuggestionRow = {
   id: string;
@@ -513,6 +552,38 @@ export function AdminPage() {
       setSelectedTaskSubmissionId(selectedTaskSubmission.id);
     }
   }, [selectedTaskSubmission, selectedTaskSubmissionId]);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editTaskFromUrlHandled = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isStaffUser) return;
+    if (searchParams.get("tab") === "tasks") setTab("tasks");
+  }, [isStaffUser, searchParams]);
+
+  useEffect(() => {
+    if (!isStaffUser) return;
+    const editId = searchParams.get("editTask");
+    if (!editId) {
+      editTaskFromUrlHandled.current = null;
+      return;
+    }
+    if (editTaskFromUrlHandled.current === editId) return;
+    if (!tasks.length) return;
+    const task = tasks.find((x) => x.id === editId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("editTask");
+    if (!task) {
+      editTaskFromUrlHandled.current = editId;
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    editTaskFromUrlHandled.current = editId;
+    setTab("tasks");
+    setEditingTask(task);
+    setEditTaskOpen(true);
+    setSearchParams(next, { replace: true });
+  }, [isStaffUser, tasks, searchParams, setSearchParams]);
 
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
@@ -1837,45 +1908,66 @@ export function AdminPage() {
             </motion.div>
           </section>
 
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[25%_45%_30%]">
-            {/* Left Column: Tasks List */}
-            <section className="sticky top-6 grid gap-4">
-              <div className="flex items-center justify-between px-2">
+          <div className="grid gap-8">
+            <section className="grid gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                 <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Все задания</div>
                 <button
+                  type="button"
                   onClick={() => refreshTasks()}
                   className="text-[10px] font-bold uppercase tracking-widest text-steam-accent/60 transition hover:text-steam-accent"
                 >
                   Обновить
                 </button>
               </div>
-              <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {tasks.map((t) => (
                   <div
                     key={t.id}
                     className={clsx(
-                      "group relative overflow-hidden rounded-xl border bg-gradient-to-br p-4 transition-all duration-300 backdrop-blur-xl",
-                      t.isEvent
-                        ? "from-amber-500/12 via-[#22304b]/88 to-[#111c32]/94 border-amber-400/30 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
-                        : "from-[#22304b]/88 via-[#162235]/92 to-[#0d1728]/96 border-white/10 hover:border-steam-accent/35 shadow-[0_14px_34px_rgba(2,6,23,0.3)]",
+                      "achievement-card group relative overflow-hidden rounded-xl border p-4 transition-all duration-300",
+                      adminTaskCardRarityClass(t.achievement?.rarity),
+                      rarityGlowClass(t.achievement?.rarity ?? "COMMON", true),
+                      t.isEvent && "ring-1 ring-amber-400/35 shadow-[0_0_22px_rgba(245,158,11,0.12)]",
                       !t.isActive && "opacity-50 grayscale",
                     )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-bold text-steam-text">{t.title}</div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className={clsx(
-                            "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-                            t.isEvent ? "bg-amber-500/20 text-amber-400" : "bg-steam-accent/10 text-steam-accent"
-                          )}>
-                            {t.isEvent ? "Ивент" : "Обычное"}
-                          </span>
-                          <span className="text-[10px] text-steam-muted font-medium">{t.submissionsCount ?? 0} заявок</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 gap-2.5">
+                        <AchievementIcon
+                          iconUrl={t.achievement?.iconUrl ?? null}
+                          alt={t.achievement?.title ?? t.title}
+                          sizeClassName="h-11 w-11 shrink-0 rounded-lg"
+                          className="border border-white/15 bg-black/35"
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold text-steam-text">{t.title}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={clsx(
+                                "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                                t.isEvent ? "bg-amber-500/25 text-amber-300" : "bg-white/10 text-steam-muted",
+                              )}
+                            >
+                              {t.isEvent ? "Ивент" : "Постоянное"}
+                            </span>
+                            <span className="rounded border border-white/15 bg-black/35 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-steam-text/95">
+                              {taskLinkedAchievementRarityLabel(t.achievement?.rarity)}
+                            </span>
+                            <span className="text-[10px] text-steam-muted">{t.submissionsCount ?? 0} заявок</span>
+                          </div>
+                          {t.achievement ? (
+                            <div className="mt-1 truncate text-[10px] font-medium text-steam-muted/95" title={t.achievement.title}>
+                              Приз: {t.achievement.title}
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-[10px] text-amber-200/85">Нет привязанного достижения</div>
+                          )}
                         </div>
                       </div>
                       <div className="flex shrink-0 gap-1 opacity-0 transition duration-300 group-hover:opacity-100">
                         <button
+                          type="button"
                           title="Редактировать"
                           className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-steam-accent/20 hover:text-steam-accent"
                           onClick={() => openTaskEditor(t)}
@@ -1883,6 +1975,7 @@ export function AdminPage() {
                           <FiEdit2 size={12} />
                         </button>
                         <button
+                          type="button"
                           title="Удалить"
                           className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-red-500/20 hover:text-red-400"
                           onClick={async () => {
@@ -1896,13 +1989,14 @@ export function AdminPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+                    <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
                       <button
+                        type="button"
                         className={clsx(
-                          "rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all duration-300",
+                          "rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all duration-300",
                           t.isActive
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
-                            : "bg-white/5 text-steam-muted border border-white/10 hover:bg-white/10",
+                            ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                            : "border-white/10 bg-white/5 text-steam-muted hover:bg-white/10",
                         )}
                         onClick={async () => {
                           await apiJson(`/api/admin/tasks/${t.id}`, { isActive: !t.isActive }, "PATCH");
@@ -1921,7 +2015,8 @@ export function AdminPage() {
               </div>
             </section>
 
-            {/* Center Column: Submissions Feed */}
+            <div className="grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,1fr)]">
+            {/* Submissions */}
             <section className="grid gap-4">
               <div className="flex items-center justify-between px-2">
                 <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Отправки пользователей</div>
@@ -2003,6 +2098,25 @@ export function AdminPage() {
 
                       <div className="rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.82),rgba(7,12,24,0.92))] p-4 backdrop-blur-lg">
                         <div className="text-[11px] font-black uppercase tracking-widest text-steam-accent drop-shadow-[0_0_8px_rgba(102,192,244,0.3)]">{submission.task.title}</div>
+                        {submission.task.achievement ? (
+                          <div className="mt-2 flex items-center gap-2">
+                            <AchievementIcon
+                              iconUrl={submission.task.achievement.iconUrl}
+                              alt=""
+                              sizeClassName="h-8 w-8 shrink-0 rounded-md"
+                              className="border border-white/15 bg-black/35"
+                            />
+                            <div className="min-w-0 text-[10px] leading-snug text-steam-muted">
+                              <span className="font-bold uppercase tracking-wide text-steam-text/90">
+                                {taskLinkedAchievementRarityLabel(submission.task.achievement.rarity)}
+                              </span>
+                              <span className="mx-1 text-steam-muted/60">·</span>
+                              <span className="font-medium text-steam-text/85" title={submission.task.achievement.title}>
+                                {submission.task.achievement.title}
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="mt-2 line-clamp-2 text-xs leading-relaxed text-steam-text/80 font-medium">
                           {submission.message || "Без текстового комментария..."}
                         </div>
@@ -2227,6 +2341,7 @@ export function AdminPage() {
                 </div>
               )}
             </section>
+            </div>
           </div>
         </div>
       ) : null}
