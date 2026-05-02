@@ -156,6 +156,17 @@ type AdminTaskSubmission = TaskSubmission & {
   user: NonNullable<TaskSubmission["user"]>;
 };
 
+/** Unicode escapes keep correct text if the source file is saved in a legacy encoding. */
+const TASK_SUBMISSION_DELETE_BTN =
+  "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443";
+const TASK_SUBMISSION_DELETED_TOAST =
+  "\u0417\u0430\u044f\u0432\u043a\u0430 \u0443\u0434\u0430\u043b\u0435\u043d\u0430";
+const TASK_SUBMISSION_DELETE_ERR =
+  "\u041e\u0448\u0438\u0431\u043a\u0430 \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f";
+const TASK_SUBMISSION_DELETE_FAIL_TITLE =
+  "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443";
+const TASK_SUBMISSION_DELETE_FAIL_MSG = "\u041e\u0448\u0438\u0431\u043a\u0430";
+
 function toAdminTaskCardModel(submission: AdminTaskSubmission): TaskItem {
   return {
     ...submission.task,
@@ -600,7 +611,7 @@ export function AdminPage() {
     });
     if (selectedTaskSubmissionId === submission.id) setSelectedTaskSubmissionId("");
     await refreshTasks();
-    toast({ kind: "success", title: "Р—Р°СЏРІРєР° СѓРґР°Р»РµРЅР°" });
+    toast({ kind: "success", title: TASK_SUBMISSION_DELETED_TOAST });
   }
 
   async function updateReportStatus(report: SupportReportRow, status: SupportReportRow["status"], adminResponse?: string | null) {
@@ -2187,12 +2198,16 @@ export function AdminPage() {
                             try {
                               await deleteTaskSubmission(selectedTaskSubmission);
                             } catch (e: any) {
-                              setError(e?.message ?? "Ошибка удаления");
-                              toast({ kind: "error", title: "Не удалось удалить заявку", message: e?.message ?? "Ошибка" });
+                              setError(e?.message ?? TASK_SUBMISSION_DELETE_ERR);
+                              toast({
+                                kind: "error",
+                                title: TASK_SUBMISSION_DELETE_FAIL_TITLE,
+                                message: e?.message ?? TASK_SUBMISSION_DELETE_FAIL_MSG,
+                              });
                             }
                           }}
                         >
-                          Удалить заявку
+                          {TASK_SUBMISSION_DELETE_BTN}
                         </Button>
                       ) : null}
                     </div>
