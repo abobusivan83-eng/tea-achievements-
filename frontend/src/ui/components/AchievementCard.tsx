@@ -75,7 +75,7 @@ export function AchievementCard(props: {
       whileHover={reduce ? undefined : { y: hoverLift, scale: 1.015 }}
       transition={{ type: "spring", stiffness: 520, damping: 34 }}
       className={clsx(
-        "achievement-card group",
+        "achievement-card group isolate",
         rarityClass,
         !props.a.earned && "is-locked",
         glow,
@@ -161,23 +161,27 @@ export function AchievementCard(props: {
       ) : null}
 
       {showScheduleOverlay ? (
-        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] bg-[#020817]/88 backdrop-blur-2xl">
-          <div className="flex max-w-[88%] flex-col items-center justify-center px-4 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-cyan-300/25 bg-[#020817]/95 text-steam-accent shadow-[0_0_28px_rgba(102,192,244,0.24)]">
-              <FiLock className="h-7 w-7" />
-            </div>
-            <div className="mt-4 text-[11px] font-black uppercase tracking-[0.28em] text-steam-muted/80">
-              {eventEnded ? "Недоступно" : "Открытие достижения"}
-            </div>
-            {scheduleLocked && props.a.taskStartsAt ? (
-              <div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 px-5 py-3 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
-                <div className="font-mono text-2xl font-black tracking-[0.22em] text-cyan-100">{formatCountdown(upcomingRemainingMs)}</div>
+        <div className="absolute inset-0 z-30 overflow-hidden rounded-[inherit] bg-[#020817]/90 backdrop-blur-xl">
+          <div className="flex h-full max-h-full min-h-0 flex-col items-center justify-center overflow-y-auto overscroll-contain px-3 py-2 text-center [scrollbar-width:thin]">
+            <div className="flex w-full min-w-0 max-w-[min(100%,17rem)] shrink-0 flex-col items-center justify-center gap-2 sm:gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-300/25 bg-[#020817]/95 text-steam-accent shadow-[0_0_24px_rgba(102,192,244,0.22)] sm:h-12 sm:w-12">
+                <FiLock className="h-6 w-6 sm:h-7 sm:w-7" />
               </div>
-            ) : null}
-            <div className="mt-4 max-w-[280px] text-sm font-bold leading-relaxed text-steam-text/92 drop-shadow-lg">
-              {eventEnded
-                ? "Окно задания по времени завершено — следите за новыми ивентами."
-                : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)}
+              <div className="max-w-full text-[10px] font-black uppercase tracking-[0.2em] text-steam-muted/85 sm:text-[11px] sm:tracking-[0.26em]">
+                {eventEnded ? "Недоступно" : "Открытие достижения"}
+              </div>
+              {scheduleLocked && props.a.taskStartsAt ? (
+                <div className="w-full max-w-full rounded-xl border border-cyan-300/15 bg-cyan-400/10 px-3 py-2 shadow-[0_0_20px_rgba(34,211,238,0.12)] sm:rounded-2xl sm:px-4 sm:py-2.5">
+                  <div className="font-mono text-lg font-black tracking-[0.12em] text-cyan-100 tabular-nums sm:text-xl sm:tracking-[0.18em] md:text-2xl md:tracking-[0.2em]">
+                    {formatCountdown(upcomingRemainingMs)}
+                  </div>
+                </div>
+              ) : null}
+              <p className="max-w-full break-words text-xs font-semibold leading-snug text-steam-text/92 [overflow-wrap:anywhere] sm:text-sm sm:leading-relaxed">
+                {eventEnded
+                  ? "Окно задания по времени завершено — следите за новыми ивентами."
+                  : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)}
+              </p>
             </div>
           </div>
         </div>
