@@ -120,7 +120,6 @@ export function AchievementsPage() {
             <option value="EPIC">EPIC</option>
             <option value="LEGENDARY">LEGENDARY</option>
             <option value="EXCLUSIVE">EXCLUSIVE</option>
-            <option value="SECRET">SECRET</option>
           </select>
 
           <select
