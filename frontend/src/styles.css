@@ -1128,6 +1128,23 @@ body {
   border-color: rgba(255,255,255,0.14);
 }
 
+/* Таймер/замок: без фоновых анимаций карточки — меньше лагов и мерцания под маской */
+.achievement-card--schedule-mask,
+.achievement-card--schedule-mask:hover {
+  animation: none !important;
+}
+.achievement-card--schedule-mask::before,
+.achievement-card--schedule-mask::after {
+  animation: none !important;
+}
+
+.task-card.task-card--schedule-mask.task-card--event {
+  animation: none;
+}
+.task-card.task-card--schedule-mask.task-card--event::before {
+  animation: none;
+}
+
 .ach-icon-box {
   position: relative;
   flex: 0 0 auto;

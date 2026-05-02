@@ -171,6 +171,7 @@ export function TaskQuestCard(props: {
     (!sub || sub.status === "REJECTED" || (sub.status !== "PENDING" && sub.status !== "REVIEWED" && sub.status !== "RESOLVED"));
 
   const hoverLift = resolved ? -5 : kind === "event" ? -4 : -2;
+  const hoverMotionBlocked = overlayAllowed;
   const previewItems = useMemo(
     () =>
       props.files.map((file) => ({
@@ -203,21 +204,23 @@ export function TaskQuestCard(props: {
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      whileHover={reduce ? undefined : { y: hoverLift, scale: 1.012 }}
+      whileHover={reduce || hoverMotionBlocked ? undefined : { y: hoverLift, scale: 1.012 }}
       transition={{ type: "spring", stiffness: 520, damping: 34 }}
       className={clsx(
         "achievement-card task-card group relative overflow-hidden",
         rClass,
-        overlayAllowed && "is-locked",
+        overlayAllowed && "is-locked min-h-[11rem] sm:min-h-[12rem] task-card--schedule-mask",
         glow,
         kind === "event" && "task-card--event",
         kind === "timed" && "task-card--timed",
         kind === "permanent" && "task-card--permanent",
       )}
     >
-      {kind === "event" ? <div className="task-card__event-halo" aria-hidden /> : null}
+      {kind === "event" ? (
+        <div className={clsx("task-card__event-halo", overlayAllowed && "opacity-0")} aria-hidden />
+      ) : null}
 
-      {!reduce && kind === "event" ? (
+      {!reduce && kind === "event" && !overlayAllowed ? (
         <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100">
           <div className="absolute -inset-[45%] bg-[linear-gradient(90deg,transparent,rgba(253,224,71,0.12),transparent)] [transform:translateX(-60%)_rotate(16deg)] animate-[shine_2.4s_ease-in-out_infinite]" />
         </div>
@@ -495,23 +498,35 @@ export function TaskQuestCard(props: {
       </AnimatePresence>
 
       {overlayAllowed ? (
-        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[12px] bg-[#020817]/88 backdrop-blur-2xl">
-          <div className="flex max-w-[88%] flex-col items-center justify-center px-4 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-cyan-300/25 bg-[#020817]/95 text-steam-accent shadow-[0_0_28px_rgba(102,192,244,0.24)]">
-              <FiLock className="h-7 w-7" />
-            </div>
-            <div className="mt-4 text-[11px] font-black uppercase tracking-[0.28em] text-steam-muted/80">
-              {scheduleStatus === "UPCOMING" ? "Открытие задания" : "Доступ закрыт"}
-            </div>
-            {scheduleStatus === "UPCOMING" ? (
-              <div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 px-5 py-3 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
-                <div className="font-mono text-2xl font-black tracking-[0.22em] text-cyan-100">
-                  {formatCountdown(upcomingRemainingMs)}
+        <div
+          className="absolute inset-0 z-[40] overflow-hidden rounded-[12px]"
+          style={{ backgroundColor: "#070d18" }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-width:thin]">
+              <div className="mx-auto flex w-full min-w-0 max-w-[17rem] select-none flex-col items-center gap-2 text-center sm:gap-2.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-[#0c1524] text-steam-accent shadow-[0_0_20px_rgba(102,192,244,0.2)]">
+                  <FiLock className="h-5 w-5" aria-hidden />
                 </div>
+                <div className="max-w-full text-[10px] font-black uppercase tracking-[0.18em] text-steam-muted sm:text-[11px] sm:tracking-[0.22em]">
+                  {scheduleStatus === "UPCOMING" ? "Открытие задания" : "Доступ закрыт"}
+                </div>
+                {scheduleStatus === "UPCOMING" ? (
+                  <div className="w-full rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 shadow-inner">
+                    <div className="text-center font-mono text-base font-black tabular-nums tracking-[0.08em] text-cyan-100 sm:text-lg">
+                      {formatCountdown(upcomingRemainingMs)}
+                    </div>
+                  </div>
+                ) : null}
+                <p className="max-w-full break-words text-[11px] font-semibold leading-snug text-steam-text [overflow-wrap:anywhere] sm:text-xs">
+                  {scheduleStatus === "UPCOMING"
+                    ? "Задание откроется автоматически по таймеру."
+                    : scheduleLockText}
+                </p>
               </div>
-            ) : null}
-            <div className="mt-4 max-w-[280px] text-sm font-bold leading-relaxed text-steam-text/92 drop-shadow-lg">
-              {scheduleStatus === "UPCOMING" ? "Задание автоматически откроется, когда таймер дойдёт до нуля." : scheduleLockText}
             </div>
           </div>
         </div>

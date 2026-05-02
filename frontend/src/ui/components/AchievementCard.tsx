@@ -68,16 +68,18 @@ export function AchievementCard(props: {
 
   const unlockedAt = props.a.awardedAt ? new Date(props.a.awardedAt).toLocaleString() : null;
   const hoverLift = props.a.earned ? -5 : -2;
+  const scheduleHoverLock = showScheduleOverlay;
   return (
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      whileHover={reduce ? undefined : { y: hoverLift, scale: 1.015 }}
+      whileHover={reduce || scheduleHoverLock ? undefined : { y: hoverLift, scale: 1.015 }}
       transition={{ type: "spring", stiffness: 520, damping: 34 }}
       className={clsx(
         "achievement-card group isolate",
         rarityClass,
         !props.a.earned && "is-locked",
+        showScheduleOverlay && "achievement-card--schedule-mask",
         glow,
       )}
     >
@@ -161,27 +163,32 @@ export function AchievementCard(props: {
       ) : null}
 
       {showScheduleOverlay ? (
-        <div className="absolute inset-0 z-30 overflow-hidden rounded-[inherit] bg-[#020817]/90 backdrop-blur-xl">
-          <div className="flex h-full max-h-full min-h-0 flex-col items-center justify-center overflow-y-auto overscroll-contain px-3 py-2 text-center [scrollbar-width:thin]">
-            <div className="flex w-full min-w-0 max-w-[min(100%,17rem)] shrink-0 flex-col items-center justify-center gap-2 sm:gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-300/25 bg-[#020817]/95 text-steam-accent shadow-[0_0_24px_rgba(102,192,244,0.22)] sm:h-12 sm:w-12">
-                <FiLock className="h-6 w-6 sm:h-7 sm:w-7" />
-              </div>
-              <div className="max-w-full text-[10px] font-black uppercase tracking-[0.2em] text-steam-muted/85 sm:text-[11px] sm:tracking-[0.26em]">
-                {eventEnded ? "Недоступно" : "Открытие достижения"}
-              </div>
-              {scheduleLocked && props.a.taskStartsAt ? (
-                <div className="w-full max-w-full rounded-xl border border-cyan-300/15 bg-cyan-400/10 px-3 py-2 shadow-[0_0_20px_rgba(34,211,238,0.12)] sm:rounded-2xl sm:px-4 sm:py-2.5">
-                  <div className="font-mono text-lg font-black tracking-[0.12em] text-cyan-100 tabular-nums sm:text-xl sm:tracking-[0.18em] md:text-2xl md:tracking-[0.2em]">
-                    {formatCountdown(upcomingRemainingMs)}
-                  </div>
+        <div
+          className="absolute inset-0 z-[40] overflow-hidden rounded-[inherit]"
+          style={{ backgroundColor: "#070d18" }}
+        >
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-width:thin]">
+              <div className="mx-auto flex w-full min-w-0 max-w-[17rem] select-none flex-col items-center gap-2 text-center sm:gap-2.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-[#0c1524] text-steam-accent shadow-[0_0_20px_rgba(102,192,244,0.2)]">
+                  <FiLock className="h-5 w-5" aria-hidden />
                 </div>
-              ) : null}
-              <p className="max-w-full break-words text-xs font-semibold leading-snug text-steam-text/92 [overflow-wrap:anywhere] sm:text-sm sm:leading-relaxed">
-                {eventEnded
-                  ? "Окно задания по времени завершено — следите за новыми ивентами."
-                  : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)}
-              </p>
+                <div className="max-w-full text-[10px] font-black uppercase tracking-[0.18em] text-steam-muted sm:text-[11px] sm:tracking-[0.22em]">
+                  {eventEnded ? "Недоступно" : "Открытие достижения"}
+                </div>
+                {scheduleLocked && props.a.taskStartsAt ? (
+                  <div className="w-full rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 shadow-inner">
+                    <div className="text-center font-mono text-base font-black tabular-nums tracking-[0.08em] text-cyan-100 sm:text-lg">
+                      {formatCountdown(upcomingRemainingMs)}
+                    </div>
+                  </div>
+                ) : null}
+                <p className="max-w-full break-words text-[11px] font-semibold leading-snug text-steam-text [overflow-wrap:anywhere] sm:text-xs sm:leading-relaxed">
+                  {eventEnded
+                    ? "Окно задания по времени завершено — следите за новыми ивентами."
+                    : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)}
+                </p>
+              </div>
             </div>
           </div>
         </div>
