@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import type { LeaderboardRow } from "../../lib/types";
 import { resolveAvatarUrl } from "../../lib/media";
@@ -10,11 +10,39 @@ import { calculateLevelColor } from "../../lib/levelColor";
 
 const DESKTOP_GRID = "xl:grid-cols-[84px_minmax(0,2.3fr)_148px_148px_148px_128px]";
 
+function LeaderboardRankBadge({ rank }: { rank: number }) {
+  const label = `${rank} место`;
+  if (rank <= 3) {
+    const tier = rank === 1 ? "gold" : rank === 2 ? "silver" : "bronze";
+    return (
+      <div
+        className={clsx(
+          "leaderboard-rank-badge shrink-0",
+          tier === "gold" && "leaderboard-rank-badge--gold",
+          tier === "silver" && "leaderboard-rank-badge--silver",
+          tier === "bronze" && "leaderboard-rank-badge--bronze",
+        )}
+        aria-label={label}
+      >
+        <span className="leaderboard-rank-badge__gloss" aria-hidden />
+        <span className="leaderboard-rank-badge__num">{rank}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="leaderboard-rank-badge leaderboard-rank-badge--rest shrink-0" aria-label={label}>
+      <span className="relative z-[1] text-base font-extrabold tabular-nums">{rank}</span>
+    </div>
+  );
+}
+
 function RatingListInner(props: {
   rows: LeaderboardRow[];
   onSelect: (r: LeaderboardRow) => void;
   onOpenProfile?: (r: LeaderboardRow) => void;
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <div className="grid gap-3">
       <div
@@ -34,15 +62,29 @@ function RatingListInner(props: {
       {props.rows.map((row, idx) => {
         const level = row.level ?? 1;
         const levelColor = calculateLevelColor(level);
-        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+        const rank = idx + 1;
+        const isPodium = idx < 3;
         const accentClass =
           idx === 0
-            ? "border-amber-300/35 bg-[linear-gradient(135deg,rgba(255,215,0,0.16),rgba(255,215,0,0.04)_50%,rgba(255,255,255,0.02))]"
+            ? "border-amber-300/45 bg-[linear-gradient(135deg,rgba(255,237,160,0.22),rgba(251,191,36,0.1)_42%,rgba(15,23,42,0.55)_100%)]"
             : idx === 1
-              ? "border-sky-300/25 bg-[linear-gradient(135deg,rgba(120,180,255,0.14),rgba(120,180,255,0.03)_50%,rgba(255,255,255,0.02))]"
+              ? "border-slate-300/35 bg-[linear-gradient(135deg,rgba(226,232,240,0.18),rgba(148,163,184,0.08)_45%,rgba(15,23,42,0.58)_100%)]"
               : idx === 2
-                ? "border-orange-300/25 bg-[linear-gradient(135deg,rgba(255,166,77,0.14),rgba(255,166,77,0.03)_50%,rgba(255,255,255,0.02))]"
+                ? "border-orange-300/35 bg-[linear-gradient(135deg,rgba(254,215,170,0.2),rgba(249,115,22,0.1)_45%,rgba(15,23,42,0.58)_100%)]"
                 : "border-white/10 bg-[linear-gradient(135deg,rgba(27,40,56,0.94),rgba(21,30,43,0.98))]";
+        const podiumRowClass =
+          !reduceMotion && idx === 0
+            ? "leaderboard-row--podium-1"
+            : !reduceMotion && idx === 1
+              ? "leaderboard-row--podium-2"
+              : !reduceMotion && idx === 2
+                ? "leaderboard-row--podium-3"
+                : null;
+        const rowShadowClass = isPodium
+          ? reduceMotion
+            ? "shadow-[0_14px_34px_rgba(0,0,0,0.28)] hover:shadow-[0_18px_38px_rgba(0,0,0,0.32)]"
+            : ""
+          : "shadow-[0_12px_30px_rgba(0,0,0,0.24)] hover:shadow-[0_18px_36px_rgba(0,0,0,0.32)]";
 
         return (
           <Tooltip
@@ -70,23 +112,23 @@ function RatingListInner(props: {
           >
             <motion.button
               type="button"
-              whileHover={{ y: -2, scale: 1.004 }}
+              whileHover={reduceMotion ? undefined : { y: isPodium ? -3 : -2, scale: isPodium ? 1.008 : 1.004 }}
               whileTap={{ scale: 0.995 }}
               transition={{ type: "spring", stiffness: 520, damping: 34 }}
               style={{ willChange: "transform" }}
               className={clsx(
-                "group relative overflow-hidden rounded-[24px] border px-4 py-4 text-left shadow-[0_12px_30px_rgba(0,0,0,0.24)] transition-all duration-300 hover:border-white/15 hover:shadow-[0_18px_36px_rgba(0,0,0,0.32)]",
+                "group relative z-0 overflow-hidden rounded-[24px] border px-4 py-4 text-left transition-all duration-300 hover:border-white/15",
+                rowShadowClass,
                 accentClass,
+                podiumRowClass,
               )}
               onClick={() => props.onSelect(row)}
             >
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.06),transparent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.06),transparent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-              <div className={clsx("grid gap-4 xl:items-center", DESKTOP_GRID)}>
+              <div className={clsx("relative z-[2] grid gap-4 xl:items-center", DESKTOP_GRID)}>
                 <div className="flex items-center gap-3 xl:justify-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-lg font-semibold text-steam-text">
-                    {medal ?? idx + 1}
-                  </div>
+                  <LeaderboardRankBadge rank={rank} />
                   <div className="text-xs uppercase tracking-[0.16em] text-steam-muted xl:hidden">Место</div>
                 </div>
 
