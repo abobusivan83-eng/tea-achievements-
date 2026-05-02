@@ -73,7 +73,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
     const taskConditions = task?.conditions?.trim() ? task.conditions.trim() : null;
     let scheduleLocked = false;
     let eventEnded = false;
-    if (!earned && a.isPublic && task?.isActive !== false) {
+    if (!earned && a.isPublic && task && task.isActive !== false) {
       if (task.endsAt && task.endsAt < now) eventEnded = true;
       else if (task.startsAt && task.startsAt > now) scheduleLocked = true;
     }

@@ -266,7 +266,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     const task = a.task;
     let scheduleLocked = false;
     let eventEnded = false;
-    if (a.isPublic && task?.isActive !== false) {
+    if (a.isPublic && task && task.isActive !== false) {
       if (task.endsAt && task.endsAt < now) eventEnded = true;
       else if (task.startsAt && task.startsAt > now) scheduleLocked = true;
     }
