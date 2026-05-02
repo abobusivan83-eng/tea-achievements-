@@ -1920,76 +1920,78 @@ export function AdminPage() {
                   Обновить
                 </button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {tasks.map((t) => (
                   <div
                     key={t.id}
                     className={clsx(
-                      "achievement-card group relative overflow-hidden rounded-xl border p-4 transition-all duration-300",
+                      "achievement-card group relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border p-4 transition-all duration-300",
                       adminTaskCardRarityClass(t.achievement?.rarity),
                       rarityGlowClass(t.achievement?.rarity ?? "COMMON", true),
                       t.isEvent && "ring-1 ring-amber-400/35 shadow-[0_0_22px_rgba(245,158,11,0.12)]",
                       !t.isActive && "opacity-50 grayscale",
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 flex-1 gap-2.5">
-                        <AchievementIcon
-                          iconUrl={t.achievement?.iconUrl ?? null}
-                          alt={t.achievement?.title ?? t.title}
-                          sizeClassName="h-11 w-11 shrink-0 rounded-lg"
-                          className="border border-white/15 bg-black/35"
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-bold text-steam-text">{t.title}</div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <span
-                              className={clsx(
-                                "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-                                t.isEvent ? "bg-amber-500/25 text-amber-300" : "bg-white/10 text-steam-muted",
-                              )}
-                            >
-                              {t.isEvent ? "Ивент" : "Постоянное"}
-                            </span>
-                            <span className="rounded border border-white/15 bg-black/35 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-steam-text/95">
-                              {taskLinkedAchievementRarityLabel(t.achievement?.rarity)}
-                            </span>
-                            <span className="text-[10px] text-steam-muted">{t.submissionsCount ?? 0} заявок</span>
-                          </div>
-                          {t.achievement ? (
-                            <div className="mt-1 truncate text-[10px] font-medium text-steam-muted/95" title={t.achievement.title}>
-                              Приз: {t.achievement.title}
+                    <div className="flex min-h-0 flex-1 flex-col gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 gap-2.5">
+                          <AchievementIcon
+                            iconUrl={t.achievement?.iconUrl ?? null}
+                            alt={t.achievement?.title ?? t.title}
+                            sizeClassName="h-11 w-11 shrink-0 rounded-lg"
+                            className="border border-white/15 bg-black/35"
+                          />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-bold text-steam-text">{t.title}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={clsx(
+                                  "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                                  t.isEvent ? "bg-amber-500/25 text-amber-300" : "bg-white/10 text-steam-muted",
+                                )}
+                              >
+                                {t.isEvent ? "Ивент" : "Постоянное"}
+                              </span>
+                              <span className="rounded border border-white/15 bg-black/35 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-steam-text/95">
+                                {taskLinkedAchievementRarityLabel(t.achievement?.rarity)}
+                              </span>
+                              <span className="text-[10px] text-steam-muted">{t.submissionsCount ?? 0} заявок</span>
                             </div>
-                          ) : (
-                            <div className="mt-1 text-[10px] text-amber-200/85">Нет привязанного достижения</div>
-                          )}
+                            {t.achievement ? (
+                              <div className="mt-1 truncate text-[10px] font-medium text-steam-muted/95" title={t.achievement.title}>
+                                Приз: {t.achievement.title}
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-[10px] text-amber-200/85">Нет привязанного достижения</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1 self-start opacity-0 transition duration-300 group-hover:opacity-100">
+                          <button
+                            type="button"
+                            title="Редактировать"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-steam-accent/20 hover:text-steam-accent"
+                            onClick={() => openTaskEditor(t)}
+                          >
+                            <FiEdit2 size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Удалить"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-red-500/20 hover:text-red-400"
+                            onClick={async () => {
+                              if (confirm("Удалить задание? Все связанные заявки также будут удалены.")) {
+                                await apiDelete(`/api/admin/tasks/${t.id}`);
+                                await refreshTasks();
+                              }
+                            }}
+                          >
+                            <FiTrash2 size={12} />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1 opacity-0 transition duration-300 group-hover:opacity-100">
-                        <button
-                          type="button"
-                          title="Редактировать"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-steam-accent/20 hover:text-steam-accent"
-                          onClick={() => openTaskEditor(t)}
-                        >
-                          <FiEdit2 size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Удалить"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-steam-muted transition hover:bg-red-500/20 hover:text-red-400"
-                          onClick={async () => {
-                            if (confirm("Удалить задание? Все связанные заявки также будут удалены.")) {
-                              await apiDelete(`/api/admin/tasks/${t.id}`);
-                              await refreshTasks();
-                            }
-                          }}
-                        >
-                          <FiTrash2 size={12} />
-                        </button>
-                      </div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+                    <div className="mt-auto flex shrink-0 items-center justify-between border-t border-white/10 pt-3">
                       <button
                         type="button"
                         className={clsx(
