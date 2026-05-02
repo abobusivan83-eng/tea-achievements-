@@ -62,15 +62,25 @@ npx prisma migrate deploy
 | Поле            | Значение |
 |-----------------|----------|
 | Root Directory  | `backend` |
-| Build Command   | `npm ci && npm run build && npx prisma migrate deploy` |
-| Start Command   | `npm start` (или `node dist/src/server.js`) |
+| Build Command   | `npm ci --include=dev && npx prisma generate && npm run build` |
+| Start Command   | `npx prisma migrate deploy && npm start` |
 | Health Check    | `/api/health` |
+
+Если при старте `npx prisma migrate deploy` падает с **`P3005`**, это значит: в базе уже есть таблицы, но **нет истории Prisma Migrate** (часто после раннего `db push`/ручных SQL).  
+Один раз (только если схема в БД реально соответствует миграциям в репозитории) выполните локально из `backend` с теми же `DATABASE_URL` / `DIRECT_URL`, что на Render:
+
+```bash
+npm ci --include=dev
+node ./scripts/prisma-resolve-all-applied.mjs
+npx prisma migrate deploy
+```
 
 **Переменные окружения**
 
 | Переменная | Staging | Production |
 |------------|---------|------------|
 | `DATABASE_URL` | Supabase staging | Supabase production |
+| `DIRECT_URL` | Supabase staging (**session pooler `:5432`**) | Supabase production (**session pooler `:5432`**) |
 | `JWT_SECRET` | случайная строка ≥ 16 символов | своя отдельная |
 | `APP_ENV` | `staging` | `production` |
 | `FRONTEND_ORIGIN` | URL ЗБТ Vercel (точный `https://…`) | URL prod Vercel |
