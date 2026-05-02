@@ -1147,7 +1147,6 @@ body {
 
 /* Единый оверлей расписания (достижения / задания) — без прокрутки, компактная сетка */
 .schedule-mask {
-  position: relative;
   isolation: isolate;
 }
 .schedule-mask > div.relative {
