@@ -343,7 +343,6 @@ model AdminAuditLog {
 /// Временная запись до подтверждения через Telegram (код из 4 цифр).
 model RegistrationOtp {
   id           String   @id @default(uuid())
-  email        String?  @unique
   nickname     String
   passwordHash String
   codeHash     String?
@@ -354,6 +353,7 @@ model RegistrationOtp {
   createdAt    DateTime @default(now())
 
   @@index([expiresAt])
+  @@index([telegramUsername])
 }
 
 /// После сообщения боту: @username (нижний регистр) → chat_id для отправки кода без ввода числового ID.

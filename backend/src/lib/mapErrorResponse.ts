@@ -82,8 +82,15 @@ export function mapErrorToResponse(err: unknown): MappedError {
         return { status: 404, message: "Not found", logAsError: false };
       case "P2003":
         return { status: 400, message: "Invalid reference", logAsError: false };
+      case "P2021":
+      case "P2022":
+        return {
+          status: 503,
+          message: "Database schema is out of sync. Run prisma migrate deploy on the server.",
+          logAsError: true,
+        };
       default:
-        return { status: 500, message: "Database error", logAsError: true };
+        return { status: 500, message: `Database error (${err.code})`, logAsError: true };
     }
   }
 
