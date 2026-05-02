@@ -27,7 +27,7 @@ import {
 } from "../lib/cache.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import { deleteUserWithDependencies } from "../lib/userDeletion.js";
-import { telegramSendMessage } from "../lib/telegram.js";
+import { TelegramApiError, TelegramNotConfiguredError, telegramSendMessage } from "../lib/telegram.js";
 import { tryDeleteEvidenceFiles } from "../lib/uploadDeletionPolicy.js";
 
 export const adminRouter = Router();
@@ -70,6 +70,26 @@ const SupportStatusSchema = z.enum(["PENDING", "REVIEWED", "RESOLVED", "REJECTED
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+async function sendTelegramBroadcastMessage(chatId: string, message: string) {
+  const maxAttempts = 4;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await telegramSendMessage(chatId, message);
+      return;
+    } catch (error) {
+      if (error instanceof TelegramNotConfiguredError) throw error;
+      const isLastAttempt = attempt >= maxAttempts;
+      if (!(error instanceof TelegramApiError) || !error.isRetryable || isLastAttempt) {
+        throw error;
+      }
+      const retryDelayMs = error.retryAfterSec
+        ? error.retryAfterSec * 1000
+        : Math.min(5000, 400 * Math.pow(2, attempt - 1));
+      await sleep(retryDelayMs);
+    }
+  }
 }
 
 function supportStatusLabel(status: z.infer<typeof SupportStatusSchema>) {
@@ -144,6 +164,10 @@ adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
 
   const message = parsed.data.message.trim();
+  if (!message) return fail(res, 400, "Сообщение не может быть пустым");
+  if (!process.env.TELEGRAM_BOT_TOKEN?.trim()) {
+    return fail(res, 503, "Telegram-бот не настроен: отсутствует TELEGRAM_BOT_TOKEN");
+  }
   const users = await prisma.user.findMany({
     where: { telegramChatId: { not: null } },
     select: { id: true, telegramChatId: true, nickname: true },
@@ -163,9 +187,12 @@ adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
     if (!chatId) continue;
     attempted++;
     try {
-      await telegramSendMessage(chatId, message);
+      await sendTelegramBroadcastMessage(chatId, message);
       sent++;
-    } catch {
+    } catch (error) {
+      if (error instanceof TelegramNotConfiguredError) {
+        return fail(res, 503, error.message);
+      }
       failed++;
       if (failedUserIds.length < 50) failedUserIds.push(u.id);
       // Ignore: user blocked bot / invalid chat id / transient telegram errors.

@@ -13,6 +13,26 @@ export class TelegramNotConfiguredError extends Error {
   }
 }
 
+export class TelegramApiError extends Error {
+  statusCode: number;
+  description: string;
+  retryAfterSec: number | null;
+  isRetryable: boolean;
+
+  constructor(params: { statusCode: number; description: string }) {
+    super(params.description || `Telegram API error (${params.statusCode})`);
+    this.name = "TelegramApiError";
+    this.statusCode = params.statusCode;
+    this.description = params.description || "";
+    const retryMatch = this.description.match(/retry after\s+(\d+)/i);
+    this.retryAfterSec = retryMatch ? Number(retryMatch[1]) : null;
+    this.isRetryable =
+      params.statusCode >= 500 ||
+      this.statusCode === 429 ||
+      /too many requests|timeout|temporarily unavailable|internal/i.test(this.description);
+  }
+}
+
 export function telegramSyntheticEmail(chatId: string) {
   return `tg_${chatId}@telegram.local`;
 }
@@ -37,7 +57,10 @@ export async function telegramSendMessage(chatId: string, text: string) {
   });
   const data = (await res.json()) as { ok?: boolean; description?: string };
   if (!data.ok) {
-    throw new Error(data.description ?? `Telegram sendMessage failed (${res.status})`);
+    throw new TelegramApiError({
+      statusCode: res.status,
+      description: data.description ?? `Telegram sendMessage failed (${res.status})`,
+    });
   }
 }
 
