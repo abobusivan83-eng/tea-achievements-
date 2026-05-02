@@ -72,6 +72,9 @@ model User {
   telegramChatId   String? @unique
   telegramUsername String? @unique
 
+  /** Последняя активность в приложении (любой авторизованный запрос, с троттлингом). */
+  lastActiveAt DateTime?
+
   achievements UserAchievement[]
   createdAchievements Achievement[] @relation("AchievementCreator")
   accessGrants AchievementAccess[]

@@ -514,6 +514,42 @@ body {
   font-size: 11px;
   color: var(--steam-text-dim);
 }
+
+/* Нативные select в фильтрах (достижения, списки) */
+.steam-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 2.5rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--steam-text);
+  background-color: rgba(0, 0, 0, 0.35);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238f98a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.steam-select:hover {
+  border-color: rgba(102, 192, 244, 0.35);
+  background-color: rgba(0, 0, 0, 0.42);
+}
+.steam-select:focus {
+  outline: none;
+  border-color: var(--steam-blue);
+  box-shadow: 0 0 0 2px rgba(102, 192, 244, 0.22);
+}
+.steam-select option {
+  background-color: var(--steam-secondary);
+  color: var(--steam-text);
+}
+
 .modal-actions {
   display: flex;
   gap: 12px;

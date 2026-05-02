@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { getBearerToken, verifyToken } from "../lib/auth.js";
 import { fail } from "../lib/http.js";
+import { bumpUserPresence } from "../lib/presence.js";
 
 export type AuthedRequest = Request & {
   user?: { id: string; role: "USER" | "ADMIN" | "CREATOR" };
@@ -13,6 +14,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   try {
     const payload = verifyToken(token);
     req.user = { id: payload.sub, role: payload.role };
+    bumpUserPresence(payload.sub);
 
     return next();
   } catch {

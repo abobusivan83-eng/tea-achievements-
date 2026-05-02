@@ -111,9 +111,10 @@ export function AchievementsPage() {
           </Button>
 
           <select
-            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+            className="steam-select min-w-[10.5rem]"
             value={only}
             onChange={(e) => setOnly(e.target.value as any)}
+            aria-label="Показать достижения"
           >
             <option value="all">Все</option>
             <option value="earned">Открытые</option>
@@ -121,7 +122,7 @@ export function AchievementsPage() {
           </select>
 
           <select
-            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+            className="steam-select min-w-[11rem]"
             value={rarity}
             onChange={(e) =>
               setRarity((e.target.value || "") as AchievementCatalogFilterRarity | "")
@@ -137,9 +138,10 @@ export function AchievementsPage() {
           </select>
 
           <select
-            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+            className="steam-select min-w-[12rem]"
             value={sort}
             onChange={(e) => setSort(e.target.value as any)}
+            aria-label="Сортировка достижений"
           >
             <option value="new">Сначала новые</option>
             <option value="rarity">По редкости</option>

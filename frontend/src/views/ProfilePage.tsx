@@ -288,11 +288,12 @@ export function ProfilePage() {
   const xpPct = Math.min(1, xpInto / xpForNext);
   const statusTier = getLevelTier(level);
   const levelColor = calculateLevelColor(level);
-  const lastActiveAtMs = profile.user.lastActiveAt ? +new Date(profile.user.lastActiveAt) : null;
-  // "В сети", если последняя активность была недавно.
-  // Точность зависит от частоты heartbeat-запросов и порога.
+  /** Считаем «в сети», если lastActiveAt свежее порога (обновляется на сервере при активности, ~раз в 75 с). */
+  const PRESENCE_ONLINE_MS = 5 * 60 * 1000;
+  const lastActiveAtMs = profile.user.lastActiveAt ? +new Date(profile.user.lastActiveAt) : NaN;
   const presenceOnline =
-    me?.id === profile.user.id ? true : lastActiveAtMs ? Date.now() - lastActiveAtMs < 60_000 : false;
+    isOwnProfile ||
+    (Number.isFinite(lastActiveAtMs) && Date.now() - lastActiveAtMs >= 0 && Date.now() - lastActiveAtMs < PRESENCE_ONLINE_MS);
   const bannerBgUrl = bannerRemoteBroken ? DEFAULT_BANNER_URL : resolveBannerUrl(profile.user.bannerUrl);
 
   return (
@@ -470,7 +471,7 @@ export function ProfilePage() {
               <div className="grid gap-4">
                 <div className="steam-card p-4">
                   <div className="text-sm font-semibold">Последние достижения</div>
-                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     {profile.achievements.earned
                       .slice()
                       .sort((a, b) => +new Date(b.awardedAt) - +new Date(a.awardedAt))
@@ -533,10 +534,10 @@ export function ProfilePage() {
             ) : null}
 
             {tab === "achievements" ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <div className="steam-card p-4">
                   <div className="text-sm font-semibold">Открытые</div>
-                  <div className="mt-3 grid gap-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {earnedAchievementCards.map((a) => (
                       <AchievementCard
                         key={a.id}
@@ -552,7 +553,7 @@ export function ProfilePage() {
                 </div>
                 <div className="steam-card p-4">
                   <div className="text-sm font-semibold">Закрытые</div>
-                  <div className="mt-3 grid gap-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {lockedAchievementCards.map((a) => (
                       <AchievementCard
                         key={a.id}

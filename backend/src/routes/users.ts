@@ -173,6 +173,17 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   const targetId = idParsed.data;
   const viewerId = req.user!.id;
   const canBypassBlocked = viewerId === targetId || req.user!.role === "ADMIN";
+  const attachPresence = async <T extends { user: Record<string, unknown> }>(payload: T) => {
+    const row = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { lastActiveAt: true },
+    });
+    return {
+      ...payload,
+      user: { ...payload.user, lastActiveAt: row?.lastActiveAt?.toISOString() ?? null },
+    };
+  };
+
   const cached = getCachedUserProfile<{
     user: { blocked: boolean };
     achievements: unknown;
@@ -180,7 +191,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   if (cached) {
     if (cached.user.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
     res.setHeader("Cache-Control", "private, no-store");
-    return ok(res, cached);
+    return ok(res, await attachPresence(cached as { user: Record<string, unknown>; achievements: unknown }));
   }
 
   const target = await prisma.user.findUnique({
@@ -200,6 +211,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
       badgesJson: true,
       statusEmoji: true,
       createdAt: true,
+      lastActiveAt: true,
     },
   });
   if (!target) return fail(res, 404, "User not found");
@@ -262,6 +274,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
       avatarUrl: resolveStoredMediaUrl(target.avatarUrl, target.avatarPath),
       bannerUrl: resolveStoredMediaUrl(target.bannerUrl, target.bannerPath),
       badges: (target.badgesJson as unknown as string[] | null) ?? [],
+      lastActiveAt: target.lastActiveAt?.toISOString() ?? null,
     },
     achievements: { earned: earnedWithShare, locked },
   };
