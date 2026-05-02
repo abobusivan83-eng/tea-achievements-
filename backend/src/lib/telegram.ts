@@ -46,22 +46,47 @@ function apiBase() {
   return `https://api.telegram.org/bot${token}/`;
 }
 
-export async function telegramSendMessage(chatId: string, text: string) {
+async function telegramCallApi(
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<{ ok?: boolean; description?: string }> {
   if (!env.TELEGRAM_BOT_TOKEN?.trim()) {
     throw new TelegramNotConfiguredError();
   }
-  const res = await fetch(`${apiBase()}sendMessage`, {
+  const res = await fetch(`${apiBase()}${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify(payload),
   });
   const data = (await res.json()) as { ok?: boolean; description?: string };
   if (!data.ok) {
     throw new TelegramApiError({
       statusCode: res.status,
-      description: data.description ?? `Telegram sendMessage failed (${res.status})`,
+      description: data.description ?? `Telegram ${method} failed (${res.status})`,
     });
   }
+  return data;
+}
+
+export async function telegramSendMessage(chatId: string, text: string) {
+  await telegramCallApi("sendMessage", { chat_id: chatId, text });
+}
+
+export async function telegramSendPhoto(chatId: string, photoUrl: string, caption?: string) {
+  await telegramCallApi("sendPhoto", {
+    chat_id: chatId,
+    photo: photoUrl,
+    ...(caption?.trim() ? { caption: caption.trim() } : {}),
+  });
+}
+
+export async function telegramSendVideo(chatId: string, videoUrl: string, caption?: string) {
+  await telegramCallApi("sendVideo", {
+    chat_id: chatId,
+    video: videoUrl,
+    supports_streaming: true,
+    ...(caption?.trim() ? { caption: caption.trim() } : {}),
+  });
 }
 
 export function isTelegramConfigured(): boolean {

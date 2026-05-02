@@ -63,6 +63,22 @@ async function saveLocallyAsMock(fileBuffer: Buffer, folder: string, prefix: str
   return toPublicFileUrl(relPath);
 }
 
+async function saveLocallyAsRawMock(params: {
+  buffer: Buffer;
+  folder: string;
+  prefix: string;
+  extension: string;
+}) {
+  const targetDir = path.join(uploadRootAbs, "mock-cloud", params.folder);
+  ensureDir(targetDir);
+  const cleanExt = params.extension.replace(/[^a-z0-9.]/gi, "").toLowerCase() || ".bin";
+  const filename = `${params.prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${cleanExt.startsWith(".") ? cleanExt : `.${cleanExt}`}`;
+  const absPath = path.join(targetDir, filename);
+  fs.writeFileSync(absPath, params.buffer);
+  const relPath = `${uploadPublicDir}/mock-cloud/${params.folder}/${filename}`;
+  return toPublicFileUrl(relPath);
+}
+
 export async function uploadImageToMediaStorage(params: {
   buffer: Buffer;
   folder: string;
@@ -96,6 +112,44 @@ export async function uploadImageToMediaStorage(params: {
       },
     );
     uploadStream.end(optimized);
+  });
+
+  return uploaded.secure_url;
+}
+
+export async function uploadTelegramAttachmentToMediaStorage(params: {
+  buffer: Buffer;
+  folder: string;
+  publicIdPrefix: string;
+  resourceType: "image" | "video";
+  extension: string;
+}) {
+  if (!ensureCloudinaryConfigured()) {
+    return saveLocallyAsRawMock({
+      buffer: params.buffer,
+      folder: params.folder,
+      prefix: params.publicIdPrefix,
+      extension: params.extension,
+    });
+  }
+
+  const uploaded = await new Promise<{ secure_url: string }>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `clan-salamanca/${params.folder}`,
+        resource_type: params.resourceType,
+        public_id: `${params.publicIdPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        overwrite: false,
+      },
+      (error, result) => {
+        if (error || !result) {
+          reject(error ?? new Error("Cloudinary upload failed"));
+          return;
+        }
+        resolve(result as { secure_url: string });
+      },
+    );
+    uploadStream.end(params.buffer);
   });
 
   return uploaded.secure_url;

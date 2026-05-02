@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import multer from "multer";
+import path from "path";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, requireStaff, type AuthedRequest } from "../middleware/auth.js";
@@ -25,9 +27,15 @@ import {
   invalidateTasksListCache,
   invalidateUserProfileCache,
 } from "../lib/cache.js";
-import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
+import { uploadImageToMediaStorage, uploadTelegramAttachmentToMediaStorage } from "../lib/mediaStorage.js";
 import { deleteUserWithDependencies } from "../lib/userDeletion.js";
-import { TelegramApiError, TelegramNotConfiguredError, telegramSendMessage } from "../lib/telegram.js";
+import {
+  TelegramApiError,
+  TelegramNotConfiguredError,
+  telegramSendMessage,
+  telegramSendPhoto,
+  telegramSendVideo,
+} from "../lib/telegram.js";
 import { tryDeleteEvidenceFiles } from "../lib/uploadDeletionPolicy.js";
 
 export const adminRouter = Router();
@@ -72,11 +80,22 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function sendTelegramBroadcastMessage(chatId: string, message: string) {
+async function sendTelegramBroadcastMessage(params: {
+  chatId: string;
+  message: string;
+  mediaUrl?: string | null;
+  mediaType?: TelegramMediaType | null;
+}) {
   const maxAttempts = 4;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await telegramSendMessage(chatId, message);
+      if (params.mediaUrl && params.mediaType === "photo") {
+        await telegramSendPhoto(params.chatId, params.mediaUrl, params.message);
+      } else if (params.mediaUrl && params.mediaType === "video") {
+        await telegramSendVideo(params.chatId, params.mediaUrl, params.message);
+      } else {
+        await telegramSendMessage(params.chatId, params.message);
+      }
       return;
     } catch (error) {
       if (error instanceof TelegramNotConfiguredError) throw error;
@@ -156,11 +175,61 @@ async function createSupportNotification(params: {
 
 const TelegramBroadcastSchema = z.object({
   message: z.string().trim().min(1, "Сообщение не может быть пустым").max(3500, "Сообщение слишком длинное"),
+  templateId: z.string().uuid().optional(),
 });
 
-adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
+const TelegramTemplateCreateSchema = z.object({
+  label: z.string().trim().min(1, "Название кнопки обязательно").max(80, "Название слишком длинное"),
+  message: z.string().trim().min(1, "Сообщение обязательно").max(3500, "Сообщение слишком длинное"),
+  sortOrder: z.coerce.number().int().min(0).max(10_000).optional(),
+});
+
+const TelegramTemplateUpdateSchema = z.object({
+  label: z.string().trim().min(1, "Название кнопки обязательно").max(80, "Название слишком длинное").optional(),
+  message: z.string().trim().min(1, "Сообщение обязательно").max(3500, "Сообщение слишком длинное").optional(),
+  sortOrder: z.coerce.number().int().min(0).max(10_000).optional(),
+  removeMedia: z.coerce.boolean().optional(),
+});
+
+const telegramBroadcastUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024, files: 1 },
+  fileFilter(_req, file, cb) {
+    if (!/^image\//.test(file.mimetype) && !/^video\//.test(file.mimetype)) {
+      return cb(new Error("Допустимы только фото/видео"));
+    }
+    cb(null, true);
+  },
+});
+
+type TelegramMediaType = "photo" | "video";
+
+function detectTelegramMediaType(file: Express.Multer.File): TelegramMediaType {
+  if (/^video\//.test(file.mimetype)) return "video";
+  return "photo";
+}
+
+async function uploadTelegramAttachment(file: Express.Multer.File) {
+  const mediaType = detectTelegramMediaType(file);
+  const extFromName = path.extname(file.originalname || "").toLowerCase();
+  const extFromMime = mediaType === "video" ? ".mp4" : ".jpg";
+  const extension = extFromName || extFromMime;
+  const mediaUrl = await uploadTelegramAttachmentToMediaStorage({
+    buffer: file.buffer,
+    folder: "telegram-broadcast",
+    publicIdPrefix: `tg-${mediaType}`,
+    resourceType: mediaType === "video" ? "video" : "image",
+    extension,
+  });
+  return { mediaType, mediaUrl };
+}
+
+adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachment"), async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
-  const parsed = TelegramBroadcastSchema.safeParse(req.body);
+  const parsed = TelegramBroadcastSchema.safeParse({
+    message: req.body?.message,
+    templateId: req.body?.templateId,
+  });
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
 
   const message = parsed.data.message.trim();
@@ -168,6 +237,15 @@ adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
   if (!process.env.TELEGRAM_BOT_TOKEN?.trim()) {
     return fail(res, 503, "Telegram-бот не настроен: отсутствует TELEGRAM_BOT_TOKEN");
   }
+  const selectedTemplate = parsed.data.templateId
+    ? await prisma.telegramBroadcastTemplate.findUnique({
+        where: { id: parsed.data.templateId },
+        select: { id: true, mediaUrl: true, mediaType: true },
+      })
+    : null;
+  if (parsed.data.templateId && !selectedTemplate) return fail(res, 404, "Шаблон не найден");
+  const uploadedMedia = req.file ? await uploadTelegramAttachment(req.file) : null;
+  const mediaToSend = uploadedMedia ?? selectedTemplate;
   const users = await prisma.user.findMany({
     where: { telegramChatId: { not: null } },
     select: { id: true, telegramChatId: true, nickname: true },
@@ -187,7 +265,12 @@ adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
     if (!chatId) continue;
     attempted++;
     try {
-      await sendTelegramBroadcastMessage(chatId, message);
+      await sendTelegramBroadcastMessage({
+        chatId,
+        message,
+        mediaUrl: mediaToSend?.mediaUrl,
+        mediaType: mediaToSend?.mediaType as TelegramMediaType | undefined,
+      });
       sent++;
     } catch (error) {
       if (error instanceof TelegramNotConfiguredError) {
@@ -205,11 +288,119 @@ adminRouter.post("/telegram-broadcast", async (req: AuthedRequest, res) => {
       adminId: req.user.id,
       action: "telegram.broadcast",
       summary: `Telegram-рассылка: отправлено ${sent}/${attempted} (ошибок: ${failed})`,
-      meta: { attempted, sent, failed, failedUserIds },
+      meta: {
+        attempted,
+        sent,
+        failed,
+        failedUserIds,
+        mediaUrl: mediaToSend?.mediaUrl ?? null,
+        mediaType: mediaToSend?.mediaType ?? null,
+      },
     });
   }
 
-  return ok(res, { attempted, sent, failed });
+  return ok(res, {
+    attempted,
+    sent,
+    failed,
+    mediaUrl: mediaToSend?.mediaUrl ?? null,
+    mediaType: mediaToSend?.mediaType ?? null,
+  });
+});
+
+adminRouter.get("/telegram-broadcast/templates", async (req: AuthedRequest, res) => {
+  if (!adminOnly(req, res)) return;
+  const templates = await prisma.telegramBroadcastTemplate.findMany({
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    take: 200,
+    select: {
+      id: true,
+      label: true,
+      message: true,
+      mediaUrl: true,
+      mediaType: true,
+      sortOrder: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  return ok(res, templates);
+});
+
+adminRouter.post(
+  "/telegram-broadcast/templates",
+  telegramBroadcastUpload.single("attachment"),
+  async (req: AuthedRequest, res) => {
+    if (!adminOnly(req, res)) return;
+    const parsed = TelegramTemplateCreateSchema.safeParse(req.body);
+    if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
+
+    const uploadedMedia = req.file ? await uploadTelegramAttachment(req.file) : null;
+    const created = await prisma.telegramBroadcastTemplate.create({
+      data: {
+        label: parsed.data.label.trim(),
+        message: parsed.data.message.trim(),
+        sortOrder: parsed.data.sortOrder ?? 0,
+        mediaUrl: uploadedMedia?.mediaUrl ?? null,
+        mediaType: uploadedMedia?.mediaType ?? null,
+        createdById: req.user?.id ?? null,
+      },
+      select: {
+        id: true,
+        label: true,
+        message: true,
+        mediaUrl: true,
+        mediaType: true,
+        sortOrder: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return ok(res, created);
+  },
+);
+
+adminRouter.patch(
+  "/telegram-broadcast/templates/:id",
+  telegramBroadcastUpload.single("attachment"),
+  async (req: AuthedRequest, res) => {
+    if (!adminOnly(req, res)) return;
+    const parsed = TelegramTemplateUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
+    const exists = await prisma.telegramBroadcastTemplate.findUnique({ where: { id: req.params.id } });
+    if (!exists) return fail(res, 404, "Шаблон не найден");
+
+    const uploadedMedia = req.file ? await uploadTelegramAttachment(req.file) : null;
+    const updated = await prisma.telegramBroadcastTemplate.update({
+      where: { id: req.params.id },
+      data: {
+        label: parsed.data.label?.trim(),
+        message: parsed.data.message?.trim(),
+        sortOrder: parsed.data.sortOrder,
+        mediaUrl: uploadedMedia?.mediaUrl ?? (parsed.data.removeMedia ? null : undefined),
+        mediaType: uploadedMedia?.mediaType ?? (parsed.data.removeMedia ? null : undefined),
+      },
+      select: {
+        id: true,
+        label: true,
+        message: true,
+        mediaUrl: true,
+        mediaType: true,
+        sortOrder: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return ok(res, updated);
+  },
+);
+
+adminRouter.delete("/telegram-broadcast/templates/:id", async (req: AuthedRequest, res) => {
+  if (!adminOnly(req, res)) return;
+  const exists = await prisma.telegramBroadcastTemplate.findUnique({ where: { id: req.params.id } });
+  if (!exists) return fail(res, 404, "Шаблон не найден");
+  await prisma.telegramBroadcastTemplate.delete({ where: { id: req.params.id } });
+  return ok(res, { deleted: true });
 });
 
 const CreateAchievementSchema = z.object({

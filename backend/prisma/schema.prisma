@@ -91,6 +91,7 @@ model User {
   taskSubmissions TaskSubmission[] @relation("TaskSubmissionAuthor")
   reviewedTaskSubmissions TaskSubmission[] @relation("TaskSubmissionReviewer")
   createdTasks Task[] @relation("TaskCreator")
+  telegramBroadcastTemplatesCreated TelegramBroadcastTemplate[] @relation("TelegramBroadcastTemplateCreator")
 
   auditLogsAsAdmin   AdminAuditLog[] @relation("AdminAuditActor")
   auditLogsAsTarget  AdminAuditLog[] @relation("AdminAuditTarget")
@@ -364,4 +365,19 @@ model TelegramChatLookup {
   usernameLower String   @id
   chatId        String
   updatedAt     DateTime @updatedAt
+}
+
+model TelegramBroadcastTemplate {
+  id          String   @id @default(uuid())
+  label       String
+  message     String
+  mediaUrl    String?
+  mediaType   String?
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdBy   User?    @relation("TelegramBroadcastTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sortOrder, createdAt])
 }

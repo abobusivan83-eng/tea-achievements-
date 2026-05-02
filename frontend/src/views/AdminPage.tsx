@@ -112,6 +112,17 @@ type AdminInboxCounts = {
   reports: number;
 };
 
+type TelegramBroadcastTemplateRow = {
+  id: string;
+  label: string;
+  message: string;
+  mediaUrl: string | null;
+  mediaType: "photo" | "video" | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type AdminTask = {
   id: string;
   title: string;
@@ -372,6 +383,15 @@ export function AdminPage() {
   const [tgMessage, setTgMessage] = useState("");
   const [tgSending, setTgSending] = useState(false);
   const [tgResult, setTgResult] = useState<{ attempted: number; sent: number; failed: number } | null>(null);
+  const [tgAttachment, setTgAttachment] = useState<File | null>(null);
+  const [tgTemplates, setTgTemplates] = useState<TelegramBroadcastTemplateRow[]>([]);
+  const [tgTemplateLabel, setTgTemplateLabel] = useState("");
+  const [tgTemplateMessage, setTgTemplateMessage] = useState("");
+  const [tgTemplateSortOrder, setTgTemplateSortOrder] = useState<number>(0);
+  const [tgTemplateAttachment, setTgTemplateAttachment] = useState<File | null>(null);
+  const [tgTemplateEditingId, setTgTemplateEditingId] = useState<string | null>(null);
+  const [tgTemplateRemoveMedia, setTgTemplateRemoveMedia] = useState(false);
+  const [tgTemplateSubmitting, setTgTemplateSubmitting] = useState(false);
   const selectClass =
     "steam-select w-full min-w-0 text-sm text-steam-text outline-none focus:border-steam-accent glow--base";
   const inputClass =
@@ -432,6 +452,22 @@ export function AdminPage() {
   async function refreshAdminInboxCounts() {
     const counts = await apiFetch<AdminInboxCounts>("/api/admin/inbox-counts", { silent: true });
     setAdminInboxCounts(counts);
+  }
+
+  async function refreshTelegramTemplates() {
+    const rows = await apiFetch<TelegramBroadcastTemplateRow[]>("/api/admin/telegram-broadcast/templates");
+    setTgTemplates(rows);
+  }
+
+  async function sendTelegramBroadcast(params: { message: string; attachment?: File | null; templateId?: string }) {
+    const formData = new FormData();
+    formData.append("message", params.message);
+    if (params.attachment) formData.append("attachment", params.attachment);
+    if (params.templateId) formData.append("templateId", params.templateId);
+    return apiFetch<{ attempted: number; sent: number; failed: number }>(
+      "/api/admin/telegram-broadcast",
+      { method: "POST", body: formData },
+    );
   }
 
   function mapCosmeticRarityToShop(r: string): Rarity {
@@ -517,7 +553,15 @@ export function AdminPage() {
   useEffect(() => {
     const tasks: Promise<unknown>[] = [refreshAchievements()];
     if (isStaffUser) {
-      tasks.push(refreshUsers(), refreshSupport(), refreshShop(), refreshTasks(), refreshAuditLogs(), refreshAdminInboxCounts());
+      tasks.push(
+        refreshUsers(),
+        refreshSupport(),
+        refreshShop(),
+        refreshTasks(),
+        refreshAuditLogs(),
+        refreshAdminInboxCounts(),
+        refreshTelegramTemplates(),
+      );
     }
     Promise.all(tasks).catch((e: any) => setError(e?.message ?? "Ошибка загрузки"));
   }, [isStaffUser]);
@@ -869,6 +913,18 @@ export function AdminPage() {
                 onChange={(e) => setTgMessage(e.target.value)}
               />
             </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-steam-muted">Вложение (фото или видео, опционально)</span>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                onChange={(e) => setTgAttachment(e.target.files?.[0] ?? null)}
+                className="rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm"
+              />
+              {tgAttachment ? (
+                <span className="text-xs text-steam-muted">Выбрано: {tgAttachment.name}</span>
+              ) : null}
+            </label>
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs text-steam-muted">
@@ -895,10 +951,7 @@ export function AdminPage() {
                   setTgSending(true);
                   setTgResult(null);
                   try {
-                    const result = await apiJson<{ attempted: number; sent: number; failed: number }>(
-                      "/api/admin/telegram-broadcast",
-                      { message: msg },
-                    );
+                    const result = await sendTelegramBroadcast({ message: msg, attachment: tgAttachment });
                     setTgResult(result);
                     toast({ kind: "success", title: "Рассылка завершена" });
                   } catch (e: any) {
@@ -910,6 +963,206 @@ export function AdminPage() {
               >
                 Отправить всем пользователям
               </Button>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
+            <div className="text-base font-semibold">Быстрые сообщения</div>
+            <div className="mt-1 text-xs text-steam-muted">
+              Сохраняй готовые кнопки с текстом и вложением. Нажатие кнопки сразу отправляет шаблон всем.
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                <span className="text-steam-muted">Название кнопки</span>
+                <input
+                  className={inputClass}
+                  value={tgTemplateLabel}
+                  onChange={(e) => setTgTemplateLabel(e.target.value)}
+                  placeholder="Тех. работы"
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-steam-muted">Порядок (меньше = выше)</span>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={tgTemplateSortOrder}
+                  onChange={(e) => setTgTemplateSortOrder(Number(e.target.value) || 0)}
+                />
+              </label>
+              <label className="grid gap-1 text-sm md:col-span-2">
+                <span className="text-steam-muted">Текст шаблона</span>
+                <textarea
+                  className="min-h-[100px] rounded-lg border border-white/10 bg-black/35 px-3 py-2 outline-none focus:border-steam-accent glow--base"
+                  value={tgTemplateMessage}
+                  onChange={(e) => setTgTemplateMessage(e.target.value)}
+                  placeholder="В настоящий момент на веб-сайте проводятся технические работы..."
+                />
+              </label>
+              <label className="grid gap-1 text-sm md:col-span-2">
+                <span className="text-steam-muted">Фото/видео для шаблона (опционально)</span>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={(e) => setTgTemplateAttachment(e.target.files?.[0] ?? null)}
+                  className="rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm"
+                />
+              </label>
+              {tgTemplateEditingId ? (
+                <label className="inline-flex items-center gap-2 text-xs text-steam-muted md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={tgTemplateRemoveMedia}
+                    onChange={(e) => setTgTemplateRemoveMedia(e.target.checked)}
+                  />
+                  Удалить текущее вложение шаблона
+                </label>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                loading={tgTemplateSubmitting}
+                onClick={async () => {
+                  const label = tgTemplateLabel.trim();
+                  const message = tgTemplateMessage.trim();
+                  if (!label || !message) {
+                    toast({ kind: "error", title: "Заполните название и текст шаблона" });
+                    return;
+                  }
+                  const formData = new FormData();
+                  formData.append("label", label);
+                  formData.append("message", message);
+                  formData.append("sortOrder", String(tgTemplateSortOrder || 0));
+                  if (tgTemplateAttachment) formData.append("attachment", tgTemplateAttachment);
+                  if (tgTemplateEditingId) formData.append("removeMedia", String(tgTemplateRemoveMedia));
+                  setTgTemplateSubmitting(true);
+                  try {
+                    if (tgTemplateEditingId) {
+                      await apiFetch(`/api/admin/telegram-broadcast/templates/${tgTemplateEditingId}`, {
+                        method: "PATCH",
+                        body: formData,
+                      });
+                      toast({ kind: "success", title: "Шаблон обновлён" });
+                    } else {
+                      await apiFetch("/api/admin/telegram-broadcast/templates", {
+                        method: "POST",
+                        body: formData,
+                      });
+                      toast({ kind: "success", title: "Шаблон добавлен" });
+                    }
+                    setTgTemplateLabel("");
+                    setTgTemplateMessage("");
+                    setTgTemplateSortOrder(0);
+                    setTgTemplateAttachment(null);
+                    setTgTemplateEditingId(null);
+                    setTgTemplateRemoveMedia(false);
+                    await refreshTelegramTemplates();
+                  } catch (e: any) {
+                    toast({ kind: "error", title: "Не удалось сохранить шаблон", message: e?.message ?? "Ошибка" });
+                  } finally {
+                    setTgTemplateSubmitting(false);
+                  }
+                }}
+              >
+                {tgTemplateEditingId ? "Сохранить шаблон" : "Добавить шаблон"}
+              </Button>
+              {tgTemplateEditingId ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setTgTemplateEditingId(null);
+                    setTgTemplateLabel("");
+                    setTgTemplateMessage("");
+                    setTgTemplateSortOrder(0);
+                    setTgTemplateAttachment(null);
+                    setTgTemplateRemoveMedia(false);
+                  }}
+                >
+                  Отмена редактирования
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {tgTemplates.length === 0 ? (
+                <div className="text-xs text-steam-muted">Шаблоны пока не добавлены.</div>
+              ) : (
+                tgTemplates.map((tpl) => (
+                  <div key={tpl.id} className="rounded-lg border border-white/10 bg-black/25 p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">{tpl.label}</div>
+                        <div className="mt-1 whitespace-pre-wrap text-xs text-steam-muted">{tpl.message}</div>
+                        {tpl.mediaUrl ? (
+                          <div className="mt-2">
+                            {tpl.mediaType === "video" ? (
+                              <video src={tpl.mediaUrl} controls className="max-h-44 rounded-lg border border-white/10" />
+                            ) : (
+                              <img src={tpl.mediaUrl} alt={tpl.label} className="max-h-44 rounded-lg border border-white/10" />
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            setTgSending(true);
+                            setTgResult(null);
+                            try {
+                              const result = await sendTelegramBroadcast({
+                                message: tpl.message,
+                                templateId: tpl.id,
+                              });
+                              setTgResult(result);
+                              toast({ kind: "success", title: `Шаблон «${tpl.label}» отправлен` });
+                            } catch (e: any) {
+                              toast({ kind: "error", title: "Не удалось отправить шаблон", message: e?.message ?? "Ошибка" });
+                            } finally {
+                              setTgSending(false);
+                            }
+                          }}
+                        >
+                          Отправить
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setTgTemplateEditingId(tpl.id);
+                            setTgTemplateLabel(tpl.label);
+                            setTgTemplateMessage(tpl.message);
+                            setTgTemplateSortOrder(tpl.sortOrder);
+                            setTgTemplateAttachment(null);
+                            setTgTemplateRemoveMedia(false);
+                          }}
+                        >
+                          Редактировать
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={async () => {
+                            try {
+                              await apiDelete(`/api/admin/telegram-broadcast/templates/${tpl.id}`);
+                              await refreshTelegramTemplates();
+                              toast({ kind: "success", title: "Шаблон удалён" });
+                            } catch (e: any) {
+                              toast({ kind: "error", title: "Не удалось удалить шаблон", message: e?.message ?? "Ошибка" });
+                            }
+                          }}
+                        >
+                          Удалить
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
