@@ -105,3 +105,13 @@ export function setCachedTasksList<T>(userId: string, data: T): void {
 export function invalidateTasksListCache(userId: string): void {
   shopCache.del(`${TASKS_LIST_PREFIX}${userId}`);
 }
+
+export function invalidateAllTasksListCaches(): void {
+  const keys = shopCache.keys().filter((k) => k.startsWith(TASKS_LIST_PREFIX));
+  if (keys.length) shopCache.del(keys);
+}
+
+export function invalidateAllUserProfileCaches(): void {
+  const keys = shopCache.keys().filter((k) => k.startsWith(USER_PROFILE_PREFIX));
+  if (keys.length) shopCache.del(keys);
+}

@@ -17,6 +17,8 @@ import {
 } from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
 import {
+  invalidateAllTasksListCaches,
+  invalidateAllUserProfileCaches,
   invalidateLeaderboardCache,
   invalidateShopItemsCache,
   invalidateSupportUnreadCountCache,
@@ -310,6 +312,9 @@ adminRouter.patch("/achievements/:id", async (req: AuthedRequest, res) => {
     },
   });
 
+  invalidateAllTasksListCaches();
+  invalidateAllUserProfileCaches();
+
   return ok(res, { ...updated, iconUrl: toPublicFileUrl(updated.iconPath) });
 });
 
@@ -319,6 +324,8 @@ adminRouter.delete("/achievements/:id", async (req, res) => {
   if (!exists) return fail(res, 404, "Achievement not found");
 
   await prisma.achievement.delete({ where: { id: achievementId } });
+  invalidateAllTasksListCaches();
+  invalidateAllUserProfileCaches();
   return ok(res, { deleted: true });
 });
 
@@ -1129,6 +1136,8 @@ adminRouter.post("/tasks", async (req: AuthedRequest, res) => {
       meta: { taskId: created.id },
     });
   }
+  invalidateAllTasksListCaches();
+  invalidateAllUserProfileCaches();
   return ok(res, created);
 });
 
@@ -1136,8 +1145,24 @@ adminRouter.patch("/tasks/:id", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
   const parsed = UpdateTaskSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, 400, parsed.error.issues[0]?.message ?? "Invalid payload");
-  const before = await prisma.task.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  const before = await prisma.task.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, startsAt: true, endsAt: true },
+  });
   if (!before) return fail(res, 404, "Task not found");
+
+  const nextStartsAt =
+    parsed.data.startsAt === undefined
+      ? before.startsAt
+      : parsed.data.startsAt
+        ? new Date(parsed.data.startsAt)
+        : null;
+  const nextEndsAt =
+    parsed.data.endsAt === undefined ? before.endsAt : parsed.data.endsAt ? new Date(parsed.data.endsAt) : null;
+  if (nextStartsAt && nextEndsAt && nextStartsAt > nextEndsAt) {
+    return fail(res, 400, "Дата окончания не может быть раньше даты начала");
+  }
+
   const updated = await prisma.task.update({
     where: { id: req.params.id },
     data: {
@@ -1161,6 +1186,8 @@ adminRouter.patch("/tasks/:id", async (req: AuthedRequest, res) => {
       meta: { taskId: updated.id },
     });
   }
+  invalidateAllTasksListCaches();
+  invalidateAllUserProfileCaches();
   return ok(res, updated);
 });
 
@@ -1177,6 +1204,8 @@ adminRouter.delete("/tasks/:id", async (req: AuthedRequest, res) => {
       meta: { taskId: exists.id },
     });
   }
+  invalidateAllTasksListCaches();
+  invalidateAllUserProfileCaches();
   return ok(res, { deleted: true });
 });
 

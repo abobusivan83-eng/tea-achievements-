@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
+import { achievementWhereForCatalogOrProfile } from "../lib/achievementVisibility.js";
 
 export const achievementsRouter = Router();
 
@@ -23,6 +24,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
   const { rarity, q, only, sort } = parsed.data;
 
   const userId = req.user!.id;
+  const now = new Date();
   const searchWhere =
     q?.trim()
       ? {
@@ -35,7 +37,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
   const achievements = await prisma.achievement.findMany({
     where: {
-      AND: [{ isPublic: true }, ...(searchWhere ? [searchWhere] : [])],
+      AND: [achievementWhereForCatalogOrProfile(userId, now), ...(searchWhere ? [searchWhere] : [])],
       ...(rarity ? { rarity: rarity as import("@prisma/client").Rarity } : {}),
     },
     select: {

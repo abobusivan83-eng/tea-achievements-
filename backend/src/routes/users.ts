@@ -10,6 +10,7 @@ import { tryDeleteReplaceableProfileMedia } from "../lib/uploadDeletionPolicy.js
 import { levelFromXp } from "../lib/levels.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
 import { invalidateLeaderboardCache, invalidateUserProfileCache, getCachedUserProfile, setCachedUserProfile } from "../lib/cache.js";
+import { achievementWhereForCatalogOrProfile } from "../lib/achievementVisibility.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import {
   ADMIN_BADGE_KEYS,
@@ -204,16 +205,11 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   if (!target) return fail(res, 404, "User not found");
   if (target.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
 
-  // Determine which achievements are visible to the viewer for this target user.
-  // Public achievements are visible to everyone. Private achievements are visible only if access exists for that target user.
+  const now = new Date();
+  // Видимость как в каталоге достижений: публичные, приватные с доступом у цели, приватные с ивент-заданием в активном окне по времени.
   const [visibleAchievements, totalUsers, publicId] = await Promise.all([
     prisma.achievement.findMany({
-      where: {
-        OR: [
-          { isPublic: true },
-          { isPublic: false, accessGrants: { some: { userId: targetId } } },
-        ],
-      },
+      where: achievementWhereForCatalogOrProfile(targetId, now),
       select: {
         id: true,
         title: true,

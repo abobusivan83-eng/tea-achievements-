@@ -8,6 +8,7 @@ import { taskSubmissionUpload } from "../middleware/uploads.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { toRelUploadPath } from "../lib/uploadPaths.js";
 import { getCachedTasksList, invalidateSupportUnreadCountCache, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
+import { achievementWhereForTaskList } from "../lib/achievementVisibility.js";
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
@@ -22,11 +23,10 @@ function scheduleStatusFromTime(startsAt: Date | null, endsAt: Date | null, now:
 
 function taskListWhere(userId: string): Prisma.TaskWhereInput {
   // List should contain scheduled tasks too; lock/unlock is handled by frontend.
+  // Приватное достижение с активным заданием остаётся в списке (каталог достижений скрывает до старта по времени).
   return {
     isActive: true,
-    achievement: {
-      OR: [{ isPublic: true }, { accessGrants: { some: { userId } } }],
-    },
+    achievement: achievementWhereForTaskList(userId),
   };
 }
 
@@ -34,9 +34,7 @@ function taskActiveWhere(userId: string, now: Date): Prisma.TaskWhereInput {
   // For submissions we must ensure the task is currently ACTIVE by schedule.
   return {
     isActive: true,
-    achievement: {
-      OR: [{ isPublic: true }, { accessGrants: { some: { userId } } }],
-    },
+    achievement: achievementWhereForTaskList(userId),
     AND: [
       { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
       { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },

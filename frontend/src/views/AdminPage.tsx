@@ -91,11 +91,23 @@ type AdminTask = {
 
 function toDateTimeLocalValue(value: string | null | undefined) {
   if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 16);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
+function taskScheduleRangeError(startsAtIso: string | null | undefined, endsAtIso: string | null | undefined): string | null {
+  if (!startsAtIso || !endsAtIso) return null;
+  const a = new Date(startsAtIso).getTime();
+  const b = new Date(endsAtIso).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  if (a > b) return "Дата окончания не может быть раньше даты начала.";
+  return null;
 }
 
 function isVideoMedia(url: string) {
@@ -1743,12 +1755,14 @@ export function AdminPage() {
                     </label>
                   </div>
                   <div className="grid gap-1.5">
-                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Начало</span>
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Начало ивента</span>
                     <input className="rounded-lg border border-white/10 bg-[#1e293b]/60 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base" type="datetime-local" value={taskStartsAt} onChange={(e) => setTaskStartsAt(e.target.value)} />
+                    <span className="ml-1 text-[10px] text-steam-muted/90">Пусто = без ограничения по старту. Время в вашем часовом поясе.</span>
                   </div>
                   <div className="grid gap-1.5">
-                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Конец</span>
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-steam-muted">Конец ивента</span>
                     <input className="rounded-lg border border-white/10 bg-[#1e293b]/60 px-3 py-2 text-sm text-steam-text outline-none focus:border-steam-accent glow--base" type="datetime-local" value={taskEndsAt} onChange={(e) => setTaskEndsAt(e.target.value)} />
+                    <span className="ml-1 text-[10px] text-steam-muted/90">Пусто = без дедлайна. Должно быть не раньше даты начала.</span>
                   </div>
                 </div>
 
@@ -1761,6 +1775,14 @@ export function AdminPage() {
                         setError("Выберите связанное достижение для задания");
                         return;
                       }
+                      const startsIso = taskStartsAt ? new Date(taskStartsAt).toISOString() : null;
+                      const endsIso = taskEndsAt ? new Date(taskEndsAt).toISOString() : null;
+                      const rangeErr = taskScheduleRangeError(startsIso, endsIso);
+                      if (rangeErr) {
+                        setError(rangeErr);
+                        toast({ kind: "error", title: rangeErr });
+                        return;
+                      }
                       try {
                         await apiJson("/api/admin/tasks", {
                           title: taskTitle,
@@ -1769,8 +1791,8 @@ export function AdminPage() {
                           rewardCoins: taskRewardCoins,
                           achievementId: taskAchievementId,
                           isEvent: taskIsEvent,
-                          startsAt: taskStartsAt ? new Date(taskStartsAt).toISOString() : null,
-                          endsAt: taskEndsAt ? new Date(taskEndsAt).toISOString() : null,
+                          startsAt: startsIso,
+                          endsAt: endsIso,
                         });
                         setTaskTitle("");
                         setTaskDesc("");
@@ -2817,22 +2839,24 @@ export function AdminPage() {
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1 text-sm">
-                <span className="text-steam-muted">Дата начала</span>
+                <span className="text-steam-muted">Дата начала ивента</span>
                 <input
                   className={inputClass}
                   type="datetime-local"
                   value={toDateTimeLocalValue(editingTask.startsAt)}
                   onChange={(e) => setEditingTask({ ...editingTask, startsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
                 />
+                <span className="text-[11px] text-steam-muted">Пусто = без ограничения по старту. Время в вашем часовом поясе.</span>
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-steam-muted">Дата окончания</span>
+                <span className="text-steam-muted">Дата окончания ивента</span>
                 <input
                   className={inputClass}
                   type="datetime-local"
                   value={toDateTimeLocalValue(editingTask.endsAt)}
                   onChange={(e) => setEditingTask({ ...editingTask, endsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
                 />
+                <span className="text-[11px] text-steam-muted">Не раньше даты начала; пусто = без дедлайна.</span>
               </label>
             </div>
 
@@ -2872,6 +2896,12 @@ export function AdminPage() {
               <Button
                 leftIcon={<FiEdit2 />}
                 onClick={async () => {
+                  const rangeErr = taskScheduleRangeError(editingTask.startsAt, editingTask.endsAt);
+                  if (rangeErr) {
+                    setError(rangeErr);
+                    toast({ kind: "error", title: rangeErr });
+                    return;
+                  }
                   await apiJson(
                     `/api/admin/tasks/${editingTask.id}`,
                     {
