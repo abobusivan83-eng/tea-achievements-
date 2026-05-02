@@ -21,6 +21,7 @@ import { AchievementCard } from "../ui/components/AchievementCard";
 import { DEFAULT_BANNER_URL, resolveAvatarUrl, resolveBannerUrl } from "../lib/media";
 import { calculateLevelColor } from "../lib/levelColor";
 import { useQuery } from "@tanstack/react-query";
+import { profileQueryKey } from "../lib/queryKeys";
 
 type ProfileResp = {
   user: {
@@ -94,9 +95,15 @@ export function ProfilePage() {
   const isOtherUserProfile = Boolean(me?.id && profileUserId && me.id !== profileUserId);
 
   const profileQuery = useQuery({
-    queryKey: ["profile", profileUserId],
+    queryKey: profileQueryKey(profileUserId),
     queryFn: async () => apiFetch<ProfileResp>(`/api/users/${profileUserId}`),
     enabled: Boolean(profileUserId),
+    // Профиль должен подтягиваться сразу после выдачи достижений / смены XP в админке (инвалидация + без «свежих» 30 с).
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnMount: "always",
+    refetchInterval: isOwnProfile ? 20_000 : false,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

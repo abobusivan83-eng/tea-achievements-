@@ -30,6 +30,7 @@ export async function apiFetch<T>(path: string, init?: ApiFetchOptions): Promise
     let res: Response;
     try {
       res = await fetch(`${API_BASE_URL}${path}`, {
+        cache: "no-store",
         ...requestInit,
         headers: {
           ...(requestInit.headers ?? {}),

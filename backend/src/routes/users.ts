@@ -178,7 +178,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   }>(targetId);
   if (cached) {
     if (cached.user.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
-    res.setHeader("Cache-Control", "private, max-age=15");
+    res.setHeader("Cache-Control", "private, no-store");
     return ok(res, cached);
   }
 
@@ -270,6 +270,6 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     achievements: { earned: earnedWithShare, locked },
   };
   setCachedUserProfile(targetId, payload);
-  res.setHeader("Cache-Control", "private, max-age=60");
+  res.setHeader("Cache-Control", "private, no-store");
   return ok(res, payload);
 });

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiFetch, apiJson, apiUpload } from "../lib/api";
 import type {
   Achievement,
@@ -28,6 +29,7 @@ import { AchievementIcon } from "../ui/components/AchievementIcon";
 import { AchievementCard } from "../ui/components/AchievementCard";
 import { TaskQuestCard } from "../ui/components/TaskQuestCard";
 import { calculateLevelColor } from "../lib/levelColor";
+import { profileQueryKey } from "../lib/queryKeys";
 
 type SupportSuggestionRow = {
   id: string;
@@ -173,6 +175,18 @@ export function AdminPage() {
   const isCreatorUser = me?.role === "CREATOR";
   const isStaffUser = isAdminUser || isCreatorUser;
   const toast = useToasts((s) => s.push);
+  const queryClient = useQueryClient();
+
+  function bumpUserProfileCache(userId: string) {
+    if (!userId) return;
+    void queryClient.invalidateQueries({ queryKey: profileQueryKey(userId) });
+  }
+
+  function bumpUserProfileAndAchievementsList(userId: string) {
+    bumpUserProfileCache(userId);
+    void queryClient.invalidateQueries({ queryKey: ["achievements"] });
+  }
+
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [achievements, setAchievements] = useState<AdminAchievement[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -560,6 +574,7 @@ export function AdminPage() {
       },
       "PATCH",
     );
+    bumpUserProfileAndAchievementsList(submission.user.id);
     await refreshTasks();
     toast({ kind: "success", title: "Награда выдана" });
   }
@@ -847,6 +862,8 @@ export function AdminPage() {
                   if (iconFile) await apiUpload(`/api/admin/achievements/${created.id}/icon`, iconFile);
                   await refreshAchievements();
                   setAwardOnCreateUserIds([]);
+                  for (const uid of created.awardedUserIds ?? []) bumpUserProfileCache(uid);
+                  void queryClient.invalidateQueries({ queryKey: ["achievements"] });
                   toast({
                     kind: "success",
                     title: "Достижение создано",
@@ -887,6 +904,7 @@ export function AdminPage() {
                     onClick={async () => {
                       try {
                         await apiJson(`/api/admin/achievements/${created.id}/award`, { userId: awardUserId });
+                        if (awardUserId) bumpUserProfileAndAchievementsList(awardUserId);
                       } catch (e: any) {
                         setError(e?.message ?? "Ошибка выдачи");
                       }
@@ -1064,6 +1082,7 @@ export function AdminPage() {
                           return;
                         }
                         await apiJson(`/api/admin/users/${u.id}`, { role }, "PATCH");
+                        bumpUserProfileCache(u.id);
                         await refreshUsers();
                       }}
                     >
@@ -1117,12 +1136,12 @@ export function AdminPage() {
                     Lvl <span style={{ color: calculateLevelColor(u.level ?? 1) }}>{u.level ?? 1}</span> • XP {u.xp ?? 0}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { xp: Math.max(0, (u.xp ?? 0) + xpAmount) }, "PATCH"); await refreshUsers(); }}>+Опыт</Button>
-                <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { xp: Math.max(0, (u.xp ?? 0) - xpAmount) }, "PATCH"); await refreshUsers(); }}>-Опыт</Button>
-                <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { level: Math.min(100, (u.level ?? 1) + lvlAmount) }, "PATCH"); await refreshUsers(); }}>+Уровень</Button>
-                <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { level: Math.max(1, (u.level ?? 1) - lvlAmount) }, "PATCH"); await refreshUsers(); }}>-Уровень</Button>
-                <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}/coins`, { delta: Math.abs(coinAmount) }); toast({ kind: "success", title: "Монеты выданы" }); }}>+Монеты</Button>
-                <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}/coins`, { delta: -Math.abs(coinAmount) }); toast({ kind: "info", title: "Монеты списаны" }); }}>-Монеты</Button>
+                <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { xp: Math.max(0, (u.xp ?? 0) + xpAmount) }, "PATCH"); bumpUserProfileCache(u.id); await refreshUsers(); }}>+Опыт</Button>
+                <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { xp: Math.max(0, (u.xp ?? 0) - xpAmount) }, "PATCH"); bumpUserProfileCache(u.id); await refreshUsers(); }}>-Опыт</Button>
+                <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { level: Math.min(100, (u.level ?? 1) + lvlAmount) }, "PATCH"); bumpUserProfileCache(u.id); await refreshUsers(); }}>+Уровень</Button>
+                <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}`, { level: Math.max(1, (u.level ?? 1) - lvlAmount) }, "PATCH"); bumpUserProfileCache(u.id); await refreshUsers(); }}>-Уровень</Button>
+                <Button size="sm" variant="ghost" onClick={async () => { await apiJson(`/api/admin/users/${u.id}/coins`, { delta: Math.abs(coinAmount) }); bumpUserProfileCache(u.id); toast({ kind: "success", title: "Монеты выданы" }); }}>+Монеты</Button>
+                <Button size="sm" variant="danger" onClick={async () => { await apiJson(`/api/admin/users/${u.id}/coins`, { delta: -Math.abs(coinAmount) }); bumpUserProfileCache(u.id); toast({ kind: "info", title: "Монеты списаны" }); }}>-Монеты</Button>
               </div>
             ))}
           </div>
@@ -1179,6 +1198,7 @@ export function AdminPage() {
                     statusEmoji: customEmoji.trim() ? customEmoji.trim() : null,
                     badges: customBadges,
                   }, "PATCH");
+                  bumpUserProfileCache(u.id);
                   await refreshUsers();
                   toast({ kind: "success", title: "Кастомизация применена" });
                 }}>
@@ -2360,6 +2380,7 @@ export function AdminPage() {
                       "PATCH",
                     );
                     setSelectedUser(updated);
+                    bumpUserProfileCache(selectedUser.id);
                     await refreshUsers();
                     setUserDetailsOpen(false);
                     toast({ kind: "success", title: "Пользователь обновлен" });
@@ -2426,6 +2447,7 @@ export function AdminPage() {
               onClick={async () => {
                 try {
                   await apiJson(`/api/admin/achievements/${awardAchId}/award`, { userId: awardUserId2 });
+                  bumpUserProfileAndAchievementsList(awardUserId2);
                   toast({ kind: "success", title: "Достижение выдано" });
                   setAwardOpen(false);
                 } catch (e: any) {
@@ -2514,6 +2536,7 @@ export function AdminPage() {
               onClick={async () => {
                 try {
                   await apiJson(`/api/admin/users/${revokeUserId}/revoke-achievements`, { achievementIds: revokeAchievementIds });
+                  bumpUserProfileAndAchievementsList(revokeUserId);
                   toast({ kind: "info", title: "Достижения забраны" });
                   setRevokeOpen(false);
                   setRevokeAchievementIds([]);
@@ -2550,6 +2573,7 @@ export function AdminPage() {
           try {
             await apiDelete(`/api/admin/achievements/${confirmTarget.id}`);
             toast({ kind: "success", title: "Достижение удалено" });
+            void queryClient.invalidateQueries({ queryKey: ["achievements"] });
             await refreshAchievements();
           } catch (e: any) {
             setError(e?.message ?? "Ошибка удаления");
@@ -2653,6 +2677,7 @@ export function AdminPage() {
                   setRejectOpen(false);
                   setRejectTarget(null);
                   setRejectReasonDraft("");
+                  bumpUserProfileCache(rejectTarget.user.id);
                   await refreshTasks();
                 } catch (e: any) {
                   setError(e?.message ?? "Ошибка отклонения");
