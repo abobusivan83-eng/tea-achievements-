@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
@@ -10,7 +10,6 @@ import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { MAX_LEVEL, levelFromXp, xpForLevel } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
 import {
-  awardAchievementToUser,
   awardAchievementToUsers,
   revokeAchievementFromUser,
   revokeAchievementsFromUser,
@@ -26,6 +25,9 @@ import {
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import { deleteUserWithDependencies } from "../lib/userDeletion.js";
 import { telegramSendMessage } from "../lib/telegram.js";
+import { grantAchievementById } from "../lib/grantAchievement.js";
+import { applyLevelMilestoneAchievements } from "../lib/levelMilestoneAchievements.js";
+import { tryDeleteEvidenceFiles } from "../lib/uploadDeletionPolicy.js";
 
 export const adminRouter = Router();
 
@@ -252,6 +254,9 @@ adminRouter.post("/achievements", async (req: AuthedRequest, res) => {
   });
 
   if (uniqueAwardUserIds.length) {
+    for (const uid of uniqueAwardUserIds) {
+      await applyLevelMilestoneAchievements(uid);
+    }
     uniqueAwardUserIds.forEach((userId) => {
       invalidateUserProfileCache(userId);
       invalidateTasksListCache(userId);
@@ -367,8 +372,14 @@ adminRouter.post("/achievements/:id/award", async (req: AuthedRequest, res) => {
   }
 
   await prisma.$transaction(async (tx) => {
-    await awardAchievementToUser(tx, { achievementId, userId: parsed.data.userId });
+    await grantAchievementById(tx, {
+      userId: parsed.data.userId,
+      achievementId,
+      title: ach.title,
+    });
   });
+  await applyLevelMilestoneAchievements(parsed.data.userId);
+  invalidateSupportUnreadCountCache(parsed.data.userId);
   invalidateUserProfileCache(parsed.data.userId);
   invalidateTasksListCache(parsed.data.userId);
   invalidateLeaderboardCache();
@@ -681,6 +692,10 @@ adminRouter.patch("/users/:id", async (req: AuthedRequest, res) => {
     },
     select: { id: true, nickname: true, email: true, role: true, blocked: true, adminNotes: true, adminTags: true, frameKey: true, badgesJson: true, statusEmoji: true, level: true, xp: true },
   });
+
+  if (typeof xpInput === "number" || typeof levelInput === "number") {
+    await applyLevelMilestoneAchievements(updated.id);
+  }
 
   const changes: string[] = [];
   if (parsed.data.role !== undefined && parsed.data.role !== current.role) changes.push(`роль → ${parsed.data.role}`);
@@ -1301,11 +1316,15 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
           taskId: string;
           status: import("@prisma/client").SupportStatus;
           adminResponse: string | null;
+          evidenceJson: Prisma.JsonValue | null;
           task: { id: string; title: string; achievementId: string; rewardCoins: number };
           user: { id: string; nickname: string };
         };
         nextStatus: import("@prisma/client").SupportStatus;
         shouldInvalidate: boolean;
+        awardedTaskAchievement: boolean;
+        shouldClearEvidence: boolean;
+        evidenceSnapshot: Prisma.JsonValue | null;
       };
 
   try {
@@ -1349,26 +1368,33 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
 
       const shouldAward = statusChanged && nextStatus === "RESOLVED" && Boolean(existing.task?.achievementId);
       if (shouldAward && existing.task?.achievementId) {
-        // Используем общую функцию выдачи достижений, которая корректно начисляет XP и проверяет дубликаты
-        await awardAchievementToUser(tx, { achievementId: existing.task.achievementId, userId: existing.user.id });
+        const achievementMeta = await tx.achievement.findUnique({
+          where: { id: existing.task.achievementId },
+          select: { id: true, title: true },
+        });
+        if (!achievementMeta) {
+          throw new Error(`Achievement ${existing.task.achievementId} not found for task submission`);
+        }
+        await grantAchievementById(tx, {
+          userId: existing.user.id,
+          achievementId: achievementMeta.id,
+          title: achievementMeta.title,
+        });
 
         const coins = Math.max(0, existing.task.rewardCoins ?? 0);
-        await tx.notification.create({
-          data: {
-            type: coins > 0 ? "SHOP" : "ACH",
-            userId: existing.user.id,
-            adminName: adminDisplayName,
-            text:
-              coins > 0
-                ? `Вы выполнили задание: ${existing.task.title}
+        if (coins > 0) {
+          await tx.notification.create({
+            data: {
+              type: "SHOP",
+              userId: existing.user.id,
+              adminName: adminDisplayName,
+              text: `Вы выполнили задание: ${existing.task.title}
 Администратор: ${adminDisplayName}
 Награда: +${coins} монет
-[COIN_BONUS]:${coins}`
-                : `Вы выполнили задание: ${existing.task.title}
-Администратор: ${adminDisplayName}
-Награда: достижение уже добавлено в профиль`,
-          },
-        });
+[COIN_BONUS]:${coins}`,
+            },
+          });
+        }
       }
 
       const shouldNotify =
@@ -1395,12 +1421,28 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         });
       }
 
+      const shouldClearEvidence =
+        statusChanged &&
+        (nextStatus === "RESOLVED" || nextStatus === "REJECTED") &&
+        existing.evidenceJson != null;
+
       return {
         kind: "ok" as const,
         updated,
-        existing,
+        existing: {
+          id: existing.id,
+          taskId: existing.taskId,
+          status: existing.status,
+          adminResponse: existing.adminResponse,
+          evidenceJson: existing.evidenceJson,
+          task: existing.task,
+          user: existing.user,
+        },
         nextStatus,
         shouldInvalidate: shouldAward || shouldNotify,
+        awardedTaskAchievement: shouldAward,
+        shouldClearEvidence,
+        evidenceSnapshot: existing.evidenceJson,
       };
     });
 
@@ -1416,6 +1458,26 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
   }
 
   if (result.kind === "missing") return fail(res, 404, "Submission not found");
+
+  if (result.awardedTaskAchievement) {
+    await applyLevelMilestoneAchievements(result.existing.user.id);
+  }
+
+  if (result.shouldClearEvidence && result.evidenceSnapshot) {
+    try {
+      await tryDeleteEvidenceFiles(result.evidenceSnapshot);
+    } catch (e) {
+      console.error("task_submission_evidence_delete_failed", { submissionId: result.existing.id, e });
+    }
+    try {
+      await prisma.taskSubmission.update({
+        where: { id: result.existing.id },
+        data: { evidenceJson: Prisma.JsonNull },
+      });
+    } catch (e) {
+      console.error("task_submission_evidence_db_clear_failed", { submissionId: result.existing.id, e });
+    }
+  }
 
   if (result.shouldInvalidate) {
     invalidateSupportUnreadCountCache(result.existing.user.id);

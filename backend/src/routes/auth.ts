@@ -18,6 +18,16 @@ import {
   telegramSyntheticEmail,
   TelegramNotConfiguredError,
 } from "../lib/telegram.js";
+import { defaultAvatarPath, defaultBannerPath } from "../lib/defaultProfileAssets.js";
+import { AchievementProgramKey } from "../lib/achievementProgramKeys.js";
+import { grantAchievementByProgramKey } from "../lib/grantAchievement.js";
+import { applyLevelMilestoneAchievements } from "../lib/levelMilestoneAchievements.js";
+import {
+  invalidateLeaderboardCache,
+  invalidateSupportUnreadCountCache,
+  invalidateTasksListCache,
+  invalidateUserProfileCache,
+} from "../lib/cache.js";
 
 export const authRouter = Router();
 
@@ -212,6 +222,8 @@ authRouter.post("/register/verify", async (req, res) => {
         telegramChatId: pending.telegramChatId,
         telegramUsername: pending.telegramUsername ?? null,
         passwordHash: pending.passwordHash,
+        avatarPath: defaultAvatarPath(),
+        bannerPath: defaultBannerPath(),
       },
       select: { id: true, nickname: true, email: true, role: true },
     });
@@ -221,6 +233,22 @@ authRouter.post("/register/verify", async (req, res) => {
   }
 
   await prisma.registrationOtp.delete({ where: { id: pending.id } }).catch(() => {});
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await grantAchievementByProgramKey(tx, {
+        userId: user.id,
+        programKey: AchievementProgramKey.WELCOME_LEAF,
+      });
+    });
+    await applyLevelMilestoneAchievements(user.id);
+    invalidateSupportUnreadCountCache(user.id);
+    invalidateUserProfileCache(user.id);
+    invalidateTasksListCache(user.id);
+    invalidateLeaderboardCache();
+  } catch (e) {
+    console.error("[auth] welcome achievement grant failed", e);
+  }
 
   const token = signToken({ sub: user.id, role: user.role }, { rememberMe: parsed.data.rememberMe === true });
   const publicId = await computeUserPublicId(prisma as any, user.id);

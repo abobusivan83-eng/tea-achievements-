@@ -103,6 +103,9 @@ model Achievement {
   rarity      Rarity
   points      Int
 
+  /** Стабильный ключ для автовыдачи (WELCOME_LEAF, LEVEL_10, …). */
+  programKey  String? @unique
+
   iconPath  String?
   frameKey  String?
   isPublic  Boolean @default(true)

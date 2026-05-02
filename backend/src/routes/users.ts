@@ -6,6 +6,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { avatarUpload, bannerUpload } from "../middleware/uploads.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
 import { resolveStoredMediaUrl } from "../lib/storedMediaUrl.js";
+import { tryDeleteReplaceableProfileMedia } from "../lib/uploadDeletionPolicy.js";
 import { levelFromXp } from "../lib/levels.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
 import { invalidateLeaderboardCache, invalidateUserProfileCache, getCachedUserProfile, setCachedUserProfile } from "../lib/cache.js";
@@ -111,12 +112,18 @@ usersRouter.post(
   async (req: AuthedRequest, res) => {
     const file = (req as any).file as Express.Multer.File | undefined;
     if (!file?.buffer) return fail(res, 400, "No file");
+    const before = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { avatarUrl: true, avatarPath: true },
+    });
     const publicUrl = await uploadImageToMediaStorage({
       buffer: file.buffer,
       folder: "avatars",
       publicIdPrefix: `avatar-${req.user!.id}`,
       preset: { width: 400, height: 400, quality: 82, fit: "cover" },
     });
+    const prevUrl = before ? resolveStoredMediaUrl(before.avatarUrl, before.avatarPath) : null;
+    tryDeleteReplaceableProfileMedia(prevUrl);
     const user = await prisma.user.update({
       where: { id: req.user!.id },
       data: { avatarPath: null, avatarUrl: publicUrl },
@@ -135,12 +142,18 @@ usersRouter.post(
   async (req: AuthedRequest, res) => {
     const file = (req as any).file as Express.Multer.File | undefined;
     if (!file?.buffer) return fail(res, 400, "No file");
+    const before = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { bannerUrl: true, bannerPath: true },
+    });
     const publicUrl = await uploadImageToMediaStorage({
       buffer: file.buffer,
       folder: "banners",
       publicIdPrefix: `banner-${req.user!.id}`,
       preset: { width: 1600, height: 520, quality: 80, fit: "cover" },
     });
+    const prevUrl = before ? resolveStoredMediaUrl(before.bannerUrl, before.bannerPath) : null;
+    tryDeleteReplaceableProfileMedia(prevUrl);
     const user = await prisma.user.update({
       where: { id: req.user!.id },
       data: { bannerPath: null, bannerUrl: publicUrl },

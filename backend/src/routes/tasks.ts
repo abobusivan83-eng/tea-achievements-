@@ -6,6 +6,7 @@ import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { taskSubmissionUpload } from "../middleware/uploads.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
+import { toRelUploadPath } from "../lib/uploadPaths.js";
 import { getCachedTasksList, invalidateSupportUnreadCountCache, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
 
 export const tasksRouter = Router();
@@ -151,10 +152,11 @@ tasksRouter.post("/:taskId/submit", taskSubmissionUpload, async (req: AuthedRequ
 
   const files = (req as Express.Request & { files?: Express.Multer.File[] }).files ?? [];
   const evidenceUrls = files.map((f) => {
-    if (typeof f.path === "string" && /^https?:\/\//i.test(f.path)) return f.path;
-    if (typeof f.filename === "string" && /^https?:\/\//i.test(f.filename)) return f.filename;
-    return toPublicFileUrl(f.path ?? "");
-  });
+    if (typeof f.path === "string" && f.path) {
+      return toPublicFileUrl(toRelUploadPath(f.path));
+    }
+    return "";
+  }).filter((u) => u.length > 0);
 
   const created = await prisma.taskSubmission.create({
     data: {

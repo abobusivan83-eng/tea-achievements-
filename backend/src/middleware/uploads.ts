@@ -1,12 +1,10 @@
 import fs from "fs";
 import multer from "multer";
 import path from "path";
+import { randomBytes } from "crypto";
 import type { RequestHandler } from "express";
-import { v2 as cloudinary } from "cloudinary";
-import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { isAllowedImageMime } from "../lib/allowedImageMime.js";
 import { uploadRootAbs } from "../lib/uploadPaths.js";
-import { ensureCloudinaryConfigured } from "../lib/mediaStorage.js";
 
 type MediaKind = "avatars" | "banners";
 
@@ -17,11 +15,13 @@ function ensureDir(dirPath: string) {
 const uploadRoot = uploadRootAbs;
 const avatarsDir = path.join(uploadRoot, "avatars");
 const bannersDir = path.join(uploadRoot, "banners");
+const evidenceDir = path.join(uploadRoot, "evidence");
 /** Временная папка для иконок достижений, вложений заявок и т.п. (файлы могут переезжать в подпапки). */
 const miscDir = path.join(uploadRoot, "misc");
 ensureDir(uploadRoot);
 ensureDir(avatarsDir);
 ensureDir(bannersDir);
+ensureDir(evidenceDir);
 ensureDir(miscDir);
 
 function buildStorage(kind: MediaKind) {
@@ -70,32 +70,21 @@ export const upload = multer({
   },
 });
 
-function taskSubmissionCloudinaryStorage() {
-  return new CloudinaryStorage({
-    cloudinary,
-    params: async (_req, file) => {
-      const ext = path.extname(file.originalname || "").toLowerCase();
-      return {
-        folder: "clan-salamanca/task-submissions",
-        type: "upload",
-        resource_type: "auto",
-        allowed_formats: ["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm", "mkv"],
-        public_id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext ? `-${ext.slice(1)}` : ""}`,
-      };
-    },
-  });
-}
-
 const TASK_MEDIA_LIMIT_BYTES = 100 * 1024 * 1024;
 
+const taskEvidenceDiskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, evidenceDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    const safeExt = ext && ext.length <= 10 ? ext : "";
+    cb(null, `${Date.now()}-${randomBytes(8).toString("hex")}${safeExt}`);
+  },
+});
+
+/** Доказательства по заданиям — только под uploads/evidence (временные файлы, удаляются после решения админа). */
 export const taskSubmissionUpload: RequestHandler = (req, res, next) => {
-  if (!ensureCloudinaryConfigured()) {
-    const err = new Error("Cloudinary upload is not configured") as Error & { status?: number };
-    err.status = 503;
-    return next(err);
-  }
   const uploader = multer({
-    storage: taskSubmissionCloudinaryStorage(),
+    storage: taskEvidenceDiskStorage,
     limits: { fileSize: TASK_MEDIA_LIMIT_BYTES, files: 8 },
     fileFilter(_req, file, cb) {
       if (!/^image\//.test(file.mimetype) && !/^video\//.test(file.mimetype)) {
@@ -111,10 +100,6 @@ export const taskSubmissionUpload: RequestHandler = (req, res, next) => {
       if (err.code === "LIMIT_FILE_SIZE") return next(new Error("Media file is too large (max. 100 MB)"));
       return next(new Error(`Upload failed: ${err.message}`));
     }
-    const e = err as { message?: string; error?: { message?: string }; http_code?: number; status?: number };
-    const msg = e?.message || e?.error?.message || "Cloudinary upload failed";
-    const wrapped = new Error(`Upload failed: ${msg}`) as Error & { status?: number };
-    wrapped.status = e?.http_code || e?.status;
-    return next(wrapped);
+    return next(err);
   });
 };

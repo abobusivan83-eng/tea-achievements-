@@ -25,6 +25,9 @@ import { isTelegramConfigured, startTelegramLongPolling } from "./lib/telegram.j
 import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
+import { ensureDefaultProfileAssets } from "./lib/defaultProfileAssets.js";
+
+ensureDefaultProfileAssets();
 
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
