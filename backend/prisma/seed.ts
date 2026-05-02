@@ -33,6 +33,14 @@ async function main() {
 
   const baseAchievements = [
     {
+      title: "Добро пожаловать в клан",
+      description: "Зарегистрируйся и стань частью клана.",
+      rarity: "COMMON" as const,
+      points: 10,
+      frameKey: "common",
+      isPublic: true,
+    },
+    {
       title: "Надёжный боец",
       description: "Получить 3 достижения.",
       rarity: "RARE" as const,
@@ -58,105 +66,11 @@ async function main() {
     }
   }
 
-  const programAchievements = [
-    {
-      programKey: "WELCOME_LEAF",
-      title: "Новый Лист",
-      description: "Ты присоединился к клану.",
-      rarity: "COMMON" as const,
-      points: 10,
-      frameKey: "common",
-      isPublic: true,
-    },
-    {
-      programKey: "LEVEL_10",
-      title: "Ученик Чайного Дома",
-      description: "Достигни 10 уровня.",
-      rarity: "RARE" as const,
-      points: 25,
-      frameKey: "rare",
-      isPublic: true,
-    },
-    {
-      programKey: "LEVEL_30",
-      title: "Мастер Гармонии",
-      description: "Достигни 30 уровня.",
-      rarity: "EPIC" as const,
-      points: 45,
-      frameKey: "epic",
-      isPublic: true,
-    },
-    {
-      programKey: "LEVEL_60",
-      title: "Хранитель равновесия",
-      description: "Достигни 60 уровня.",
-      rarity: "LEGENDARY" as const,
-      points: 90,
-      frameKey: "legendary",
-      isPublic: true,
-    },
-    {
-      programKey: "LEVEL_100",
-      title: "Железный Феникс",
-      description: "Достигни 100 уровня.",
-      rarity: "LEGENDARY" as const,
-      points: 200,
-      frameKey: "legendary-animated",
-      isPublic: true,
-    },
-    {
-      programKey: "COLLECTOR_5",
-      title: "Первая Пиала",
-      description: "Собери 5 достижений.",
-      rarity: "COMMON" as const,
-      points: 15,
-      frameKey: "common",
-      isPublic: true,
-    },
-    {
-      programKey: "COLLECTOR_12",
-      title: "Хранитель Традиций",
-      description: "Собери 12 достижений.",
-      rarity: "EPIC" as const,
-      points: 55,
-      frameKey: "epic",
-      isPublic: true,
-    },
-    {
-      programKey: "COLLECTOR_25",
-      title: "Антиквар Пяти Вершин",
-      description: "Собери 25 достижений.",
-      rarity: "LEGENDARY" as const,
-      points: 120,
-      frameKey: "legendary",
-      isPublic: true,
-    },
-  ] as const;
-
-  for (const a of programAchievements) {
-    await prisma.achievement.upsert({
-      where: { programKey: a.programKey },
-      create: { ...a, createdById: admin.id },
-      update: {
-        title: a.title,
-        description: a.description,
-        rarity: a.rarity,
-        points: a.points,
-        frameKey: a.frameKey,
-        isPublic: a.isPublic,
-      },
-    });
-    console.log(`Program achievement upserted: ${a.programKey}`);
-  }
-
-  await prisma.achievement.updateMany({
-    where: { title: "Добро пожаловать в клан" },
-    data: { programKey: "WELCOME_LEAF", title: "Новый Лист" },
-  });
-
   // Seed a couple of tasks for ZBT (each task is tied to exactly one achievement).
   const achWelcome = await prisma.achievement.findFirst({
-    where: { OR: [{ programKey: "WELCOME_LEAF" }, { title: "Новый Лист" }] },
+    where: {
+      OR: [{ title: "Добро пожаловать в клан" }, { title: "Новый Лист" }],
+    },
     select: { id: true },
   });
   const achFighter = await prisma.achievement.findFirst({ where: { title: "Надёжный боец" }, select: { id: true } });
@@ -218,7 +132,9 @@ async function main() {
     select: { id: true },
   });
 
-  const welcome = await prisma.achievement.findFirst({ where: { programKey: "WELCOME_LEAF" } });
+  const welcome = await prisma.achievement.findFirst({
+    where: { OR: [{ title: "Добро пожаловать в клан" }, { title: "Новый Лист" }] },
+  });
   if (welcome) {
     await prisma.userAchievement.upsert({
       where: { userId_achievementId: { userId: demo.id, achievementId: welcome.id } },
