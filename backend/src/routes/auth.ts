@@ -19,6 +19,7 @@ import {
   TelegramNotConfiguredError,
 } from "../lib/telegram.js";
 import { defaultAvatarPath, defaultBannerPath } from "../lib/defaultProfileAssets.js";
+import { tryAwardStarterAchievementAfterRegistration } from "../lib/registrationStarterAchievement.js";
 
 export const authRouter = Router();
 
@@ -224,6 +225,8 @@ authRouter.post("/register/verify", async (req, res) => {
   }
 
   await prisma.registrationOtp.delete({ where: { id: pending.id } }).catch(() => {});
+
+  await tryAwardStarterAchievementAfterRegistration(prisma, user.id);
 
   const token = signToken({ sub: user.id, role: user.role }, { rememberMe: parsed.data.rememberMe === true });
   const publicId = await computeUserPublicId(prisma as any, user.id);
