@@ -77,6 +77,18 @@ npx prisma migrate deploy
 
 Скрипт `prisma-resolve-all-applied.mjs` по умолчанию выполняет `prisma migrate resolve` через **`DIRECT_URL` (session `:5432`)**, потому что с некоторых сетей порт transaction pooler **`6543` может быть недоступен**, и команды “зависают”/падают с `P1001`.
 
+Альтернатива без локального Windows: в репозитории есть GitHub Action **`.github/workflows/prisma-baseline-and-deploy.yml`**.
+
+Задайте GitHub Secrets:
+
+- `PROD_DATABASE_URL` — как `DATABASE_URL` на Render (обычно `:6543` + `pgbouncer=true` + `connection_limit=1`)
+- `PROD_DIRECT_URL` — как `DIRECT_URL` на Render (обычно session pooler `:5432`)
+
+Запуск: **Actions → Prisma baseline + migrate deploy → Run workflow**
+
+- первый раз при `P3005`: включите **`run_baseline=true`** и `confirm_production=YES`
+- дальше обычно достаточно **`run_baseline=false`** (только `migrate deploy`)
+
 **Переменные окружения**
 
 | Переменная | Staging | Production |

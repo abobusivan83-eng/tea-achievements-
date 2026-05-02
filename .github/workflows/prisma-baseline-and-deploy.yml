@@ -1,0 +1,62 @@
+name: Prisma baseline + migrate deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_baseline:
+        description: "Run one-time baseline (prisma-resolve-all-applied) before migrate deploy"
+        type: boolean
+        default: false
+      confirm_production:
+        description: 'Type YES to allow running against production secrets'
+        type: string
+        required: true
+
+# Minimal permissions: no package access, no extra scopes.
+permissions:
+  contents: read
+
+concurrency:
+  group: prisma-migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Guard
+        if: ${{ github.event.inputs.confirm_production != 'YES' }}
+        run: |
+          echo "Refusing to run: set confirm_production to YES"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        run: npm ci --include=dev
+
+      - name: Baseline (one-time)
+        if: ${{ github.event.inputs.run_baseline == 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+        run: node ./scripts/prisma-resolve-all-applied.mjs
+
+      - name: Migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+        run: npx prisma migrate deploy
