@@ -38,6 +38,14 @@ export type Achievement = {
   awardedAt: string | null;
   /** Текст из связанного задания (условия выполнения), если задание есть */
   taskConditions?: string | null;
+  /** ISO дата старта связанного задания (если есть) */
+  taskStartsAt?: string | null;
+  /** ISO дата конца окна задания */
+  taskEndsAt?: string | null;
+  /** До наступления startsAt публичное достижение показывается закрытым с таймером */
+  scheduleLocked?: boolean;
+  /** Окно задания по endsAt уже закончилось — достижение остаётся закрытым */
+  eventEnded?: boolean;
 };
 
 export type LeaderboardRow = {

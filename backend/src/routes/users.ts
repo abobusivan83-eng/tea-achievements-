@@ -10,7 +10,7 @@ import { tryDeleteReplaceableProfileMedia } from "../lib/uploadDeletionPolicy.js
 import { levelFromXp } from "../lib/levels.js";
 import { computeUserPublicId } from "../lib/userPublicId.js";
 import { invalidateLeaderboardCache, invalidateUserProfileCache, getCachedUserProfile, setCachedUserProfile } from "../lib/cache.js";
-import { achievementWhereForCatalogOrProfile } from "../lib/achievementVisibility.js";
+import { achievementCatalogWhereForUser } from "../lib/achievementVisibility.js";
 import { uploadImageToMediaStorage } from "../lib/mediaStorage.js";
 import {
   ADMIN_BADGE_KEYS,
@@ -218,10 +218,9 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
   if (target.blocked && !canBypassBlocked) return fail(res, 403, "User blocked");
 
   const now = new Date();
-  // Видимость как в каталоге достижений: публичные, приватные с доступом у цели, приватные с ивент-заданием в активном окне по времени.
   const [visibleAchievements, totalUsers, publicId] = await Promise.all([
     prisma.achievement.findMany({
-      where: achievementWhereForCatalogOrProfile(targetId, now),
+      where: achievementCatalogWhereForUser(targetId),
       select: {
         id: true,
         title: true,
@@ -233,6 +232,7 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
         isPublic: true,
         createdAt: true,
         awards: { where: { userId: targetId }, select: { awardedAt: true } },
+        task: { select: { conditions: true, startsAt: true, endsAt: true, isActive: true } },
       },
       orderBy: [{ rarity: "asc" }, { createdAt: "desc" }],
     }),
@@ -262,9 +262,30 @@ usersRouter.get("/:id", requireAuth, async (req: AuthedRequest, res) => {
     ownerPct: totalUsers > 0 ? Math.round(((usageMap.get(x.id) ?? 0) / totalUsers) * 1000) / 10 : 0,
   }));
 
-  const locked = visibleAchievements
-    .filter((a) => a.awards.length === 0)
-    .map((a) => ({ ...a, iconUrl: toPublicFileUrl(a.iconPath) }));
+  const locked = visibleAchievements.filter((a) => a.awards.length === 0).map((a) => {
+    const task = a.task;
+    let scheduleLocked = false;
+    let eventEnded = false;
+    if (a.isPublic && task?.isActive !== false) {
+      if (task.endsAt && task.endsAt < now) eventEnded = true;
+      else if (task.startsAt && task.startsAt > now) scheduleLocked = true;
+    }
+    return {
+      id: a.id,
+      title: a.title,
+      description: a.description,
+      rarity: a.rarity,
+      points: a.points,
+      iconUrl: toPublicFileUrl(a.iconPath),
+      frameKey: a.frameKey,
+      isPublic: a.isPublic,
+      taskConditions: task?.conditions?.trim() ? task.conditions.trim() : null,
+      taskStartsAt: task?.startsAt?.toISOString() ?? null,
+      taskEndsAt: task?.endsAt?.toISOString() ?? null,
+      scheduleLocked,
+      eventEnded,
+    };
+  });
 
   const payload = {
     user: {

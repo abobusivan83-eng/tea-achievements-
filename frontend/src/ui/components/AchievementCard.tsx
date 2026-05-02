@@ -1,9 +1,32 @@
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import type { Achievement } from "../../lib/types";
 import { rarityGlowClass } from "../../ui/rarityStyles";
 import { AchievementIcon } from "./AchievementIcon";
-import { FiZoomIn } from "react-icons/fi";
+import { FiLock, FiZoomIn } from "react-icons/fi";
+
+function formatCountdown(totalMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatUpcomingLine(startsAt: string | null, nowMs: number) {
+  if (!startsAt) return "Ожидайте начала";
+  const startMs = new Date(startsAt).getTime();
+  const delta = startMs - nowMs;
+  if (!Number.isFinite(delta) || delta <= 0) return `Старт: ${new Date(startsAt).toLocaleString()}`;
+  const totalSeconds = Math.floor(delta / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  if (days > 0) return `Откроется: ${new Date(startsAt).toLocaleString()}`;
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `Откроется через: ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 export function AchievementCard(props: {
   a: Achievement;
@@ -15,6 +38,20 @@ export function AchievementCard(props: {
 }) {
   const glow = rarityGlowClass(props.a.rarity, props.a.earned);
   const reduce = useReducedMotion();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const scheduleLocked = Boolean(props.a.scheduleLocked && props.a.taskStartsAt && !props.a.earned);
+  const eventEnded = Boolean(props.a.eventEnded && !props.a.earned);
+  const showScheduleOverlay = scheduleLocked || eventEnded;
+
+  useEffect(() => {
+    if (!showScheduleOverlay || reduce) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [showScheduleOverlay, reduce]);
+
+  const startsAtMs = props.a.taskStartsAt ? new Date(props.a.taskStartsAt).getTime() : null;
+  const upcomingRemainingMs =
+    startsAtMs !== null && Number.isFinite(startsAtMs) ? Math.max(0, startsAtMs - nowMs) : 0;
 
   const rarityClass =
     props.a.rarity === "EXCLUSIVE"
@@ -80,7 +117,15 @@ export function AchievementCard(props: {
         <div className="ach-desc">{props.a.description}</div>
         <div className="ach-footer">
           <div className="ach-reward">+{props.a.points} XP</div>
-          <div className="ach-date">{props.a.earned ? (unlockedAt ?? "Unlocked") : "Locked"}</div>
+          <div className="ach-date">
+          {props.a.earned
+            ? (unlockedAt ?? "Unlocked")
+            : scheduleLocked
+              ? "Скоро"
+              : eventEnded
+                ? "Окно закрыто"
+                : "Locked"}
+        </div>
         </div>
         {props.actionLabel && props.onAction ? (
           <div className="mt-3 flex justify-end">
@@ -112,6 +157,29 @@ export function AchievementCard(props: {
         props.a.rarity === "SECRET") ? (
         <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100">
           <div className="absolute -inset-[40%] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)] [transform:translateX(-65%)_rotate(18deg)] animate-[shine_2.2s_ease-in-out_infinite]" />
+        </div>
+      ) : null}
+
+      {showScheduleOverlay ? (
+        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] bg-[#020817]/88 backdrop-blur-2xl">
+          <div className="flex max-w-[88%] flex-col items-center justify-center px-4 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-cyan-300/25 bg-[#020817]/95 text-steam-accent shadow-[0_0_28px_rgba(102,192,244,0.24)]">
+              <FiLock className="h-7 w-7" />
+            </div>
+            <div className="mt-4 text-[11px] font-black uppercase tracking-[0.28em] text-steam-muted/80">
+              {eventEnded ? "Недоступно" : "Открытие достижения"}
+            </div>
+            {scheduleLocked && props.a.taskStartsAt ? (
+              <div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/10 px-5 py-3 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
+                <div className="font-mono text-2xl font-black tracking-[0.22em] text-cyan-100">{formatCountdown(upcomingRemainingMs)}</div>
+              </div>
+            ) : null}
+            <div className="mt-4 max-w-[280px] text-sm font-bold leading-relaxed text-steam-text/92 drop-shadow-lg">
+              {eventEnded
+                ? "Окно задания по времени завершено — следите за новыми ивентами."
+                : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)}
+            </div>
+          </div>
         </div>
       ) : null}
 

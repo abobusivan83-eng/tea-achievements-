@@ -60,6 +60,12 @@ type ProfileResp = {
       points: number;
       iconUrl: string | null;
       frameKey: string | null;
+      isPublic?: boolean;
+      taskConditions?: string | null;
+      taskStartsAt?: string | null;
+      taskEndsAt?: string | null;
+      scheduleLocked?: boolean;
+      eventEnded?: boolean;
     }>;
   };
 };
@@ -994,6 +1000,16 @@ function toAchievementCardModel(
     | ProfileResp["achievements"]["locked"][number],
   locked: boolean,
 ): Achievement & { ownerPct?: number } {
+  const lockedExtra =
+    locked && "scheduleLocked" in item
+      ? {
+          taskConditions: item.taskConditions ?? undefined,
+          taskStartsAt: item.taskStartsAt ?? undefined,
+          taskEndsAt: item.taskEndsAt ?? undefined,
+          scheduleLocked: item.scheduleLocked,
+          eventEnded: item.eventEnded,
+        }
+      : {};
   return {
     id: item.id,
     title: item.title,
@@ -1002,11 +1018,12 @@ function toAchievementCardModel(
     points: item.points,
     iconUrl: item.iconUrl,
     frameKey: item.frameKey,
-    isPublic: true,
+    isPublic: locked && "isPublic" in item && typeof item.isPublic === "boolean" ? item.isPublic : true,
     createdAt: new Date().toISOString(),
     earned: !locked,
     awardedAt: locked ? null : ("awardedAt" in item ? item.awardedAt : null),
     ownerPct: "ownerPct" in item ? item.ownerPct : undefined,
+    ...lockedExtra,
   };
 }
 

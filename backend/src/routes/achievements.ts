@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
-import { achievementWhereForCatalogOrProfile } from "../lib/achievementVisibility.js";
+import { achievementCatalogWhereForUser } from "../lib/achievementVisibility.js";
 
 export const achievementsRouter = Router();
 
@@ -43,7 +43,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
   const achievements = await prisma.achievement.findMany({
     where: {
-      AND: [achievementWhereForCatalogOrProfile(userId, now), ...(searchWhere ? [searchWhere] : [])],
+      AND: [achievementCatalogWhereForUser(userId), ...(searchWhere ? [searchWhere] : [])],
       ...(rarity ? { rarity: rarity as import("@prisma/client").Rarity } : {}),
     },
     select: {
@@ -56,7 +56,7 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
       frameKey: true,
       isPublic: true,
       createdAt: true,
-      task: { select: { conditions: true } },
+      task: { select: { conditions: true, startsAt: true, endsAt: true, isActive: true } },
     },
   });
 
@@ -68,7 +68,15 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
   const mapped = achievements.map((a) => {
     const award = awardsMap.get(a.id) ?? null;
-    const taskConditions = a.task?.conditions?.trim() ? a.task.conditions.trim() : null;
+    const earned = Boolean(award);
+    const task = a.task;
+    const taskConditions = task?.conditions?.trim() ? task.conditions.trim() : null;
+    let scheduleLocked = false;
+    let eventEnded = false;
+    if (!earned && a.isPublic && task?.isActive !== false) {
+      if (task.endsAt && task.endsAt < now) eventEnded = true;
+      else if (task.startsAt && task.startsAt > now) scheduleLocked = true;
+    }
     return {
       id: a.id,
       title: a.title,
@@ -79,9 +87,13 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
       frameKey: a.frameKey,
       isPublic: a.isPublic,
       createdAt: a.createdAt,
-      earned: Boolean(award),
+      earned,
       awardedAt: award ?? null,
       taskConditions,
+      taskStartsAt: task?.startsAt?.toISOString() ?? null,
+      taskEndsAt: task?.endsAt?.toISOString() ?? null,
+      scheduleLocked,
+      eventEnded,
     };
   });
 

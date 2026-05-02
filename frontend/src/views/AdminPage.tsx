@@ -15,7 +15,7 @@ import type {
 import { Button } from "../ui/components/Button";
 import { Modal } from "../ui/components/Modal";
 import { AnimatePresence, motion } from "framer-motion";
-import { FiAward, FiChevronDown, FiChevronUp, FiEdit2, FiMessageCircle, FiPlus, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
+import { FiAward, FiChevronDown, FiChevronUp, FiEdit2, FiFilter, FiMessageCircle, FiPlus, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
 import { useToasts } from "../state/toasts";
 import { useAuth } from "../state/auth";
 import { ConfirmModal } from "../ui/components/ConfirmModal";
@@ -126,6 +126,25 @@ type AdminTask = {
   achievementId: string;
   achievement: { id: string; title: string; rarity: Rarity; points: number; iconUrl?: string | null } | null;
   submissionsCount?: number;
+  createdAt?: string;
+};
+
+const TASK_ADMIN_RARITY_FILTERS: { value: Rarity; label: string }[] = [
+  { value: "COMMON", label: "Обычное" },
+  { value: "RARE", label: "Редкое" },
+  { value: "EPIC", label: "Эпическое" },
+  { value: "LEGENDARY", label: "Легендарное" },
+  { value: "EXCLUSIVE", label: "Эксклюзив" },
+  { value: "SECRET", label: "Секретное" },
+];
+
+const TASK_RARITY_ORDER: Record<Rarity, number> = {
+  COMMON: 0,
+  RARE: 1,
+  EPIC: 2,
+  LEGENDARY: 3,
+  EXCLUSIVE: 4,
+  SECRET: 5,
 };
 
 function toDateTimeLocalValue(value: string | null | undefined) {
@@ -289,6 +308,11 @@ export function AdminPage() {
   const [rejectBusy, setRejectBusy] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminTaskSubmission | null>(null);
   const [rejectReasonDraft, setRejectReasonDraft] = useState("");
+
+  const [taskAdminQ, setTaskAdminQ] = useState("");
+  const [taskAdminRarity, setTaskAdminRarity] = useState<Rarity | "">("");
+  const [taskAdminBucket, setTaskAdminBucket] = useState<"all" | "active" | "inactive" | "upcoming">("all");
+  const [taskAdminSort, setTaskAdminSort] = useState<"new" | "rarity" | "coins">("new");
 
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFiles, setViewerFiles] = useState<string[]>([]);
@@ -542,6 +566,49 @@ export function AdminPage() {
       null,
     [readTaskSubmissions, selectedTaskSubmissionId, taskSubmissions, unreadTaskSubmissions],
   );
+
+  const filteredTasks = useMemo(() => {
+    const now = Date.now();
+    const q = taskAdminQ.trim().toLowerCase();
+    let list = tasks.filter((t) => {
+      if (q) {
+        const hay = [t.title, t.description, t.conditions, t.achievement?.title ?? ""].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (taskAdminRarity && (t.achievement?.rarity ?? "COMMON") !== taskAdminRarity) return false;
+      switch (taskAdminBucket) {
+        case "active":
+          if (!t.isActive) return false;
+          break;
+        case "inactive":
+          if (t.isActive) return false;
+          break;
+        case "upcoming": {
+          const startMs = t.startsAt ? new Date(t.startsAt).getTime() : 0;
+          if (!startMs || startMs <= now) return false;
+          break;
+        }
+        default:
+          break;
+      }
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      if (taskAdminSort === "new") {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      }
+      if (taskAdminSort === "rarity") {
+        return TASK_RARITY_ORDER[b.achievement?.rarity ?? "COMMON"] - TASK_RARITY_ORDER[a.achievement?.rarity ?? "COMMON"];
+      }
+      if (taskAdminSort === "coins") {
+        return (b.rewardCoins ?? 0) - (a.rewardCoins ?? 0);
+      }
+      return 0;
+    });
+    return list;
+  }, [tasks, taskAdminQ, taskAdminRarity, taskAdminBucket, taskAdminSort]);
 
   useEffect(() => {
     if (!selectedTaskSubmission && selectedTaskSubmissionId) {
@@ -1909,9 +1976,74 @@ export function AdminPage() {
           </section>
 
           <div className="grid gap-8">
-            <section className="grid gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-steam-muted">Все задания</div>
+            <Reveal className="steam-card steam-card--hover p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="mr-auto">
+                  <div className="text-sm font-semibold">Список заданий</div>
+                  <div className="text-xs text-steam-muted">
+                    Показано: <span className="text-steam-text">{filteredTasks.length}</span> / {tasks.length}
+                  </div>
+                </div>
+
+                <div className="relative w-full md:w-72">
+                  <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-steam-muted" />
+                  <input
+                    className="w-full rounded-lg border border-white/10 bg-black/30 py-2 pl-9 pr-3 text-sm text-steam-text outline-none focus:border-steam-accent"
+                    placeholder="Поиск по названию, описанию, условиям или призу…"
+                    value={taskAdminQ}
+                    onChange={(e) => setTaskAdminQ(e.target.value)}
+                    spellCheck={false}
+                    autoComplete="off"
+                    aria-label="Поиск заданий"
+                  />
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<FiFilter />}
+                  onClick={() => setTaskAdminBucket(taskAdminBucket === "all" ? "upcoming" : "all")}
+                >
+                  {taskAdminBucket === "upcoming" ? "Clear" : "Filter"}
+                </Button>
+
+                <select
+                  className="steam-select min-w-[11rem]"
+                  value={taskAdminBucket}
+                  onChange={(e) => setTaskAdminBucket(e.target.value as typeof taskAdminBucket)}
+                  aria-label="Показать задания"
+                >
+                  <option value="all">Все</option>
+                  <option value="active">Включённые</option>
+                  <option value="inactive">Выключенные</option>
+                  <option value="upcoming">С отложенным стартом</option>
+                </select>
+
+                <select
+                  className="steam-select min-w-[11rem]"
+                  value={taskAdminRarity}
+                  onChange={(e) => setTaskAdminRarity((e.target.value || "") as Rarity | "")}
+                  aria-label="Редкость приза"
+                >
+                  <option value="">Любая редкость приза</option>
+                  {TASK_ADMIN_RARITY_FILTERS.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="steam-select min-w-[12rem]"
+                  value={taskAdminSort}
+                  onChange={(e) => setTaskAdminSort(e.target.value as typeof taskAdminSort)}
+                  aria-label="Сортировка заданий"
+                >
+                  <option value="new">Сначала новые</option>
+                  <option value="rarity">По редкости приза</option>
+                  <option value="coins">По монетам</option>
+                </select>
+
                 <button
                   type="button"
                   onClick={() => refreshTasks()}
@@ -1920,8 +2052,11 @@ export function AdminPage() {
                   Обновить
                 </button>
               </div>
+            </Reveal>
+
+            <section className="grid gap-3">
               <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {tasks.map((t) => (
+                {filteredTasks.map((t) => (
                   <div
                     key={t.id}
                     className={clsx(
