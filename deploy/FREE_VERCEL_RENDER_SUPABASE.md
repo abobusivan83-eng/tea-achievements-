@@ -75,6 +75,8 @@ node ./scripts/prisma-resolve-all-applied.mjs
 npx prisma migrate deploy
 ```
 
+Скрипт `prisma-resolve-all-applied.mjs` по умолчанию выполняет `prisma migrate resolve` через **`DIRECT_URL` (session `:5432`)**, потому что с некоторых сетей порт transaction pooler **`6543` может быть недоступен**, и команды “зависают”/падают с `P1001`.
+
 **Переменные окружения**
 
 | Переменная | Staging | Production |
