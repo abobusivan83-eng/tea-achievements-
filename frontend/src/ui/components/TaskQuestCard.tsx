@@ -5,7 +5,8 @@ import type { Rarity, SupportStatus, TaskItem } from "../../lib/types";
 import { rarityGlowClass } from "../rarityStyles";
 import { Button } from "./Button";
 import { AchievementIcon } from "./AchievementIcon";
-import { FiAward, FiChevronDown, FiClock, FiEdit2, FiLock, FiUpload } from "react-icons/fi";
+import { ScheduleLockOverlay } from "./ScheduleLockOverlay";
+import { FiAward, FiChevronDown, FiClock, FiEdit2, FiUpload } from "react-icons/fi";
 
 function statusLabel(s: SupportStatus) {
   switch (s) {
@@ -87,14 +88,6 @@ function formatDuration(seconds: number | null | undefined) {
   const mm = String(Math.floor(total / 60)).padStart(2, "0");
   const ss = String(total % 60).padStart(2, "0");
   return `${mm}:${ss}`;
-}
-
-function formatCountdown(totalMs: number) {
-  const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function scheduleStatusFromTime(startsAt: string | null, endsAt: string | null, nowMs: number): TaskScheduleStatus {
@@ -209,7 +202,7 @@ export function TaskQuestCard(props: {
       className={clsx(
         "achievement-card task-card group relative overflow-hidden",
         rClass,
-        overlayAllowed && "is-locked min-h-[11rem] sm:min-h-[12rem] task-card--schedule-mask",
+        overlayAllowed && "is-locked min-h-[10rem] sm:min-h-[11rem] task-card--schedule-mask",
         glow,
         kind === "event" && "task-card--event",
         kind === "timed" && "task-card--timed",
@@ -498,38 +491,18 @@ export function TaskQuestCard(props: {
       </AnimatePresence>
 
       {overlayAllowed ? (
-        <div
-          className="absolute inset-0 z-[40] overflow-hidden rounded-[12px]"
-          style={{ backgroundColor: "#070d18" }}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          role="presentation"
-        >
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-width:thin]">
-              <div className="mx-auto flex w-full min-w-0 max-w-[17rem] select-none flex-col items-center gap-2 text-center sm:gap-2.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-[#0c1524] text-steam-accent shadow-[0_0_20px_rgba(102,192,244,0.2)]">
-                  <FiLock className="h-5 w-5" aria-hidden />
-                </div>
-                <div className="max-w-full text-[10px] font-black uppercase tracking-[0.18em] text-steam-muted sm:text-[11px] sm:tracking-[0.22em]">
-                  {scheduleStatus === "UPCOMING" ? "Открытие задания" : "Доступ закрыт"}
-                </div>
-                {scheduleStatus === "UPCOMING" ? (
-                  <div className="w-full rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 shadow-inner">
-                    <div className="text-center font-mono text-base font-black tabular-nums tracking-[0.08em] text-cyan-100 sm:text-lg">
-                      {formatCountdown(upcomingRemainingMs)}
-                    </div>
-                  </div>
-                ) : null}
-                <p className="max-w-full break-words text-[11px] font-semibold leading-snug text-steam-text [overflow-wrap:anywhere] sm:text-xs">
-                  {scheduleStatus === "UPCOMING"
-                    ? "Задание откроется автоматически по таймеру."
-                    : scheduleLockText}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ScheduleLockOverlay
+          mode="task"
+          rarity={ach?.rarity ?? "COMMON"}
+          headline={scheduleStatus === "UPCOMING" ? "Открытие задания" : "Доступ закрыт"}
+          showTimer={scheduleStatus === "UPCOMING"}
+          countdownMs={upcomingRemainingMs}
+          detail={
+            scheduleStatus === "UPCOMING" ? "Задание откроется автоматически по таймеру." : scheduleLockText
+          }
+          roundedClassName="rounded-[12px]"
+          stopPointerOnOverlay
+        />
       ) : null}
 
       {!reduce &&

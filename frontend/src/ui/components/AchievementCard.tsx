@@ -4,15 +4,8 @@ import clsx from "clsx";
 import type { Achievement } from "../../lib/types";
 import { rarityGlowClass } from "../../ui/rarityStyles";
 import { AchievementIcon } from "./AchievementIcon";
-import { FiLock, FiZoomIn } from "react-icons/fi";
-
-function formatCountdown(totalMs: number) {
-  const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
+import { ScheduleLockOverlay } from "./ScheduleLockOverlay";
+import { FiZoomIn } from "react-icons/fi";
 
 function formatUpcomingLine(startsAt: string | null, nowMs: number) {
   if (!startsAt) return "Ожидайте начала";
@@ -163,35 +156,19 @@ export function AchievementCard(props: {
       ) : null}
 
       {showScheduleOverlay ? (
-        <div
-          className="absolute inset-0 z-[40] overflow-hidden rounded-[inherit]"
-          style={{ backgroundColor: "#070d18" }}
-        >
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-width:thin]">
-              <div className="mx-auto flex w-full min-w-0 max-w-[17rem] select-none flex-col items-center gap-2 text-center sm:gap-2.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-[#0c1524] text-steam-accent shadow-[0_0_20px_rgba(102,192,244,0.2)]">
-                  <FiLock className="h-5 w-5" aria-hidden />
-                </div>
-                <div className="max-w-full text-[10px] font-black uppercase tracking-[0.18em] text-steam-muted sm:text-[11px] sm:tracking-[0.22em]">
-                  {eventEnded ? "Недоступно" : "Открытие достижения"}
-                </div>
-                {scheduleLocked && props.a.taskStartsAt ? (
-                  <div className="w-full rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 shadow-inner">
-                    <div className="text-center font-mono text-base font-black tabular-nums tracking-[0.08em] text-cyan-100 sm:text-lg">
-                      {formatCountdown(upcomingRemainingMs)}
-                    </div>
-                  </div>
-                ) : null}
-                <p className="max-w-full break-words text-[11px] font-semibold leading-snug text-steam-text [overflow-wrap:anywhere] sm:text-xs sm:leading-relaxed">
-                  {eventEnded
-                    ? "Окно задания по времени завершено — следите за новыми ивентами."
-                    : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ScheduleLockOverlay
+          mode="achievement"
+          rarity={props.a.rarity}
+          headline={eventEnded ? "Недоступно" : "Открытие достижения"}
+          showTimer={scheduleLocked && Boolean(props.a.taskStartsAt)}
+          countdownMs={upcomingRemainingMs}
+          detail={
+            eventEnded
+              ? "Окно задания по времени завершено — следите за новыми ивентами."
+              : formatUpcomingLine(props.a.taskStartsAt ?? null, nowMs)
+          }
+          roundedClassName="rounded-[inherit]"
+        />
       ) : null}
 
       <AnimatePresence>
