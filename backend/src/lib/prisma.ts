@@ -12,13 +12,16 @@ function withPgClientDefaults(databaseUrl: string): string {
   if (databaseUrl.startsWith("file:")) return databaseUrl;
   try {
     const u = new URL(databaseUrl);
-    if (!u.searchParams.has("connect_timeout")) u.searchParams.set("connect_timeout", "12");
-    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "18");
+    // После простоя Supabase free — коннект дольше; не рвём сессию из-за малого pool_timeout у Prisma runtime.
+    if (!u.searchParams.has("connect_timeout")) u.searchParams.set("connect_timeout", "14");
+    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "22");
     return u.toString();
   } catch {
     return databaseUrl;
   }
 }
+
+/* PrismaClient — один экспорт ниже через globalForPrisma (не создаём новый экземпляр на каждый HTTP-запрос). */
 
 export const prisma: PrismaClient =
   globalForPrisma.prisma ??

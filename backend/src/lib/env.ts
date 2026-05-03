@@ -54,9 +54,10 @@ const EnvSchema = z.object({
    * Рекомендуется в production/staging (см. setWebhook secret_token).
    */
   TELEGRAM_WEBHOOK_SECRET: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(8).max(256).optional()),
-  SLOW_REQUEST_MS: z.coerce.number().int().min(50).max(60_000).default(800),
+  /** После простоя Postgres (Supabase free) простые GET нередко дольше 1s — ниже этого порога не логируем как slow_http. */
+  SLOW_REQUEST_MS: z.coerce.number().int().min(50).max(120_000).default(1600),
   REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(20_000),
-  PRISMA_SLOW_QUERY_MS: z.coerce.number().int().min(10).max(60_000).default(300),
+  PRISMA_SLOW_QUERY_MS: z.coerce.number().int().min(10).max(120_000).default(550),
   CLOUDINARY_URL: z.string().min(1).optional(),
   CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
   CLOUDINARY_API_KEY: z.string().min(1).optional(),

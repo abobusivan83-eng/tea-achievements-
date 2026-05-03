@@ -30,6 +30,7 @@ import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
 import { ensureDefaultProfileAssets } from "./lib/defaultProfileAssets.js";
+import { ensureTelegramBroadcastTemplateTable } from "./lib/ensureTelegramBroadcastTable.js";
 
 ensureDefaultProfileAssets();
 
@@ -353,9 +354,12 @@ const server = app.listen(port, () => {
   if (commit) {
     logger.info("[deploy] RENDER_GIT_COMMIT", { commit });
   }
-  void logDatabaseEncoding();
   void logSupabaseDatasourcePairSanity();
-  void logTelegramBroadcastTemplateColumns();
+  void logDatabaseEncoding();
+  void (async () => {
+    await ensureTelegramBroadcastTemplateTable();
+    await logTelegramBroadcastTemplateColumns();
+  })();
   if (process.env.RENDER === "true") {
     logger.warn(
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",
