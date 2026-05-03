@@ -82,6 +82,13 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Пачковая Telegram-рассылка: не забивать event loop между пачками. */
+const TELEGRAM_BROADCAST_CHUNK_SIZE = 12;
+const TELEGRAM_BROADCAST_INTER_CHUNK_DELAY_MIN_MS = 500;
+const TELEGRAM_BROADCAST_INTER_CHUNK_DELAY_MAX_MS = 1000;
+/** Внутри пачки небольшой зазор — лимиты Telegram flood. */
+const TELEGRAM_BROADCAST_INTRA_CHUNK_DELAY_MS = 85;
+
 async function ensureTelegramFileId(params: {
   chatId: string;
   caption: string;
@@ -385,13 +392,8 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
     `.catch(() => {});
   }
 
-  let attempted = 0;
-  let sent = 0;
-  let failed = 0;
-  const failedUserIds: string[] = [];
-
-  // Small delay helps avoid Telegram flood limits.
-  const delayMs = 85;
+  type TelegramRecipient = { userId: string; chatId: string };
+  const recipients: TelegramRecipient[] = [];
 
   for (const u of users) {
     const directChatId = (u.telegramChatId ?? "").trim();
@@ -399,28 +401,51 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
     const resolvedByUsername = usernameLower ? (lookupByUsername.get(usernameLower) ?? "").trim() : "";
     const chatId = directChatId || resolvedByUsername;
     if (!chatId) continue;
-    attempted++;
-    try {
-      await sendTelegramBroadcastMessage({
-        chatId,
-        message,
-        mediaUrl: urlMedia?.mediaUrl,
-        mediaType: urlMedia?.mediaType,
-        bufferMedia,
-      });
-      sent++;
-    } catch (error) {
-      if (error instanceof TelegramNotConfiguredError) {
-        return fail(res, 503, error.message);
-      }
-      failed++;
-      if (failedUserIds.length < 50) failedUserIds.push(u.id);
-      // Ignore: user blocked bot / invalid chat id / transient telegram errors.
-    }
-    await sleep(delayMs);
+    recipients.push({ userId: u.id, chatId });
   }
 
-  if (attempted === 0) {
+  let attempted = 0;
+  let sent = 0;
+  let failed = 0;
+  const failedUserIds: string[] = [];
+
+  for (let offset = 0; offset < recipients.length; offset += TELEGRAM_BROADCAST_CHUNK_SIZE) {
+    const chunk = recipients.slice(offset, offset + TELEGRAM_BROADCAST_CHUNK_SIZE);
+    const hasMoreChunks = offset + TELEGRAM_BROADCAST_CHUNK_SIZE < recipients.length;
+
+    for (const r of chunk) {
+      attempted++;
+      try {
+        await sendTelegramBroadcastMessage({
+          chatId: r.chatId,
+          message,
+          mediaUrl: urlMedia?.mediaUrl,
+          mediaType: urlMedia?.mediaType,
+          bufferMedia,
+        });
+        sent++;
+      } catch (error) {
+        if (error instanceof TelegramNotConfiguredError) {
+          return fail(res, 503, error.message);
+        }
+        failed++;
+        if (failedUserIds.length < 50) failedUserIds.push(r.userId);
+      }
+      await sleep(TELEGRAM_BROADCAST_INTRA_CHUNK_DELAY_MS);
+    }
+
+    if (hasMoreChunks) {
+      const pause =
+        TELEGRAM_BROADCAST_INTER_CHUNK_DELAY_MIN_MS +
+        Math.floor(
+          Math.random() *
+            (TELEGRAM_BROADCAST_INTER_CHUNK_DELAY_MAX_MS - TELEGRAM_BROADCAST_INTER_CHUNK_DELAY_MIN_MS + 1),
+        );
+      await sleep(pause);
+    }
+  }
+
+  if (recipients.length === 0 || attempted === 0) {
     return fail(
       res,
       400,

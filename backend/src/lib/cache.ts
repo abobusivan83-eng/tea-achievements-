@@ -33,8 +33,8 @@ export function getCachedLeaderboard<T>(): T | undefined {
 }
 
 export function setCachedLeaderboard<T>(data: T): void {
-  // Heavy aggregate; match typical UI background refresh cadence.
-  shopCache.set(LEADERBOARD_KEY, data, 60);
+  /** Агрегат по всей базе (~60 с); маршрут дополнительно дедупит параллельные промахи одиним in-flight промисом. */
+  shopCache.set(LEADERBOARD_KEY, data, 58);
 }
 
 export function invalidateLeaderboardCache(): void {

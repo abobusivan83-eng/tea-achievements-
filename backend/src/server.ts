@@ -228,20 +228,8 @@ app.get("/api/ready", async (_req, res) => {
 
 /** Telegram Bot API webhook (HTTPS только). Ответ мгновенный 200, обработка вне hot path через setImmediate. */
 app.post("/api/telegraf-webhook", (req: express.Request, res: express.Response) => {
-  console.log("📥 Webhook received");
   const webhookBody = req.body as { update_id?: unknown } | null | undefined;
   const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  const updateId =
-    webhookBody &&
-    typeof webhookBody === "object" &&
-    webhookBody !== null &&
-    typeof webhookBody.update_id === "number"
-      ? webhookBody.update_id
-      : undefined;
-  logger.info("[telegram] Webhook received", {
-    updateId,
-    secretOk: Boolean(secret ? req.header("x-telegram-bot-api-secret-token")?.trim() === secret : true),
-  });
 
   if (secret) {
     const got = req.header("x-telegram-bot-api-secret-token")?.trim();
@@ -259,7 +247,19 @@ app.post("/api/telegraf-webhook", (req: express.Request, res: express.Response) 
   if (!bodyOk) {
     return res.sendStatus(400);
   }
+
+  // Сразу 200 Telegram (не ждём логирование и Prisma на hot path).
   res.sendStatus(200);
+
+  const updateId =
+    typeof webhookBody === "object" &&
+    webhookBody !== null &&
+    typeof webhookBody.update_id === "number"
+      ? webhookBody.update_id
+      : undefined;
+  console.log("📥 Webhook received");
+  logger.info("[telegram] Webhook accepted (async)", { updateId });
+
   setImmediate(() => {
     void processTelegramUpdate(webhookBody as Parameters<typeof processTelegramUpdate>[0]).catch((err) =>
       logger.error("[telegram] processTelegramUpdate", {

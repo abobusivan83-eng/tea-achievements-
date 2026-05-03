@@ -12,9 +12,10 @@ function withPgClientDefaults(databaseUrl: string): string {
   if (databaseUrl.startsWith("file:")) return databaseUrl;
   try {
     const u = new URL(databaseUrl);
-    // После простоя Supabase free — коннект дольше; не рвём сессию из-за малого pool_timeout у Prisma runtime.
-    if (!u.searchParams.has("connect_timeout")) u.searchParams.set("connect_timeout", "14");
-    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "22");
+    /** Разумный дефолт для одного Render free dyno на Supabase pooler (:6543 пул). Не переопределяем, если заданы в строке .env. */
+    if (!u.searchParams.has("connection_limit")) u.searchParams.set("connection_limit", "10");
+    if (!u.searchParams.has("connect_timeout")) u.searchParams.set("connect_timeout", "15");
+    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "20");
     return u.toString();
   } catch {
     return databaseUrl;

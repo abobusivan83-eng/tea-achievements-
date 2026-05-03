@@ -7,6 +7,9 @@ import { levelFromXp } from "../lib/levels.js";
 import { attachPublicIds } from "../lib/userPublicId.js";
 import { getCachedLeaderboard, setCachedLeaderboard } from "../lib/cache.js";
 
+/** Один промис на процесс пока считается «тяжёлый» топ — без N одновременных raw SQL при просроке TTL. */
+let leaderboardInFlight: Promise<unknown[]> | null = null;
+
 export const leaderboardRouter = Router();
 
 type LeaderboardAggRow = {
@@ -25,79 +28,95 @@ type LeaderboardAggRow = {
 leaderboardRouter.get("/", requireAuth, async (_req, res) => {
   const cached = getCachedLeaderboard<unknown[]>();
   if (cached) {
-    res.setHeader("Cache-Control", "private, max-age=60");
+    res.setHeader("Cache-Control", "private, max-age=55");
     return ok(res, cached);
   }
 
-  const isSqlite = process.env.DATABASE_URL?.startsWith("file:");
+  const buildMapped = async (): Promise<unknown[]> => {
+    const isSqlite = process.env.DATABASE_URL?.startsWith("file:");
 
-  let rows: LeaderboardAggRow[];
-  if (isSqlite) {
-    rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
-      SELECT
-        u.id,
-        u.createdAt,
-        u.nickname,
-        u.avatarPath,
-        u.avatarUrl,
-        u.frameKey,
-        u.level,
-        u.xp,
-        CAST(COUNT(ua.achievementId) AS INTEGER) AS achievementCount,
-        CAST(COALESCE(SUM(a.points), 0) AS INTEGER) AS totalPoints
-      FROM User u
-      LEFT JOIN UserAchievement ua ON ua.userId = u.id
-      LEFT JOIN Achievement a ON a.id = ua.achievementId
-      GROUP BY u.id, u.createdAt, u.nickname, u.avatarPath, u.avatarUrl, u.frameKey, u.level, u.xp
-      ORDER BY totalPoints DESC, u.xp DESC
-      LIMIT 100
-    `;
-  } else {
-    rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
-      SELECT
-        u.id,
-        u."createdAt",
-        u.nickname,
-        u."avatarPath",
-        u."avatarUrl",
-        u."frameKey",
-        u.level,
-        u.xp,
-        COUNT(ua."achievementId")::int AS "achievementCount",
-        COALESCE(SUM(a.points), 0)::int AS "totalPoints"
-      FROM "User" u
-      LEFT JOIN "UserAchievement" ua ON ua."userId" = u.id
-      LEFT JOIN "Achievement" a ON a.id = ua."achievementId"
-      GROUP BY u.id, u."createdAt", u.nickname, u."avatarPath", u."avatarUrl", u."frameKey", u.level, u.xp
-      ORDER BY "totalPoints" DESC, u.xp DESC
-      LIMIT 100
-    `;
+    let rows: LeaderboardAggRow[];
+    if (isSqlite) {
+      rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
+        SELECT
+          u.id,
+          u.createdAt,
+          u.nickname,
+          u.avatarPath,
+          u.avatarUrl,
+          u.frameKey,
+          u.level,
+          u.xp,
+          CAST(COUNT(ua.achievementId) AS INTEGER) AS achievementCount,
+          CAST(COALESCE(SUM(a.points), 0) AS INTEGER) AS totalPoints
+        FROM User u
+        LEFT JOIN UserAchievement ua ON ua.userId = u.id
+        LEFT JOIN Achievement a ON a.id = ua.achievementId
+        GROUP BY u.id, u.createdAt, u.nickname, u.avatarPath, u.avatarUrl, u.frameKey, u.level, u.xp
+        ORDER BY totalPoints DESC, u.xp DESC
+        LIMIT 100
+      `;
+    } else {
+      rows = await prisma.$queryRaw<LeaderboardAggRow[]>`
+        SELECT
+          u.id,
+          u."createdAt",
+          u.nickname,
+          u."avatarPath",
+          u."avatarUrl",
+          u."frameKey",
+          u.level,
+          u.xp,
+          COUNT(ua."achievementId")::int AS "achievementCount",
+          COALESCE(SUM(a.points), 0)::int AS "totalPoints"
+        FROM "User" u
+        LEFT JOIN "UserAchievement" ua ON ua."userId" = u.id
+        LEFT JOIN "Achievement" a ON a.id = ua."achievementId"
+        GROUP BY u.id, u."createdAt", u.nickname, u."avatarPath", u."avatarUrl", u."frameKey", u.level, u.xp
+        ORDER BY "totalPoints" DESC, u.xp DESC
+        LIMIT 100
+      `;
+    }
+
+    const normalized = rows.map((r) => ({
+      ...r,
+      achievementCount: Number(r.achievementCount),
+      totalPoints: Number(r.totalPoints),
+    }));
+
+    const mapped = attachPublicIds(normalized).map((u) => {
+      const lv = levelFromXp(u.xp);
+      return {
+        id: u.id,
+        publicId: u.publicId,
+        nickname: u.nickname,
+        avatarUrl: resolveStoredMediaUrl(u.avatarUrl, u.avatarPath),
+        frameKey: u.frameKey,
+        totalPoints: u.totalPoints,
+        achievementCount: u.achievementCount,
+        level: lv.level,
+        xp: u.xp,
+        xpIntoLevel: lv.xpIntoLevel,
+        xpForNext: lv.xpForNext,
+      };
+    });
+
+    setCachedLeaderboard(mapped);
+    return mapped;
+  };
+
+  if (!leaderboardInFlight) {
+    leaderboardInFlight = buildMapped().finally(() => {
+      leaderboardInFlight = null;
+    });
   }
 
-  const normalized = rows.map((r) => ({
-    ...r,
-    achievementCount: Number(r.achievementCount),
-    totalPoints: Number(r.totalPoints),
-  }));
-
-  const mapped = attachPublicIds(normalized).map((u) => {
-    const lv = levelFromXp(u.xp);
-    return {
-      id: u.id,
-      publicId: u.publicId,
-      nickname: u.nickname,
-      avatarUrl: resolveStoredMediaUrl(u.avatarUrl, u.avatarPath),
-      frameKey: u.frameKey,
-      totalPoints: u.totalPoints,
-      achievementCount: u.achievementCount,
-      level: lv.level,
-      xp: u.xp,
-      xpIntoLevel: lv.xpIntoLevel,
-      xpForNext: lv.xpForNext,
-    };
-  });
-
-  setCachedLeaderboard(mapped);
-  res.setHeader("Cache-Control", "private, max-age=60");
-  return ok(res, mapped);
+  try {
+    const mapped = await leaderboardInFlight;
+    res.setHeader("Cache-Control", "private, max-age=55");
+    return ok(res, mapped);
+  } catch (err) {
+    leaderboardInFlight = null;
+    throw err;
+  }
 });
