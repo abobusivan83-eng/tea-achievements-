@@ -21,7 +21,11 @@ import { shopRouter } from "./routes/shop.js";
 import { giftsRouter } from "./routes/gifts.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { fail, ok } from "./lib/http.js";
-import { bootstrapTelegramWebhook, isTelegramConfigured, processTelegramUpdate } from "./lib/telegram.js";
+import {
+  bootstrapTelegramWebhook,
+  isTelegramBotTokenSet,
+  processTelegramUpdate,
+} from "./lib/telegram.js";
 import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
@@ -30,6 +34,60 @@ import { ensureDefaultProfileAssets } from "./lib/defaultProfileAssets.js";
 ensureDefaultProfileAssets();
 
 /** Диагностика БД без пароля и без полного URI (удобно проверять pooler/supabase-проект в Render). */
+/** Сравнение ref проекта между pool DATABASE_URL и прямым DIRECT_URL (одинаковый ref обязателен). */
+function supabaseProjectRefFromConnectionString(urlStr: string): string | null {
+  try {
+    const u = new URL(urlStr);
+    const user = decodeURIComponent(u.username || "");
+    const poolUser = user.match(/^postgres\.([a-z0-9]+)$/i);
+    if (poolUser) return poolUser[1].toLowerCase();
+    const dbHost = u.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+    if (dbHost) return dbHost[1].toLowerCase();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function logSupabaseDatasourcePairSanity() {
+  const direct = process.env.DIRECT_URL;
+  if (!env.DATABASE_URL.startsWith("postgres") || !direct?.startsWith("postgres")) {
+    logger.warn("[db] DIRECT_URL не задан или не Postgres — проверьте переменную в Render для Supabase.");
+    return;
+  }
+  const refPool = supabaseProjectRefFromConnectionString(env.DATABASE_URL);
+  const refDirect = supabaseProjectRefFromConnectionString(direct);
+  logger.info("[db] Supabase: ref из DATABASE_URL (pool) и DIRECT_URL", {
+    fromDatabaseUrl: refPool ?? "не распознан",
+    fromDirectUrl: refDirect ?? "не распознан",
+    refsMatch: refPool && refDirect ? refPool === refDirect : null,
+  });
+  if (refPool && refDirect && refPool !== refDirect) {
+    logger.error(
+      "[db] КРИТИЧНО: DATABASE_URL и DIRECT_URL разные проекты Supabase. migrate deploy попадает в одну базу, API в другую — отсюда P2022 и «нет колонки», при этом миграции «все применены».",
+    );
+  }
+}
+
+async function logTelegramBroadcastTemplateColumns() {
+  try {
+    const cols = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'TelegramBroadcastTemplate'
+      ORDER BY ordinal_position
+    `;
+    logger.info("[db] Колонки таблицы TelegramBroadcastTemplate сейчас в БД", {
+      columns: cols.map((c) => c.column_name),
+      count: cols.length,
+    });
+  } catch (e) {
+    logger.warn("[db] Не удалось прочитать information_schema по TelegramBroadcastTemplate", {
+      err: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
 function databaseUrlDiagnostics(raw: string): Record<string, unknown> {
   if (raw.startsWith("file:")) {
     return { kind: "sqlite", hint: "schema file" };
@@ -170,16 +228,20 @@ app.get("/api/ready", async (_req, res) => {
 /** Telegram Bot API webhook (HTTPS только). Ответ мгновенный 200, обработка вне hot path через setImmediate. */
 app.post("/api/telegraf-webhook", (req: express.Request, res: express.Response) => {
   console.log("📥 Webhook received");
-  const webhookBody = req.body as { update_id?: unknown } | undefined;
+  const webhookBody = req.body as { update_id?: unknown } | null | undefined;
+  const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const updateId =
     webhookBody &&
     typeof webhookBody === "object" &&
+    webhookBody !== null &&
     typeof webhookBody.update_id === "number"
       ? webhookBody.update_id
       : undefined;
-  logger.info("[telegram] Webhook received", { updateId });
+  logger.info("[telegram] Webhook received", {
+    updateId,
+    secretOk: Boolean(secret ? req.header("x-telegram-bot-api-secret-token")?.trim() === secret : true),
+  });
 
-  const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
   if (secret) {
     const got = req.header("x-telegram-bot-api-secret-token")?.trim();
     if (got !== secret) {
@@ -187,12 +249,18 @@ app.post("/api/telegraf-webhook", (req: express.Request, res: express.Response) 
       return res.sendStatus(401);
     }
   }
-  if (!req.body || typeof req.body !== "object") {
+
+  const bodyOk =
+    webhookBody !== null &&
+    webhookBody !== undefined &&
+    typeof webhookBody === "object" &&
+    !Array.isArray(webhookBody);
+  if (!bodyOk) {
     return res.sendStatus(400);
   }
   res.sendStatus(200);
   setImmediate(() => {
-    void processTelegramUpdate(req.body).catch((err) =>
+    void processTelegramUpdate(webhookBody as Parameters<typeof processTelegramUpdate>[0]).catch((err) =>
       logger.error("[telegram] processTelegramUpdate", {
         err: err instanceof Error ? err.stack ?? err.message : String(err),
       }),
@@ -286,12 +354,19 @@ const server = app.listen(port, () => {
     logger.info("[deploy] RENDER_GIT_COMMIT", { commit });
   }
   void logDatabaseEncoding();
+  void logSupabaseDatasourcePairSanity();
+  void logTelegramBroadcastTemplateColumns();
   if (process.env.RENDER === "true") {
     logger.warn(
       "[tea] Render: диск эфемерный — файлы в uploads/ могут пропасть после деплоя/рестарта.",
     );
   }
-  if (isTelegramConfigured()) {
+  if (isTelegramBotTokenSet()) {
+    if (!env.TELEGRAM_BOT_USERNAME?.trim()) {
+      logger.warn(
+        "[telegram] TELEGRAM_BOT_USERNAME пустой — вход по коду может быть недоступен, но webhook регистрируем по токену.",
+      );
+    }
     void bootstrapTelegramWebhook().catch((e) =>
       logger.error("[telegram] bootstrap webhook", {
         err: e instanceof Error ? e.message : String(e),

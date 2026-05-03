@@ -176,6 +176,11 @@ export function isTelegramConfigured(): boolean {
   return Boolean(env.TELEGRAM_BOT_TOKEN?.trim() && env.TELEGRAM_BOT_USERNAME?.trim());
 }
 
+/** Достаточно токена для setWebhook / приёма апдейтов (username нужен для ссылок t.me/..., не для webhook). */
+export function isTelegramBotTokenSet(): boolean {
+  return Boolean(env.TELEGRAM_BOT_TOKEN?.trim());
+}
+
 export function telegramDeepLink(linkToken: string) {
   const u = env.TELEGRAM_BOT_USERNAME!.replace(/^@/, "").trim();
   return `https://t.me/${u}?start=${encodeURIComponent(linkToken)}`;
@@ -389,16 +394,24 @@ export async function bootstrapTelegramWebhook(): Promise<void> {
     );
   }
 
-  try {
-    await telegramCallApi("setWebhook", payload);
-    logger.info("[telegram] setWebhook успешно.", { url: webhookUrl });
-    logger.info("[telegram] Режим доставки обновлений: только HTTPS webhook (polling не используется).");
-    const info = await telegramCallApi("getWebhookInfo", {});
-    logger.info("[telegram] getWebhookInfo", { info });
-  } catch (e) {
-    logger.error("[telegram] setWebhook / getWebhookInfo ошибка", {
-      err: e instanceof Error ? e.message : String(e),
-      url: webhookUrl,
-    });
+  const delaysMs = [0, 2500, 8000];
+  for (let i = 0; i < delaysMs.length; i++) {
+    if (delaysMs[i] > 0) {
+      await new Promise((r) => setTimeout(r, delaysMs[i]));
+    }
+    try {
+      await telegramCallApi("setWebhook", payload);
+      logger.info("[telegram] setWebhook успешно.", { url: webhookUrl, attempt: i + 1 });
+      logger.info("[telegram] Режим доставки обновлений: только HTTPS webhook (polling не используется).");
+      const info = await telegramCallApi("getWebhookInfo", {});
+      logger.info("[telegram] getWebhookInfo", { info });
+      return;
+    } catch (e) {
+      logger.error("[telegram] setWebhook / getWebhookInfo ошибка", {
+        err: e instanceof Error ? e.message : String(e),
+        url: webhookUrl,
+        attempt: i + 1,
+      });
+    }
   }
 }
