@@ -63,7 +63,7 @@ npx prisma migrate deploy
 |-----------------|----------|
 | Root Directory  | `backend` |
 | Build Command   | `npm ci --include=dev && npx prisma generate && npm run build` |
-| Start Command   | `npx prisma migrate deploy && npm start` |
+| Start Command   | `sh scripts/render-migrate-deploy.sh` (снимает одиночный failed-migration перед deploy) или `npx prisma migrate deploy && npm start` |
 | Health Check    | `/api/health` |
 
 Если при старте `npx prisma migrate deploy` падает с **`P3005`**, это значит: в базе уже есть таблицы, но **нет истории Prisma Migrate** (часто после раннего `db push`/ручных SQL).  

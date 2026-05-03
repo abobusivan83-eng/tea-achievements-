@@ -15,7 +15,7 @@ services:
     branch: develop
     rootDir: backend
     buildCommand: npm ci --include=dev && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm start
+    startCommand: sh scripts/render-migrate-deploy.sh
     healthCheckPath: /api/ready
     envVars:
       - key: NODE_VERSION
@@ -49,7 +49,7 @@ services:
     branch: main
     rootDir: backend
     buildCommand: npm ci --include=dev && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm start
+    startCommand: sh scripts/render-migrate-deploy.sh
     healthCheckPath: /api/ready
     envVars:
       - key: NODE_VERSION
