@@ -68,6 +68,89 @@ async function telegramCallApi(
   return data;
 }
 
+type TelegramMultipartResult = Record<string, unknown>;
+
+async function telegramCallMultipart(method: string, form: FormData): Promise<TelegramMultipartResult> {
+  if (!env.TELEGRAM_BOT_TOKEN?.trim()) {
+    throw new TelegramNotConfiguredError();
+  }
+  const res = await fetch(`${apiBase()}${method}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await res.json()) as TelegramMultipartResult & { ok?: boolean; description?: string };
+  if (!data.ok) {
+    throw new TelegramApiError({
+      statusCode: res.status,
+      description: (data.description as string | undefined) ?? `Telegram ${method} failed (${res.status})`,
+    });
+  }
+  return data;
+}
+
+/**
+ * Однократная отправка медиа с телом multipart (буфер) — нужна, чтобы получить file_id без CDN/диска.
+ * Дальнейшие получатели рассылки могут использовать тот же file_id у этого бота.
+ */
+export async function telegramUploadPhotoFromBuffer(params: {
+  chatId: string;
+  buffer: Buffer;
+  mime: string;
+  filename: string;
+  caption?: string;
+}): Promise<string> {
+  const form = new FormData();
+  form.set("chat_id", params.chatId);
+  form.set(
+    "photo",
+    new Blob([new Uint8Array(params.buffer)], { type: params.mime || "image/jpeg" }),
+    params.filename || "photo.jpg",
+  );
+  if (params.caption?.trim()) form.set("caption", params.caption.trim());
+  const data = await telegramCallMultipart("sendPhoto", form);
+  const result = data.result as { photo?: Array<{ file_id?: string }> } | undefined;
+  const photos = result?.photo;
+  if (!photos?.length) {
+    throw new TelegramApiError({ statusCode: 500, description: "Telegram sendPhoto: ответ без photo." });
+  }
+  const fid = photos[photos.length - 1]?.file_id;
+  if (!fid) {
+    throw new TelegramApiError({ statusCode: 500, description: "Telegram sendPhoto: ответ без file_id." });
+  }
+  return fid;
+}
+
+/** См. {@link telegramUploadPhotoFromBuffer} для видео. */
+export async function telegramUploadVideoFromBuffer(params: {
+  chatId: string;
+  buffer: Buffer;
+  mime: string;
+  filename: string;
+  caption?: string;
+}): Promise<string> {
+  const form = new FormData();
+  form.set("chat_id", params.chatId);
+  form.set(
+    "video",
+    new Blob([new Uint8Array(params.buffer)], { type: params.mime || "video/mp4" }),
+    params.filename || "video.mp4",
+  );
+  if (params.caption?.trim()) form.set("caption", params.caption.trim());
+  form.set("supports_streaming", "true");
+  const data = await telegramCallMultipart("sendVideo", form);
+  const result = data.result as { video?: { file_id?: string } } | undefined;
+  const fid = result?.video?.file_id;
+  if (!fid) {
+    throw new TelegramApiError({ statusCode: 500, description: "Telegram sendVideo: ответ без video.file_id." });
+  }
+  return fid;
+}
+
+/** Снять webhook (локальная отладка / перенос между URL). В production обычно не нужен — вызывается setWebhook. */
+export async function telegramDeleteWebhook() {
+  await telegramCallApi("deleteWebhook", { drop_pending_updates: false }).catch(() => {});
+}
+
 export async function telegramSendMessage(chatId: string, text: string) {
   await telegramCallApi("sendMessage", { chat_id: chatId, text });
 }
@@ -118,7 +201,7 @@ async function issueCodeAndNotify(chatId: string, pendingId: string) {
   await telegramSendMessage(chatId, registrationCodeMessage(code));
 }
 
-/** Вызывается из long polling: пользователь открыл бота с /start <linkToken>. */
+/** Вызывается из webhook: пользователь открыл бота с /start <linkToken>. */
 export async function handleTelegramStartLink(linkToken: string, chatId: string) {
   const pending = await prisma.registrationOtp.findUnique({ where: { linkToken } });
   if (!pending) {
@@ -180,104 +263,111 @@ async function trySendPendingRegistrationCode(usernameLower: string, chatId: str
   return true;
 }
 
-let pollingOffset = 0;
-let pollingStarted = false;
+/** Структура update.message от Telegram Bot API (минимально нужные поля). */
+export type TelegramWebhookUpdate = {
+  update_id?: number;
+  message?: {
+    text?: string;
+    chat?: { id: number };
+    from?: { id: number; username?: string; is_bot?: boolean };
+  };
+};
 
-export function startTelegramLongPolling() {
-  if (pollingStarted) return;
-  if (!env.TELEGRAM_BOT_TOKEN?.trim()) {
-    logger.warn("[telegram] TELEGRAM_BOT_TOKEN не задан — long polling отключён.");
+/**
+ * Обработать одно входящее обновление webhook. Тяжёлую работу вызывайте через setImmediate после ответа 200 Telegram.
+ */
+export async function processTelegramUpdate(update: TelegramWebhookUpdate): Promise<void> {
+  const msg = update.message;
+  if (!msg?.chat?.id) return;
+  const chatIdStr = String(msg.chat.id);
+  const from = msg.from;
+
+  if (from && !from.is_bot && from.username?.trim()) {
+    const un = from.username.trim().toLowerCase();
+    try {
+      await prisma.telegramChatLookup.upsert({
+        where: { usernameLower: un },
+        create: { usernameLower: un, chatId: chatIdStr },
+        update: { chatId: chatIdStr },
+      });
+    } catch (e) {
+      logger.error("[telegram] TelegramChatLookup upsert", { err: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  const text = msg.text ?? "";
+  const isStart = text.startsWith("/start");
+  const startToken = isStart ? text.split(/\s+/)[1]?.trim() : undefined;
+
+  if (isStart && startToken) {
+    try {
+      await handleTelegramStartLink(startToken, chatIdStr);
+    } catch (e) {
+      logger.error("[telegram] handleTelegramStartLink", {
+        err: e instanceof Error ? e.stack ?? e.message : String(e),
+      });
+    }
     return;
   }
-  pollingStarted = true;
 
-  const loop = async () => {
+  let issuedByUsername = false;
+  if (from && !from.is_bot && from.username?.trim()) {
     try {
-      const url = new URL(`${apiBase()}getUpdates`);
-      url.searchParams.set("offset", String(pollingOffset));
-      url.searchParams.set("timeout", "45");
-
-      const res = await fetch(url.toString());
-      const data = (await res.json()) as {
-        ok?: boolean;
-        result?: Array<{
-          update_id: number;
-          message?: {
-            text?: string;
-            chat?: { id: number };
-            from?: { id: number; username?: string; is_bot?: boolean };
-          };
-        }>;
-      };
-
-      if (!data.ok || !data.result) {
-        logger.warn("[telegram] getUpdates not ok", { ok: data.ok });
-        await new Promise((r) => setTimeout(r, 3000));
-        setTimeout(() => void loop(), 0);
-        return;
-      }
-
-      for (const u of data.result) {
-        pollingOffset = u.update_id + 1;
-        const msg = u.message;
-        if (!msg?.chat?.id) continue;
-        const chatIdStr = String(msg.chat.id);
-        const from = msg.from;
-
-        if (from && !from.is_bot && from.username?.trim()) {
-          const un = from.username.trim().toLowerCase();
-          try {
-            await prisma.telegramChatLookup.upsert({
-              where: { usernameLower: un },
-              create: { usernameLower: un, chatId: chatIdStr },
-              update: { chatId: chatIdStr },
-            });
-          } catch (e) {
-            logger.error("[telegram] TelegramChatLookup upsert", { err: e instanceof Error ? e.message : String(e) });
-          }
-        }
-
-        const text = msg.text ?? "";
-        const isStart = text.startsWith("/start");
-        const startToken = isStart ? text.split(/\s+/)[1]?.trim() : undefined;
-
-        if (isStart && startToken) {
-          try {
-            await handleTelegramStartLink(startToken, chatIdStr);
-          } catch (e) {
-            logger.error("[telegram] handleTelegramStartLink", { err: e instanceof Error ? e.stack ?? e.message : String(e) });
-          }
-          continue;
-        }
-
-        let issuedByUsername = false;
-        if (from && !from.is_bot && from.username?.trim()) {
-          try {
-            issuedByUsername = await trySendPendingRegistrationCode(from.username.trim().toLowerCase(), chatIdStr);
-          } catch (e) {
-            logger.error("[telegram] trySendPendingRegistrationCode", {
-              err: e instanceof Error ? e.message : String(e),
-            });
-          }
-        }
-
-        if (isStart && !startToken && !issuedByUsername) {
-          try {
-            await telegramSendMessage(
-              chatIdStr,
-              "Готово! Вернись на сайт и нажми «Продолжить», чтобы получить код.",
-            );
-          } catch (e) {
-            logger.error("[telegram] /start reply", { err: e instanceof Error ? e.message : String(e) });
-          }
-        }
-      }
+      issuedByUsername = await trySendPendingRegistrationCode(from.username.trim().toLowerCase(), chatIdStr);
     } catch (e) {
-      logger.error("[telegram] getUpdates", { err: e instanceof Error ? e.stack ?? e.message : String(e) });
-      await new Promise((r) => setTimeout(r, 4000));
+      logger.error("[telegram] trySendPendingRegistrationCode", {
+        err: e instanceof Error ? e.message : String(e),
+      });
     }
-    setTimeout(() => void loop(), 0);
-  };
+  }
 
-  void loop();
+  if (isStart && !startToken && !issuedByUsername) {
+    try {
+      await telegramSendMessage(
+        chatIdStr,
+        "Готово! Вернись на сайт и нажми «Продолжить», чтобы получить код.",
+      );
+    } catch (e) {
+      logger.error("[telegram] /start reply", { err: e instanceof Error ? e.message : String(e) });
+    }
+  }
+}
+
+/**
+ * Зарегистрировать webhook на api.telegram.org для текущего PUBLIC URL (Render HTTPS).
+ */
+export async function bootstrapTelegramWebhook(): Promise<void> {
+  if (!env.TELEGRAM_BOT_TOKEN?.trim()) {
+    logger.warn("[telegram] webhook: TELEGRAM_BOT_TOKEN не задан — регистрация пропущена.");
+    return;
+  }
+  const base = env.API_URL.replace(/\/$/, "");
+  const webhookUrl = `${base}/api/telegraf-webhook`;
+
+  const payload: Record<string, unknown> = {
+    url: webhookUrl,
+    allowed_updates: ["message"],
+    drop_pending_updates: false,
+  };
+  const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (secret) {
+    payload.secret_token = secret;
+  } else if (env.APP_ENV === "production" || env.APP_ENV === "staging") {
+    logger.warn(
+      "[telegram] TELEGRAM_WEBHOOK_SECRET не задан — endpoint /api/telegraf-webhook открыт только по «секретному» знанию URL; задайте секрет в Render.",
+    );
+  }
+
+  try {
+    await telegramCallApi("setWebhook", payload);
+    logger.info("[telegram] setWebhook успешно.", { url: webhookUrl });
+    logger.info("[telegram] Режим доставки обновлений: только HTTPS webhook (polling не используется).");
+    const info = await telegramCallApi("getWebhookInfo", {});
+    logger.info("[telegram] getWebhookInfo", { info });
+  } catch (e) {
+    logger.error("[telegram] setWebhook / getWebhookInfo ошибка", {
+      err: e instanceof Error ? e.message : String(e),
+      url: webhookUrl,
+    });
+  }
 }

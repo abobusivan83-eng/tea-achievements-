@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { PrismaClientInitializationError } from "@prisma/client/runtime/library";
+import { logger } from "./logger.js";
 
 export type MappedError = {
   status: number;
@@ -84,6 +85,12 @@ export function mapErrorToResponse(err: unknown): MappedError {
         return { status: 400, message: "Invalid reference", logAsError: false };
       case "P2021":
       case "P2022":
+        console.dir(err, { depth: null });
+        logger.error("prisma_schema_out_of_sync", {
+          code: err.code,
+          message: err.message,
+          meta: err.meta,
+        });
         return {
           status: 503,
           message: "Database schema is out of sync. Run prisma migrate deploy on the server.",

@@ -125,6 +125,11 @@ export async function uploadTelegramAttachmentToMediaStorage(params: {
   extension: string;
 }) {
   if (!ensureCloudinaryConfigured()) {
+    if (env.APP_ENV !== "development") {
+      throw new Error(
+        "Не настроено облако для медиа (CLOUDINARY_URL или CLOUDINARY_*). На Render локальное сохранение в uploads/ недоступно между рестартами — задайте Cloudinary или отправляйте рассылку с вложением без сохранения шаблона.",
+      );
+    }
     return saveLocallyAsRawMock({
       buffer: params.buffer,
       folder: params.folder,

@@ -49,6 +49,11 @@ const EnvSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
   /** Имя бота без @ (для ссылки t.me/...). */
   TELEGRAM_BOT_USERNAME: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+  /**
+   * Секрет для Telegram Webhook: Telegram пришлёт заголовок X-Telegram-Bot-Api-Secret-Token.
+   * Рекомендуется в production/staging (см. setWebhook secret_token).
+   */
+  TELEGRAM_WEBHOOK_SECRET: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(8).max(256).optional()),
   SLOW_REQUEST_MS: z.coerce.number().int().min(50).max(60_000).default(800),
   REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(20_000),
   PRISMA_SLOW_QUERY_MS: z.coerce.number().int().min(10).max(60_000).default(300),

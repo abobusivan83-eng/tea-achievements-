@@ -4,14 +4,36 @@ import { logger } from "./logger.js";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma =
+/**
+ * Короткий connect_timeout для бесплатного Supabase после «пробуждения» — не висеть десятки секунд на установке соединения.
+ * Pooler: pool_timeout задаёт время ожидания свободного слота из пула Prisma (сек).
+ */
+function withPgClientDefaults(databaseUrl: string): string {
+  if (databaseUrl.startsWith("file:")) return databaseUrl;
+  try {
+    const u = new URL(databaseUrl);
+    if (!u.searchParams.has("connect_timeout")) u.searchParams.set("connect_timeout", "12");
+    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "18");
+    return u.toString();
+  } catch {
+    return databaseUrl;
+  }
+}
+
+export const prisma: PrismaClient =
   globalForPrisma.prisma ??
   new PrismaClient({
+    datasources: {
+      db: { url: withPgClientDefaults(env.DATABASE_URL) },
+    },
     log:
       process.env.NODE_ENV === "production"
         ? [{ emit: "event", level: "query" }, "error"]
         : [{ emit: "event", level: "query" }, "warn", "error"],
   });
+
+// Один процесс Render = один клиент БД (важнее в dev/HMR и при повторном require).
+globalForPrisma.prisma ??= prisma;
 
 prisma.$on("query", (event) => {
   if (event.duration >= env.PRISMA_SLOW_QUERY_MS) {
@@ -21,10 +43,6 @@ prisma.$on("query", (event) => {
     });
   }
 });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
 
 async function disconnect() {
   await prisma.$disconnect().catch(() => {});

@@ -35,6 +35,8 @@ import {
   telegramSendMessage,
   telegramSendPhoto,
   telegramSendVideo,
+  telegramUploadPhotoFromBuffer,
+  telegramUploadVideoFromBuffer,
 } from "../lib/telegram.js";
 import { tryDeleteEvidenceFiles } from "../lib/uploadDeletionPolicy.js";
 
@@ -80,15 +82,82 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function ensureTelegramFileId(params: {
+  chatId: string;
+  caption: string;
+  bufferMedia: BufferMediaEnvelope;
+}) {
+  const h = params.bufferMedia.fileIdHolder;
+  if (h.id) return;
+
+  try {
+    if (params.bufferMedia.type === "video") {
+      h.id = await telegramUploadVideoFromBuffer({
+        chatId: params.chatId,
+        buffer: params.bufferMedia.buffer,
+        mime: params.bufferMedia.mime,
+        filename: params.bufferMedia.filename,
+        caption: params.caption,
+      });
+    } else {
+      h.id = await telegramUploadPhotoFromBuffer({
+        chatId: params.chatId,
+        buffer: params.bufferMedia.buffer,
+        mime: params.bufferMedia.mime,
+        filename: params.bufferMedia.filename,
+        caption: params.caption,
+      });
+    }
+  } finally {
+    if (params.bufferMedia.shouldClearBufferAfterFileId && h.id) {
+      params.bufferMedia.buffer = Buffer.alloc(0);
+      params.bufferMedia.shouldClearBufferAfterFileId = false;
+    }
+  }
+}
+
+type BufferMediaEnvelope = {
+  type: TelegramMediaType;
+  buffer: Buffer;
+  mime: string;
+  filename: string;
+  /** Общий объект по рассылке: первый успешный multipart сохранит file_id. */
+  fileIdHolder: { id?: string };
+  /** После получения file_id освобождаем память (десятки МБ × тысячи получателей). */
+  shouldClearBufferAfterFileId: boolean;
+};
+
 async function sendTelegramBroadcastMessage(params: {
   chatId: string;
   message: string;
   mediaUrl?: string | null;
   mediaType?: TelegramMediaType | null;
+  bufferMedia?: BufferMediaEnvelope | null;
 }) {
   const maxAttempts = 4;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      if (params.bufferMedia) {
+        if (!params.bufferMedia.buffer.length && !params.bufferMedia.fileIdHolder.id) {
+          throw new TelegramApiError({ statusCode: 500, description: "Медиа буфер пуст (file_id ещё не получен)." });
+        }
+        if (!params.bufferMedia.fileIdHolder.id && params.bufferMedia.buffer.length > 0) {
+          await ensureTelegramFileId({
+            chatId: params.chatId,
+            caption: params.message,
+            bufferMedia: params.bufferMedia,
+          });
+          return;
+        }
+        if (params.bufferMedia.fileIdHolder.id) {
+          if (params.bufferMedia.type === "video") {
+            await telegramSendVideo(params.chatId, params.bufferMedia.fileIdHolder.id, params.message);
+          } else {
+            await telegramSendPhoto(params.chatId, params.bufferMedia.fileIdHolder.id, params.message);
+          }
+        }
+        return;
+      }
       if (params.mediaUrl && params.mediaType === "photo") {
         await telegramSendPhoto(params.chatId, params.mediaUrl, params.message);
       } else if (params.mediaUrl && params.mediaType === "video") {
@@ -248,8 +317,29 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
       })
     : null;
   if (parsed.data.templateId && !selectedTemplate) return fail(res, 404, "Шаблон не найден");
-  const uploadedMedia = req.file ? await uploadTelegramAttachment(req.file) : null;
-  const mediaToSend = uploadedMedia ?? selectedTemplate;
+  /** Вложение «здесь и сейчас»: multipart напрямую в Telegram без диска/Cloudinary */
+  let bufferMedia: BufferMediaEnvelope | null = null;
+  if (req.file) {
+    const t = detectTelegramMediaType(req.file);
+    bufferMedia = {
+      type: t,
+      buffer: Buffer.from(req.file.buffer),
+      mime: req.file.mimetype || (t === "video" ? "video/mp4" : "image/jpeg"),
+      filename: req.file.originalname?.trim() || (t === "video" ? "video.mp4" : "photo.jpg"),
+      fileIdHolder: {},
+      shouldClearBufferAfterFileId: true,
+    };
+  }
+  /** Шаблон / CDN только если нет свежего файла в этом запросе */
+  const urlMedia =
+    !bufferMedia &&
+    selectedTemplate?.mediaUrl?.trim() &&
+    (selectedTemplate.mediaType === "photo" || selectedTemplate.mediaType === "video")
+      ? {
+          mediaUrl: selectedTemplate.mediaUrl!.trim(),
+          mediaType: selectedTemplate.mediaType as TelegramMediaType,
+        }
+      : null;
   const users = await prisma.user.findMany({
     where: {
       OR: [{ telegramChatId: { not: null } }, { telegramUsername: { not: null } }],
@@ -274,6 +364,27 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
     : [];
   const lookupByUsername = new Map(lookupRows.map((x) => [x.usernameLower, x.chatId]));
 
+  /** Один массовый UPDATE вместо N запросов `user.update` в цикле. */
+  const chatIdBackfills: Array<{ userId: string; chatId: string }> = [];
+  for (const u of users) {
+    const directChatId = (u.telegramChatId ?? "").trim();
+    const usernameLower = u.telegramUsername ? normalizeTelegramUsername(u.telegramUsername) : "";
+    const resolvedByUsername = usernameLower ? (lookupByUsername.get(usernameLower) ?? "").trim() : "";
+    const chatId = directChatId || resolvedByUsername;
+    if (!chatId) continue;
+    if (!directChatId && resolvedByUsername) chatIdBackfills.push({ userId: u.id, chatId: resolvedByUsername });
+  }
+
+  if (chatIdBackfills.length) {
+    const rows = chatIdBackfills.map(({ userId, chatId }) => Prisma.sql`(${userId}::uuid, ${chatId})`);
+    await prisma.$executeRaw`
+      UPDATE "User" AS u
+      SET "telegramChatId" = v.chat_id
+      FROM (VALUES ${Prisma.join(rows)}) AS v(user_id, chat_id)
+      WHERE u.id = v.user_id
+    `.catch(() => {});
+  }
+
   let attempted = 0;
   let sent = 0;
   let failed = 0;
@@ -288,21 +399,14 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
     const resolvedByUsername = usernameLower ? (lookupByUsername.get(usernameLower) ?? "").trim() : "";
     const chatId = directChatId || resolvedByUsername;
     if (!chatId) continue;
-    if (!directChatId && resolvedByUsername) {
-      await prisma.user
-        .update({
-          where: { id: u.id },
-          data: { telegramChatId: resolvedByUsername },
-        })
-        .catch(() => {});
-    }
     attempted++;
     try {
       await sendTelegramBroadcastMessage({
         chatId,
         message,
-        mediaUrl: mediaToSend?.mediaUrl,
-        mediaType: mediaToSend?.mediaType as TelegramMediaType | undefined,
+        mediaUrl: urlMedia?.mediaUrl,
+        mediaType: urlMedia?.mediaType,
+        bufferMedia,
       });
       sent++;
     } catch (error) {
@@ -334,8 +438,9 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
         sent,
         failed,
         failedUserIds,
-        mediaUrl: mediaToSend?.mediaUrl ?? null,
-        mediaType: mediaToSend?.mediaType ?? null,
+        mediaUrl: urlMedia?.mediaUrl ?? null,
+        mediaType: urlMedia?.mediaType ?? null,
+        mediaViaBuffer: Boolean(bufferMedia),
       },
     });
   }
@@ -344,8 +449,9 @@ adminRouter.post("/telegram-broadcast", telegramBroadcastUpload.single("attachme
     attempted,
     sent,
     failed,
-    mediaUrl: mediaToSend?.mediaUrl ?? null,
-    mediaType: mediaToSend?.mediaType ?? null,
+    mediaUrl: urlMedia?.mediaUrl ?? null,
+    mediaType: urlMedia?.mediaType ?? null,
+    mediaViaBuffer: Boolean(bufferMedia),
   });
 });
 

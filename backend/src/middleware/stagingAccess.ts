@@ -40,6 +40,8 @@ export function requireStagingAccess(req: Request, res: Response, next: NextFunc
   if (env.APP_ENV !== "staging") return next();
   if (req.method === "OPTIONS") return next();
   if (req.path === "/api/health") return next();
+  /** Telegram шлёт webhook без ZBT-токена; защита — TELEGRAM_WEBHOOK_SECRET + проверка в обработчике. */
+  if (req.path === "/api/telegraf-webhook") return next();
 
   const allowedIps = getAllowedIps();
   const requestIp = normalizeIp(req.ip) ?? normalizeIp(req.socket.remoteAddress ?? undefined);

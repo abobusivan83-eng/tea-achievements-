@@ -21,13 +21,38 @@ import { shopRouter } from "./routes/shop.js";
 import { giftsRouter } from "./routes/gifts.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { fail, ok } from "./lib/http.js";
-import { isTelegramConfigured, startTelegramLongPolling } from "./lib/telegram.js";
+import { bootstrapTelegramWebhook, isTelegramConfigured, processTelegramUpdate } from "./lib/telegram.js";
 import { startRegistrationOtpCleanup } from "./lib/registrationCleanup.js";
 import { requireStagingAccess } from "./middleware/stagingAccess.js";
 import { uploadPublicDir, uploadRootAbs } from "./lib/uploadPaths.js";
 import { ensureDefaultProfileAssets } from "./lib/defaultProfileAssets.js";
 
 ensureDefaultProfileAssets();
+
+/** Диагностика БД без пароля и без полного URI (удобно проверять pooler/supabase-проект в Render). */
+function databaseUrlDiagnostics(raw: string): Record<string, unknown> {
+  if (raw.startsWith("file:")) {
+    return { kind: "sqlite", hint: "schema file" };
+  }
+  try {
+    const u = new URL(raw);
+    const params: Record<string, string> = {};
+    u.searchParams.forEach((v, k) => {
+      params[k] = /password|passwd|secret|token|key/i.test(k) ? "****" : v;
+    });
+    const user = decodeURIComponent(u.username || "");
+    return {
+      kind: "postgresql",
+      host: u.hostname,
+      port: u.port || "default",
+      database: u.pathname.replace(/^\//, "") || "(default)",
+      userPreview: user ? `${user.slice(0, Math.min(3, user.length))}***` : "(none)",
+      params,
+    };
+  } catch {
+    return { kind: "invalid_url" };
+  }
+}
 
 const app = express();
 app.set("trust proxy", env.TRUST_PROXY);
@@ -90,7 +115,7 @@ app.use(
 app.use(requireStagingAccess);
 app.use(
   morgan(env.APP_ENV === "production" ? "combined" : "dev", {
-    skip: (req) => req.path === "/api/health",
+    skip: (req) => req.path === "/api/health" || req.path === "/api/telegraf-webhook",
   }),
 );
 app.use(express.json({ limit: "1mb" }));
@@ -140,6 +165,39 @@ app.get("/api/ready", async (_req, res) => {
     logger.error("readiness_failed", { err: e instanceof Error ? e.message : String(e) });
     return fail(res, 503, "Service unavailable");
   }
+});
+
+/** Telegram Bot API webhook (HTTPS только). Ответ мгновенный 200, обработка вне hot path через setImmediate. */
+app.post("/api/telegraf-webhook", (req: express.Request, res: express.Response) => {
+  console.log("📥 Webhook received");
+  const webhookBody = req.body as { update_id?: unknown } | undefined;
+  const updateId =
+    webhookBody &&
+    typeof webhookBody === "object" &&
+    typeof webhookBody.update_id === "number"
+      ? webhookBody.update_id
+      : undefined;
+  logger.info("[telegram] Webhook received", { updateId });
+
+  const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (secret) {
+    const got = req.header("x-telegram-bot-api-secret-token")?.trim();
+    if (got !== secret) {
+      logger.warn("[telegram] webhook отклонён: неверный X-Telegram-Bot-Api-Secret-Token");
+      return res.sendStatus(401);
+    }
+  }
+  if (!req.body || typeof req.body !== "object") {
+    return res.sendStatus(400);
+  }
+  res.sendStatus(200);
+  setImmediate(() => {
+    void processTelegramUpdate(req.body).catch((err) =>
+      logger.error("[telegram] processTelegramUpdate", {
+        err: err instanceof Error ? err.stack ?? err.message : String(err),
+      }),
+    );
+  });
 });
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
@@ -220,9 +278,13 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
 });
 
 const server = app.listen(port, () => {
-  const maskedUrl = env.DATABASE_URL.replace(/:([^:@]+)@/, ":****@");
   logger.info(`API listening on port ${port} (${env.API_URL}) [${env.APP_ENV}]`);
-  logger.info(`Using DATABASE_URL: ${maskedUrl}`);
+  logger.info("[boot] tea-backend: webhook telegram, без getUpdates/polling");
+  logger.info("[db] DATABASE_URL (хост и параметры, без пароля)", databaseUrlDiagnostics(env.DATABASE_URL));
+  const commit = process.env.RENDER_GIT_COMMIT?.trim();
+  if (commit) {
+    logger.info("[deploy] RENDER_GIT_COMMIT", { commit });
+  }
   void logDatabaseEncoding();
   if (process.env.RENDER === "true") {
     logger.warn(
@@ -230,7 +292,11 @@ const server = app.listen(port, () => {
     );
   }
   if (isTelegramConfigured()) {
-    void startTelegramLongPolling();
+    void bootstrapTelegramWebhook().catch((e) =>
+      logger.error("[telegram] bootstrap webhook", {
+        err: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   void startRegistrationOtpCleanup();
 });
