@@ -334,14 +334,45 @@ export async function processTelegramUpdate(update: TelegramWebhookUpdate): Prom
 }
 
 /**
- * Зарегистрировать webhook на api.telegram.org для текущего PUBLIC URL (Render HTTPS).
+ * Публичный HTTPS-адрес этого Node-процесса (куда Telegram шлёт webhook).
+ *
+ * На Render **нельзя** подставлять домен фронта (Vercel): там нет маршрута `/api/telegraf-webhook`.
+ * Поэтому при `RENDER_EXTERNAL_URL` он имеет приоритет над `API_URL` / `PUBLIC_BASE_URL`.
+ */
+export function resolveWebhookServerBase(): string {
+  const explicit = process.env.TELEGRAM_WEBHOOK_PUBLIC_BASE_URL?.trim().replace(/\/$/, "");
+  if (explicit) {
+    logger.info("[telegram] WEBHOOK: базовый URL из TELEGRAM_WEBHOOK_PUBLIC_BASE_URL", { explicit });
+    return explicit;
+  }
+
+  const fromApi = env.API_URL.replace(/\/$/, "");
+
+  if (process.env.RENDER === "true") {
+    const fromRender = process.env.RENDER_EXTERNAL_URL?.trim().replace(/\/$/, "");
+    if (fromRender) {
+      if (fromRender !== fromApi) {
+        logger.warn(
+          "[telegram] WEBHOOK: используется RENDER_EXTERNAL_URL, а не API_URL/DEFAULT (чтобы обновления бота попадали на этот сервис, а не на Vercel SPA).",
+          { webhookBase: fromRender, apiUrlConfiguredAs: fromApi },
+        );
+      }
+      return fromRender;
+    }
+  }
+
+  return fromApi;
+}
+
+/**
+ * Зарегистрировать webhook на api.telegram.org (HTTPS только).
  */
 export async function bootstrapTelegramWebhook(): Promise<void> {
   if (!env.TELEGRAM_BOT_TOKEN?.trim()) {
     logger.warn("[telegram] webhook: TELEGRAM_BOT_TOKEN не задан — регистрация пропущена.");
     return;
   }
-  const base = env.API_URL.replace(/\/$/, "");
+  const base = resolveWebhookServerBase();
   const webhookUrl = `${base}/api/telegraf-webhook`;
 
   const payload: Record<string, unknown> = {
