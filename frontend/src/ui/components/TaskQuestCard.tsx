@@ -419,7 +419,7 @@ export function TaskQuestCard(props: {
                 >
                   <div className="grid gap-3 border-t border-white/10 pt-3">
                     <label className="grid gap-1 text-sm">
-                      <span className="text-steam-muted">Комментарий (мин. 10 символов)</span>
+                      <span className="text-steam-muted">Комментарий (мин. 3 символа)</span>
                       <textarea
                         className="min-h-[100px] rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-steam-accent"
                         value={props.message}
@@ -491,7 +491,7 @@ export function TaskQuestCard(props: {
                         loading={props.submitting}
                         variant="primary"
                         onClick={() => props.onSubmit()}
-                        disabled={props.message.trim().length < 10 || props.submitting}
+                        disabled={props.message.trim().length < 3 || props.submitting}
                       >
                         Отправить
                       </Button>

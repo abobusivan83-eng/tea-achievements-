@@ -147,7 +147,7 @@ tasksRouter.post("/:taskId/submit", taskSubmissionUpload, async (req: AuthedRequ
   if (!z.string().uuid().safeParse(taskId).success) return fail(res, 400, "Invalid task id");
 
   const message = String((req.body as { message?: string })?.message ?? "").trim();
-  if (message.length < 10) return fail(res, 400, "Message must be at least 10 characters");
+  if (message.length < 3) return fail(res, 400, "Message must be at least 3 characters");
   if (message.length > 2000) return fail(res, 400, "Message too long");
 
   const now = new Date();
