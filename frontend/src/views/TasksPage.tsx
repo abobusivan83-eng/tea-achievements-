@@ -22,9 +22,40 @@ type TaskAchievementDetails = {
   achievement: Achievement;
   conditions: string;
 };
+type TaskDetailsModal = {
+  title: string;
+  description: string;
+  conditions: string;
+  rewardCoins?: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  achievementTitle?: string;
+  achievementRarity?: string | null;
+};
+
+const TASK_RARITY_RANK: Record<string, number> = {
+  COMMON: 1,
+  RARE: 2,
+  EPIC: 3,
+  LEGENDARY: 4,
+  SECRET: 5,
+  EXCLUSIVE: 6,
+};
 
 function isCompletedForUser(t: TaskItem) {
   return t.mySubmission?.status === "RESOLVED";
+}
+
+function taskScheduleStatus(t: TaskItem, nowMs: number): "UPCOMING" | "ACTIVE" | "EXPIRED" {
+  const startsAtMs = t.startsAt ? new Date(t.startsAt).getTime() : null;
+  const endsAtMs = t.endsAt ? new Date(t.endsAt).getTime() : null;
+  if (startsAtMs !== null && nowMs < startsAtMs) return "UPCOMING";
+  if (endsAtMs !== null && nowMs > endsAtMs) return "EXPIRED";
+  return "ACTIVE";
+}
+
+function taskRarityRank(t: TaskItem): number {
+  return TASK_RARITY_RANK[t.achievement?.rarity ?? "COMMON"] ?? 0;
 }
 
 export function TasksPage() {
@@ -41,6 +72,7 @@ export function TasksPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [selectedAchievement, setSelectedAchievement] = useState<TaskAchievementDetails | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskDetailsModal | null>(null);
   const [iconLightboxUrl, setIconLightboxUrl] = useState<string | null>(null);
   const toast = useToasts((s) => s.push);
   const reduce = useReducedMotion();
@@ -55,13 +87,23 @@ export function TasksPage() {
       if (isCompletedForUser(t)) completed.push(t);
       else available.push(t);
     }
+    available.sort((a, b) => {
+      const aOpen = taskScheduleStatus(a, nowMs) === "ACTIVE" ? 1 : 0;
+      const bOpen = taskScheduleStatus(b, nowMs) === "ACTIVE" ? 1 : 0;
+      if (bOpen !== aOpen) return bOpen - aOpen;
+      const rarityDelta = taskRarityRank(b) - taskRarityRank(a);
+      if (rarityDelta !== 0) return rarityDelta;
+      return +new Date(b.createdAt) - +new Date(a.createdAt);
+    });
     completed.sort((a, b) => {
+      const rarityDelta = taskRarityRank(b) - taskRarityRank(a);
+      if (rarityDelta !== 0) return rarityDelta;
       const ta = new Date(a.mySubmission?.reviewedAt ?? a.mySubmission?.createdAt ?? 0).getTime();
       const tb = new Date(b.mySubmission?.reviewedAt ?? b.mySubmission?.createdAt ?? 0).getTime();
       return tb - ta;
     });
     return { availableTasks: available, completedTasks: completed };
-  }, [tasks]);
+  }, [tasks, nowMs]);
 
   function switchTab(next: TasksTab) {
     setTab(next);
@@ -259,11 +301,18 @@ export function TasksPage() {
                 }
                 viewAchievementLabel="Посмотреть достижение"
                 viewTaskLabel="Посмотреть задание"
-                onViewTask={() => {
-                  if (expandedId !== t.id) {
-                    toggleExpand(t.id);
-                  }
-                }}
+                onViewTask={() =>
+                  setSelectedTask({
+                    title: t.title,
+                    description: t.description,
+                    conditions: t.conditions,
+                    rewardCoins: t.rewardCoins,
+                    startsAt: t.startsAt,
+                    endsAt: t.endsAt,
+                    achievementTitle: t.achievement?.title,
+                    achievementRarity: t.achievement?.rarity,
+                  })
+                }
                 onViewAchievement={(achievement) =>
                   setSelectedAchievement({
                     achievement: {
@@ -445,6 +494,46 @@ export function TasksPage() {
             ) : null}
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setSelectedAchievement(null)}>
+                Закрыть
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(selectedTask)} title={selectedTask ? `Задание: ${selectedTask.title}` : "Задание"} onClose={() => setSelectedTask(null)}>
+        {selectedTask ? (
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Описание</div>
+              <div className="mt-2 whitespace-pre-line text-sm leading-7 text-steam-text">{selectedTask.description}</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Условия выполнения</div>
+              <div className="mt-2 whitespace-pre-line text-sm leading-7 text-steam-text">{selectedTask.conditions.trim()}</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-steam-text">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-steam-muted">Награда и сроки</div>
+              <div className="mt-2 grid gap-1 text-steam-muted">
+                <div>
+                  Достижение: <span className="text-steam-text">{selectedTask.achievementTitle ?? "—"}</span>
+                </div>
+                <div>
+                  Редкость: <span className="text-steam-text">{selectedTask.achievementRarity ?? "—"}</span>
+                </div>
+                <div>
+                  Монеты: <span className="text-steam-text">{typeof selectedTask.rewardCoins === "number" ? selectedTask.rewardCoins : 0}</span>
+                </div>
+                <div>
+                  Старт: <span className="text-steam-text">{selectedTask.startsAt ? new Date(selectedTask.startsAt).toLocaleString() : "Без ограничения"}</span>
+                </div>
+                <div>
+                  Окончание: <span className="text-steam-text">{selectedTask.endsAt ? new Date(selectedTask.endsAt).toLocaleString() : "Без ограничения"}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedTask(null)}>
                 Закрыть
               </Button>
             </div>

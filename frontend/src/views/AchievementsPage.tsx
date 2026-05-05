@@ -19,6 +19,14 @@ const ACHIEVEMENT_RARITY_FILTERS: { value: Exclude<Rarity, "SECRET">; label: str
   { value: "LEGENDARY", label: "Легендарное" },
   { value: "EXCLUSIVE", label: "Эксклюзив" },
 ];
+const ACHIEVEMENT_RARITY_RANK: Record<Rarity, number> = {
+  COMMON: 1,
+  RARE: 2,
+  EPIC: 3,
+  LEGENDARY: 4,
+  SECRET: 5,
+  EXCLUSIVE: 6,
+};
 
 type AchievementCatalogFilterRarity = (typeof ACHIEVEMENT_RARITY_FILTERS)[number]["value"];
 
@@ -52,7 +60,23 @@ export function AchievementsPage() {
     },
   });
 
-  const items = achievementsQuery.data ?? [];
+  const sourceItems = achievementsQuery.data ?? [];
+  const items = useMemo(() => {
+    const arr = [...sourceItems];
+    arr.sort((a, b) => {
+      const aOpen = a.earned ? 1 : 0;
+      const bOpen = b.earned ? 1 : 0;
+      if (bOpen !== aOpen) return bOpen - aOpen;
+
+      const rarityDelta = (ACHIEVEMENT_RARITY_RANK[b.rarity] ?? 0) - (ACHIEVEMENT_RARITY_RANK[a.rarity] ?? 0);
+      if (rarityDelta !== 0) return rarityDelta;
+
+      if (sort === "points" && b.points !== a.points) return b.points - a.points;
+      if (sort === "new") return +new Date(b.createdAt) - +new Date(a.createdAt);
+      return +new Date(b.createdAt) - +new Date(a.createdAt);
+    });
+    return arr;
+  }, [sourceItems, sort]);
   const loading = achievementsQuery.isLoading;
   const error = achievementsQuery.error instanceof Error ? achievementsQuery.error.message : null;
 
