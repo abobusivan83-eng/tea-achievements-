@@ -197,7 +197,9 @@ export function ShopPage() {
             </div>
             <div className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">Магазин трофеев и профиля</div>
             <div className="mt-2 max-w-xl text-sm text-steam-muted md:text-base">
-              Покупай редкие рамки и значки за заработанные монеты. Витрина теперь адаптирована под любые названия, цены и размеры экрана.
+              Выделяйся среди соратников! В нашем магазине ты можешь приобрести редкие рамки и значки, которые
+              подчеркнут твой статус в клане. Сделай свой профиль по-настоящему уникальным за счет накопленного
+              капитала.
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[520px] lg:grid-cols-4">
