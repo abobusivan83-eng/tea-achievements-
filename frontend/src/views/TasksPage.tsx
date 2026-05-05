@@ -73,7 +73,12 @@ export function TasksPage() {
 
   async function refresh() {
     const list = await apiFetch<TaskItem[]>("/api/tasks");
-    setTasks(list);
+    setTasks(
+      list.map((task) => ({
+        ...task,
+        mySubmission: task.mySubmission ?? (task as TaskItem & { submission?: TaskItem["mySubmission"] }).submission ?? null,
+      })),
+    );
   }
 
   useEffect(() => {
@@ -253,6 +258,12 @@ export function TasksPage() {
                     : undefined
                 }
                 viewAchievementLabel="Посмотреть достижение"
+                viewTaskLabel="Посмотреть задание"
+                onViewTask={() => {
+                  if (expandedId !== t.id) {
+                    toggleExpand(t.id);
+                  }
+                }}
                 onViewAchievement={(achievement) =>
                   setSelectedAchievement({
                     achievement: {

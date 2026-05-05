@@ -48,8 +48,9 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
   if (cached) return ok(res, cached);
 
   const now = new Date();
+  const userId = req.user!.id;
   const rows = await prisma.task.findMany({
-    where: taskListWhere(req.user!.id),
+    where: taskListWhere(userId),
     orderBy: [{ isEvent: "desc" }, { createdAt: "desc" }],
     take: 200,
     select: {
@@ -81,7 +82,7 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
         },
       },
       submissions: {
-        where: { userId: req.user!.id },
+        where: { userId },
         orderBy: { createdAt: "desc" },
         take: 1,
         select: {
@@ -95,26 +96,48 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
       },
     },
   });
+  const achievementIds = rows.map((t) => t.achievementId);
+  const earnedRows =
+    achievementIds.length > 0
+      ? await prisma.userAchievement.findMany({
+          where: { userId, achievementId: { in: achievementIds } },
+          select: { achievementId: true, awardedAt: true },
+        })
+      : [];
+  const earnedMap = new Map(earnedRows.map((x) => [x.achievementId, x.awardedAt]));
 
   const payload = rows.map((t) => {
     const sub = t.submissions[0];
+    const earnedAt = earnedMap.get(t.achievementId) ?? null;
+    const normalizedSubmission =
+      sub?.status === "RESOLVED" || earnedAt
+        ? {
+            id: sub?.id ?? `award:${t.id}`,
+            status: "RESOLVED" as const,
+            createdAt: sub?.createdAt ?? earnedAt ?? now,
+            reviewedAt: sub?.reviewedAt ?? earnedAt ?? null,
+            adminResponse: sub?.adminResponse ?? null,
+            reviewedByNickname: sub?.reviewedBy?.nickname ?? null,
+          }
+        : sub
+          ? {
+              ...sub,
+              reviewedByNickname: sub.reviewedBy?.nickname ?? null,
+            }
+          : null;
     return {
       ...t,
       achievement: {
         ...t.achievement,
         iconUrl: toPublicFileUrl(t.achievement.iconPath),
       },
-      submission: sub
-        ? {
-            ...sub,
-            reviewedByNickname: sub.reviewedBy?.nickname ?? null,
-          }
-        : null,
+      mySubmission: normalizedSubmission,
+      submission: normalizedSubmission,
       scheduleStatus: scheduleStatusFromTime(t.startsAt, t.endsAt, now),
     };
   });
 
-  setCachedTasksList(req.user!.id, payload);
+  setCachedTasksList(userId, payload);
   res.setHeader("Cache-Control", "private, max-age=45");
   return ok(res, payload);
 });

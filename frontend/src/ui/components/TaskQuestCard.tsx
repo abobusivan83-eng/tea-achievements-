@@ -130,6 +130,8 @@ export function TaskQuestCard(props: {
   onSubmit: () => void;
   onViewAchievement?: (achievement: NonNullable<TaskItem["achievement"]>) => void;
   viewAchievementLabel?: string;
+  onViewTask?: () => void;
+  viewTaskLabel?: string;
   /** Роль CREATOR: быстрый переход в админку с открытым редактором задания */
   creatorQuickEdit?: boolean;
   onCreatorEditTask?: () => void;
@@ -339,7 +341,19 @@ export function TaskQuestCard(props: {
                   )}
                 </div>
                 {props.onViewAchievement ? (
-                  <div className="mt-2 flex justify-end">
+                  <div className="mt-2 flex flex-wrap justify-end gap-2">
+                    {props.onViewTask ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          props.onViewTask?.();
+                        }}
+                      >
+                        {props.viewTaskLabel ?? "Посмотреть задание"}
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"

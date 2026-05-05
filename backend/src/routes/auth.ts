@@ -77,12 +77,22 @@ async function findUserForLogin(raw: string) {
   // @nickname — Telegram, не email
   if (t.startsWith("@") && !t.slice(1).includes("@")) {
     const uname = t.slice(1).toLowerCase();
+    const byExact = await prisma.user.findUnique({
+      where: { telegramUsername: uname },
+      select: loginUserSelect,
+    });
+    if (byExact) return byExact;
     return prisma.user.findFirst({
       where: { telegramUsername: { equals: uname, mode: "insensitive" } },
       select: loginUserSelect,
     });
   }
   if (t.includes("@")) {
+    const byExact = await prisma.user.findUnique({
+      where: { email: lower },
+      select: loginUserSelect,
+    });
+    if (byExact) return byExact;
     return prisma.user.findFirst({
       where: { email: { equals: lower, mode: "insensitive" } },
       select: loginUserSelect,
@@ -96,6 +106,11 @@ async function findUserForLogin(raw: string) {
     });
   }
   const uname = t.toLowerCase();
+  const byExact = await prisma.user.findUnique({
+    where: { telegramUsername: uname },
+    select: loginUserSelect,
+  });
+  if (byExact) return byExact;
   return prisma.user.findFirst({
     where: { telegramUsername: { equals: uname, mode: "insensitive" } },
     select: loginUserSelect,
@@ -109,8 +124,8 @@ authRouter.post("/register/request", async (req, res) => {
   const tgUser = normalizeTelegramUsername(parsed.data.telegramUsername);
   if (!tgUser) return fail(res, 400, "Укажи ник в Telegram.");
 
-  const clash = await prisma.user.findFirst({
-    where: { telegramUsername: { equals: tgUser, mode: "insensitive" } },
+  const clash = await prisma.user.findUnique({
+    where: { telegramUsername: tgUser },
     select: { id: true },
   });
   if (clash) return fail(res, 409, "Этот Telegram-ник уже занят");
