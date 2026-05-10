@@ -1,7 +1,6 @@
 import fs from "fs";
 import multer from "multer";
 import path from "path";
-import { randomBytes } from "crypto";
 import type { RequestHandler } from "express";
 import { isAllowedImageMime } from "../lib/allowedImageMime.js";
 import { uploadRootAbs } from "../lib/uploadPaths.js";
@@ -72,19 +71,10 @@ export const upload = multer({
 
 const TASK_MEDIA_LIMIT_BYTES = 100 * 1024 * 1024;
 
-const taskEvidenceDiskStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, evidenceDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const safeExt = ext && ext.length <= 10 ? ext : "";
-    cb(null, `${Date.now()}-${randomBytes(8).toString("hex")}${safeExt}`);
-  },
-});
-
-/** Доказательства по заданиям — только под uploads/evidence (временные файлы, удаляются после решения админа). */
+/** Буфер в RAM → заливка в CDN; локальный uploads/evidence больше не используется (эфемерный FS). */
 export const taskSubmissionUpload: RequestHandler = (req, res, next) => {
   const uploader = multer({
-    storage: taskEvidenceDiskStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: TASK_MEDIA_LIMIT_BYTES, files: 8 },
     fileFilter(_req, file, cb) {
       if (!/^image\//.test(file.mimetype) && !/^video\//.test(file.mimetype)) {

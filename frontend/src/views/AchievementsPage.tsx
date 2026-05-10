@@ -50,6 +50,7 @@ export function AchievementsPage() {
 
   const achievementsQuery = useQuery({
     queryKey: ["achievements", rarity, only, sort, q.trim()],
+    staleTime: 60_000,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (rarity) params.set("rarity", rarity);

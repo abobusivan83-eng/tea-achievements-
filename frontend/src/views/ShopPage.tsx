@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, apiJson } from "../lib/api";
+import { shopItemsQueryKey, shopMeQueryKey } from "../lib/queryKeys";
 import type { Rarity, ShopItem } from "../lib/types";
 import { Reveal } from "../ui/components/Reveal";
 import { Button } from "../ui/components/Button";
@@ -119,39 +121,32 @@ function ProductCard(props: { item: ShopItem; owned: boolean; buying: boolean; o
 }
 
 export function ShopPage() {
-  const [items, setItems] = useState<ShopItem[]>([]);
-  const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
-  const [coins, setCoins] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [buyBusyId, setBuyBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    async function run() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [itemsResp, meResp] = await Promise.all([
-          apiFetch<ShopItem[]>("/api/shop/items"),
-          apiFetch<{ purchasedItemIds: string[]; coins: number }>("/api/shop/me"),
-        ]);
-        if (!mounted) return;
-        setItems(itemsResp);
-        setPurchasedIds(new Set(meResp.purchasedItemIds));
-        setCoins(meResp.coins ?? 0);
-      } catch (e: any) {
-        if (!mounted) return;
-        setError(e?.message ?? "Ошибка загрузки магазина");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const itemsQuery = useQuery({
+    queryKey: shopItemsQueryKey,
+    queryFn: () => apiFetch<ShopItem[]>("/api/shop/items"),
+    staleTime: 90_000,
+  });
+  const meQuery = useQuery({
+    queryKey: shopMeQueryKey,
+    queryFn: () => apiFetch<{ purchasedItemIds: string[]; coins: number }>("/api/shop/me"),
+    staleTime: 45_000,
+  });
+
+  const items = itemsQuery.data ?? [];
+  const purchasedIds = useMemo(
+    () => new Set(meQuery.data?.purchasedItemIds ?? []),
+    [meQuery.data?.purchasedItemIds],
+  );
+  const coins = meQuery.data?.coins ?? 0;
+  const loading = itemsQuery.isLoading || meQuery.isLoading;
+  const loadError =
+    (itemsQuery.error instanceof Error ? itemsQuery.error.message : null) ??
+    (meQuery.error instanceof Error ? meQuery.error.message : null);
+  const displayError = error ?? loadError;
 
   const frames = useMemo(() => items.filter((i) => i.type === "FRAME"), [items]);
   const statusEmojis = useMemo(
@@ -175,10 +170,7 @@ export function ShopPage() {
         window.clearTimeout(timeoutId);
       }
 
-      // Refresh from the server to ensure balance/ownership is always consistent.
-      const meResp = await apiFetch<{ purchasedItemIds: string[]; coins: number }>("/api/shop/me");
-      setPurchasedIds(new Set(meResp.purchasedItemIds));
-      setCoins(meResp.coins ?? 0);
+      await queryClient.invalidateQueries({ queryKey: shopMeQueryKey });
     } catch (e: any) {
       setError(e?.message ?? "Не удалось купить");
     } finally {
@@ -245,7 +237,7 @@ export function ShopPage() {
           ))}
         </div>
       ) : null}
-      {error ? <div className="steam-card p-4">{error}</div> : null}
+      {displayError ? <div className="steam-card p-4">{displayError}</div> : null}
 
       <div className="grid gap-5 xl:grid-cols-[1.05fr_1.15fr]">
         <section className="steam-card shop-panel p-4 md:p-5">

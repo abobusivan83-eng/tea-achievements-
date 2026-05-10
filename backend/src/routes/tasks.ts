@@ -5,9 +5,11 @@ import { prisma } from "../lib/prisma.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { taskSubmissionUpload } from "../middleware/uploads.js";
+import { uploadTaskEvidenceToMediaStorage } from "../lib/mediaStorage.js";
+import { tryDeleteEvidenceFiles } from "../lib/uploadDeletionPolicy.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
-import { toRelUploadPath } from "../lib/uploadPaths.js";
 import { getCachedTasksList, invalidateSupportUnreadCountCache, invalidateTasksListCache, setCachedTasksList } from "../lib/cache.js";
+import { logger } from "../lib/logger.js";
 import { achievementWhereForTaskList } from "../lib/achievementVisibility.js";
 
 export const tasksRouter = Router();
@@ -172,31 +174,56 @@ tasksRouter.post("/:taskId/submit", taskSubmissionUpload, async (req: AuthedRequ
   }
 
   const files = (req as Express.Request & { files?: Express.Multer.File[] }).files ?? [];
-  const evidenceUrls = files.map((f) => {
-    if (typeof f.path === "string" && f.path) {
-      return toPublicFileUrl(toRelUploadPath(f.path));
+  const evidenceUrls: string[] = [];
+  try {
+    const uidShort = req.user!.id.replace(/-/g, "").slice(0, 10);
+    for (const f of files) {
+      if (!Buffer.isBuffer(f.buffer) || !f.buffer.length) continue;
+      const safeName = String(f.originalname ?? "file")
+        .replace(/[^\w.\-()+ ]+/g, "_")
+        .slice(0, 72);
+      const prefix = `${uidShort}-${safeName}`;
+      const url = await uploadTaskEvidenceToMediaStorage({
+        buffer: f.buffer,
+        mimetype: f.mimetype || "application/octet-stream",
+        originalname: f.originalname,
+        publicIdPrefix: prefix,
+      });
+      evidenceUrls.push(url);
     }
-    return "";
-  }).filter((u) => u.length > 0);
+  } catch (e) {
+    if (evidenceUrls.length > 0) await tryDeleteEvidenceFiles(evidenceUrls);
+    const msg = e instanceof Error && e.message ? e.message.slice(0, 500) : "Upload failed";
+    const svc = /облако|cloudinary|cdn/i.test(msg);
+    return fail(res, svc ? 503 : 500, msg);
+  }
 
-  const created = await prisma.taskSubmission.create({
-    data: {
-      taskId,
-      userId: req.user!.id,
-      message,
-      evidenceJson: evidenceUrls.length ? (evidenceUrls as unknown as object) : undefined,
-      status: "PENDING",
-    },
-    select: {
-      id: true,
-      taskId: true,
-      status: true,
-      createdAt: true,
-      message: true,
-      adminResponse: true,
-      evidenceJson: true,
-    },
-  });
+  let created;
+  try {
+    created = await prisma.taskSubmission.create({
+      data: {
+        taskId,
+        userId: req.user!.id,
+        message,
+        evidenceJson: evidenceUrls.length ? (evidenceUrls as unknown as object) : undefined,
+        status: "PENDING",
+      },
+      select: {
+        id: true,
+        taskId: true,
+        status: true,
+        createdAt: true,
+        message: true,
+        adminResponse: true,
+        evidenceJson: true,
+      },
+    });
+  } catch (e) {
+    await tryDeleteEvidenceFiles(evidenceUrls);
+    logger.error("task_submission_db_create_failed", { err: String(e), userId: req.user!.id, taskId });
+    return fail(res, 500, "Не удалось сохранить заявку");
+  }
+
   invalidateTasksListCache(req.user!.id);
   await prisma.notification.create({
     data: {

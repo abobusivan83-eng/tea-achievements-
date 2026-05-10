@@ -15,6 +15,7 @@ const GIFTS_UNREAD_PREFIX = "gifts:unread:";
 const SUPPORT_UNREAD_PREFIX = "support:unread:";
 const USER_PROFILE_PREFIX = "user:profile:";
 const TASKS_LIST_PREFIX = "tasks:list:";
+const ACHIEVEMENT_CATALOG_PREFIX = "achievements:catalog:";
 
 export function getCachedShopItems(): unknown {
   return shopCache.get(SHOP_ITEMS_KEY);
@@ -113,5 +114,26 @@ export function invalidateAllTasksListCaches(): void {
 
 export function invalidateAllUserProfileCaches(): void {
   const keys = shopCache.keys().filter((k) => k.startsWith(USER_PROFILE_PREFIX));
+  if (keys.length) shopCache.del(keys);
+}
+
+export function getCachedAchievementCatalog<T>(userId: string, queryHash: string): T | undefined {
+  return shopCache.get(`${ACHIEVEMENT_CATALOG_PREFIX}${userId}:${queryHash}`) as T | undefined;
+}
+
+export function setCachedAchievementCatalog<T>(userId: string, queryHash: string, data: T): void {
+  shopCache.set(`${ACHIEVEMENT_CATALOG_PREFIX}${userId}:${queryHash}`, data, 42);
+}
+
+/** Сброс ответов GET /api/achievements для одного пользователя (выдача/отзыв, задание, доступ). */
+export function invalidateAchievementCatalogForUser(userId: string): void {
+  const prefix = `${ACHIEVEMENT_CATALOG_PREFIX}${userId}:`;
+  const keys = shopCache.keys().filter((k) => k.startsWith(prefix));
+  if (keys.length) shopCache.del(keys);
+}
+
+/** Новое/изменённое/удалённое достижение в каталоге — сброс кэша для всех. */
+export function invalidateAllAchievementCatalogCaches(): void {
+  const keys = shopCache.keys().filter((k) => k.startsWith(ACHIEVEMENT_CATALOG_PREFIX));
   if (keys.length) shopCache.del(keys);
 }

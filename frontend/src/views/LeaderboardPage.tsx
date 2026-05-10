@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import type { LeaderboardRow } from "../lib/types";
@@ -10,43 +11,30 @@ import { Reveal } from "../ui/components/Reveal";
 import { Skeleton } from "../ui/components/Skeleton";
 import { AvatarFrame } from "../ui/components/AvatarFrame";
 import { resolveAvatarUrl } from "../lib/media";
+import { leaderboardQueryKey } from "../lib/queryKeys";
 
 export function LeaderboardPage() {
   const nav = useNavigate();
-  const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<LeaderboardRow | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"points" | "achievements" | "level">("points");
 
-  useEffect(() => {
-    let mounted = true;
-    async function run(background = false) {
-      if (!background) {
-        setLoading(true);
-      }
-      setError(null);
-      try {
-        const data = await apiFetch<LeaderboardRow[]>("/api/leaderboard", { silent: background });
-        if (!mounted) return;
-        setRows(data);
-      } catch (e: any) {
-        setError(e?.message ?? "Ошибка загрузки рейтинга");
-      } finally {
-        if (mounted && !background) setLoading(false);
-      }
-    }
-    run();
-    const id = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      void run(true);
-    }, 20_000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
+  const leaderboardQuery = useQuery({
+    queryKey: leaderboardQueryKey,
+    queryFn: () => apiFetch<LeaderboardRow[]>("/api/leaderboard"),
+    staleTime: 55_000,
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
+  });
+
+  const rows = leaderboardQuery.data ?? [];
+  const loading = leaderboardQuery.isLoading;
+  const error =
+    leaderboardQuery.isError && leaderboardQuery.error instanceof Error
+      ? leaderboardQuery.error.message
+      : leaderboardQuery.isError
+        ? "Ошибка загрузки рейтинга"
+        : null;
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();

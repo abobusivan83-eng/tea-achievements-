@@ -19,6 +19,8 @@ import {
 } from "../lib/achievementAwards.js";
 import { getAdminDisplayName, logAdminAction } from "../lib/adminAudit.js";
 import {
+  invalidateAchievementCatalogForUser,
+  invalidateAllAchievementCatalogCaches,
   invalidateAllTasksListCaches,
   invalidateAllUserProfileCaches,
   invalidateLeaderboardCache,
@@ -644,6 +646,7 @@ adminRouter.post("/achievements", async (req: AuthedRequest, res) => {
     return created;
   });
 
+  invalidateAllAchievementCatalogCaches();
   if (uniqueAwardUserIds.length) {
     uniqueAwardUserIds.forEach((userId) => {
       invalidateUserProfileCache(userId);
@@ -704,6 +707,7 @@ adminRouter.patch("/achievements/:id", async (req: AuthedRequest, res) => {
 
   invalidateAllTasksListCaches();
   invalidateAllUserProfileCaches();
+  invalidateAllAchievementCatalogCaches();
 
   return ok(res, { ...updated, iconUrl: toPublicFileUrl(updated.iconPath) });
 });
@@ -716,6 +720,7 @@ adminRouter.delete("/achievements/:id", async (req, res) => {
   await prisma.achievement.delete({ where: { id: achievementId } });
   invalidateAllTasksListCaches();
   invalidateAllUserProfileCaches();
+  invalidateAllAchievementCatalogCaches();
   return ok(res, { deleted: true });
 });
 
@@ -736,6 +741,7 @@ adminRouter.post("/achievements/:id/icon", upload.single("file"), async (req, re
     select: { id: true, iconPath: true },
   });
 
+  invalidateAllAchievementCatalogCaches();
   return ok(res, { iconUrl: toPublicFileUrl(updated.iconPath) });
 });
 
@@ -769,6 +775,7 @@ adminRouter.post("/achievements/:id/award", async (req: AuthedRequest, res) => {
   });
   invalidateUserProfileCache(parsed.data.userId);
   invalidateTasksListCache(parsed.data.userId);
+  invalidateAchievementCatalogForUser(parsed.data.userId);
   invalidateLeaderboardCache();
 
   const target = await prisma.user.findUnique({
@@ -802,6 +809,7 @@ adminRouter.post("/achievements/:id/revoke", async (req: AuthedRequest, res) => 
   });
   invalidateUserProfileCache(parsed.data.userId);
   invalidateTasksListCache(parsed.data.userId);
+  invalidateAchievementCatalogForUser(parsed.data.userId);
   invalidateLeaderboardCache();
 
   const target = await prisma.user.findUnique({
@@ -889,6 +897,7 @@ adminRouter.post("/users/:id/revoke-achievements", async (req: AuthedRequest, re
   });
   invalidateUserProfileCache(target.id);
   invalidateTasksListCache(target.id);
+  invalidateAchievementCatalogForUser(target.id);
   invalidateLeaderboardCache();
 
   if (req.user?.id) {
@@ -976,6 +985,8 @@ adminRouter.post("/achievements/:id/grant", async (req: AuthedRequest, res) => {
   await prisma.achievementAccess.createMany({
     data: parsed.data.userIds.map((userId) => ({ achievementId, userId })),
   });
+
+  parsed.data.userIds.forEach((userId) => invalidateAchievementCatalogForUser(userId));
 
   if (req.user?.id) {
     const users = await prisma.user.findMany({
@@ -1528,6 +1539,7 @@ adminRouter.post("/tasks", async (req: AuthedRequest, res) => {
   }
   invalidateAllTasksListCaches();
   invalidateAllUserProfileCaches();
+  invalidateAllAchievementCatalogCaches();
   return ok(res, created);
 });
 
@@ -1578,6 +1590,7 @@ adminRouter.patch("/tasks/:id", async (req: AuthedRequest, res) => {
   }
   invalidateAllTasksListCaches();
   invalidateAllUserProfileCaches();
+  invalidateAllAchievementCatalogCaches();
   return ok(res, updated);
 });
 
@@ -1596,15 +1609,30 @@ adminRouter.delete("/tasks/:id", async (req: AuthedRequest, res) => {
   }
   invalidateAllTasksListCaches();
   invalidateAllUserProfileCaches();
+  invalidateAllAchievementCatalogCaches();
   return ok(res, { deleted: true });
+});
+
+const TaskSubmissionsListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  offset: z.coerce.number().int().min(0).max(50_000).optional(),
 });
 
 adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
   if (!adminOnly(req, res)) return;
   const status = SupportStatusSchema.optional().safeParse(req.query.status);
   const where = status.success && status.data ? { status: status.data } : undefined;
-  const rows = await prisma.taskSubmission.findMany({
+
+  const paged = TaskSubmissionsListQuerySchema.safeParse(req.query);
+  const take = paged.success && paged.data.limit !== undefined ? paged.data.limit : 100;
+  const skip = paged.success && paged.data.offset !== undefined ? paged.data.offset : 0;
+
+  const [total, rows] = await Promise.all([
+    prisma.taskSubmission.count({ where }),
+    prisma.taskSubmission.findMany({
     where,
+    skip,
+    take,
     orderBy: [{ isRead: "asc" }, { createdAt: "desc" }],
     include: {
       user: {
@@ -1651,32 +1679,32 @@ adminRouter.get("/tasks/submissions", async (req: AuthedRequest, res) => {
         },
       },
     },
-    take: 500,
-  });
-  return ok(
-    res,
-    rows.map((s) => ({
-      ...s,
-      evidence: (s.evidenceJson as unknown as string[] | null) ?? [],
-      user: {
-        ...s.user,
-        avatarUrl: s.user.avatarUrl || (s.user.avatarPath ? toPublicFileUrl(s.user.avatarPath) : null),
-        level: levelFromXp(s.user.xp).level,
-      },
-      task: {
-        ...s.task,
-        achievement: s.task.achievement
-          ? {
-              ...s.task.achievement,
-              iconUrl: toPublicFileUrl(s.task.achievement.iconPath),
-              createdAt: s.task.achievement.createdAt.toISOString(),
-            }
-          : null,
-        createdAt: s.task.createdAt.toISOString(),
-        updatedAt: s.task.updatedAt.toISOString(),
-      },
-    })),
-  );
+  }),
+  ]);
+
+  const items = rows.map((s) => ({
+    ...s,
+    evidence: (s.evidenceJson as unknown as string[] | null) ?? [],
+    user: {
+      ...s.user,
+      avatarUrl: s.user.avatarUrl || (s.user.avatarPath ? toPublicFileUrl(s.user.avatarPath) : null),
+      level: levelFromXp(s.user.xp).level,
+    },
+    task: {
+      ...s.task,
+      achievement: s.task.achievement
+        ? {
+            ...s.task.achievement,
+            iconUrl: toPublicFileUrl(s.task.achievement.iconPath),
+            createdAt: s.task.achievement.createdAt.toISOString(),
+          }
+        : null,
+      createdAt: s.task.createdAt.toISOString(),
+      updatedAt: s.task.updatedAt.toISOString(),
+    },
+  }));
+
+  return ok(res, { items, total });
 });
 
 const TaskSubmissionIdSchema = z.string().uuid("Invalid submission id");
@@ -1727,6 +1755,8 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         };
         nextStatus: import("@prisma/client").SupportStatus;
         shouldInvalidate: boolean;
+        /** Пользователь получил достижение по заявке — обновить кэш каталога /achievements. */
+        didAwardAchievement: boolean;
         shouldClearEvidence: boolean;
         evidenceSnapshot: Prisma.JsonValue | null;
       };
@@ -1836,6 +1866,7 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
         },
         nextStatus,
         shouldInvalidate: shouldAward || shouldNotify,
+        didAwardAchievement: shouldAward,
         shouldClearEvidence,
         evidenceSnapshot: existing.evidenceJson,
       };
@@ -1874,6 +1905,9 @@ adminRouter.patch("/tasks/submissions/:id", async (req: AuthedRequest, res) => {
     invalidateSupportUnreadCountCache(result.existing.user.id);
     invalidateUserProfileCache(result.existing.user.id);
     invalidateTasksListCache(result.existing.user.id);
+    if (result.didAwardAchievement) {
+      invalidateAchievementCatalogForUser(result.existing.user.id);
+    }
     if (result.nextStatus === "RESOLVED") {
       invalidateLeaderboardCache();
     }
@@ -1923,6 +1957,14 @@ adminRouter.delete("/tasks/submissions/:id", async (req: AuthedRequest, res) => 
   if (!existing) return fail(res, 404, "Submission not found");
   if (existing.status === "PENDING") {
     return fail(res, 400, "Нельзя удалить заявку, пока она не обработана");
+  }
+
+  if (existing.evidenceJson) {
+    try {
+      await tryDeleteEvidenceFiles(existing.evidenceJson);
+    } catch {
+      /* best-effort: запись удаляем в любом случае */
+    }
   }
 
   await prisma.taskSubmission.delete({

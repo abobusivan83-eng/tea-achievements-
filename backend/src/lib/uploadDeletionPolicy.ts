@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { uploadPublicDir, uploadRootAbs } from "./uploadPaths.js";
+import { destroyCloudinaryDeliveryUrlIfApplicable } from "./mediaStorage.js";
 
 function absoluteFromStoredRef(ref: string): string | null {
   const trimmed = ref.trim();
@@ -67,12 +68,34 @@ export function evidenceAbsPathFromPublicRef(ref: string): string | null {
   return absoluteFromStoredRef(rel.startsWith(`${uploadPublicDir}/`) ? rel : `${uploadPublicDir}/${rel.replace(/^\/+/, "")}`);
 }
 
+/** Dev fallback: локальная папка mock-cloud/task-evidence после отката или очистки заявки. */
+function mockTaskEvidenceLocalAbs(ref: string): string | null {
+  const trimmed = ref.trim();
+  if (!trimmed) return null;
+  const needle = `${uploadPublicDir}/mock-cloud/task-evidence`;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const tail = new URL(trimmed).pathname.replace(/^\/+/, "");
+      if (!tail.includes(`${needle}/`)) return null;
+      return absoluteFromStoredRef(tail);
+    } catch {
+      return null;
+    }
+  }
+  const rel = trimmed.replace(/\\/g, "/").replace(/^\/+/, "");
+  const withPrefix = rel.startsWith(`${uploadPublicDir}/`) ? rel : `${uploadPublicDir}/${rel}`;
+  if (!withPrefix.includes(`${needle}/`)) return null;
+  return absoluteFromStoredRef(withPrefix);
+}
+
 export async function tryDeleteEvidenceFiles(evidenceUrls: unknown): Promise<void> {
   if (!evidenceUrls) return;
   if (!Array.isArray(evidenceUrls)) return;
   for (const raw of evidenceUrls) {
     if (typeof raw !== "string" || !raw.trim()) continue;
-    const abs = evidenceAbsPathFromPublicRef(raw);
+    const trimmed = raw.trim();
+    await destroyCloudinaryDeliveryUrlIfApplicable(trimmed);
+    const abs = evidenceAbsPathFromPublicRef(trimmed) ?? mockTaskEvidenceLocalAbs(trimmed);
     if (!abs) continue;
     try {
       if (fs.existsSync(abs)) await fs.promises.unlink(abs);

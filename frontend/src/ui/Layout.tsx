@@ -90,7 +90,7 @@ export function Layout(props: { children: ReactNode }) {
     let mounted = true;
     async function run() {
       try {
-        const items = await apiFetch<LeaderboardRow[]>("/api/leaderboard");
+        const items = await apiFetch<LeaderboardRow[]>("/api/leaderboard", { silent: true });
         if (!mounted) return;
         setReportUsers(items);
         if (!reportUserId) setReportUserId(items.find((x) => x.id !== me?.id)?.id ?? "");

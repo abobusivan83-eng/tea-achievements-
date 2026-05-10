@@ -1,7 +1,9 @@
+import { createHash } from "crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { getCachedAchievementCatalog, setCachedAchievementCatalog } from "../lib/cache.js";
 import { fail, ok } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { toPublicFileUrl } from "../lib/publicUrl.js";
@@ -29,6 +31,15 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
   const now = new Date();
   /** Несколько слов через пробел — все должны встречаться в названии или описании (удобно для русского текста). */
   const searchTokens = q?.trim() ? q.trim().split(/\s+/).filter((t) => t.length > 0).slice(0, 8) : [];
+
+  const catalogHash = createHash("sha1")
+    .update(`${userId}\n${rarity ?? ""}\n${only}\n${sort}\n${searchTokens.join("\u241f")}`)
+    .digest("hex");
+  const catalogHit = getCachedAchievementCatalog<unknown[]>(userId, catalogHash);
+  if (catalogHit !== undefined) {
+    res.setHeader("Cache-Control", "private, max-age=35");
+    return ok(res, catalogHit);
+  }
   const searchWhere: Prisma.AchievementWhereInput | null =
     searchTokens.length > 0
       ? {
@@ -115,6 +126,8 @@ achievementsRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
     return +new Date(b.createdAt) - +new Date(a.createdAt);
   });
 
+  setCachedAchievementCatalog(userId, catalogHash, sorted);
+  res.setHeader("Cache-Control", "private, max-age=35");
   return ok(res, sorted);
 });
 

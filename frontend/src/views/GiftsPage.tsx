@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, apiJson } from "../lib/api";
 import type { GiftInboxItem, GiftOutboxItem, LeaderboardRow } from "../lib/types";
 import { Reveal } from "../ui/components/Reveal";
@@ -6,65 +7,71 @@ import { Button } from "../ui/components/Button";
 import { FiGift, FiInbox, FiSend, FiZap } from "react-icons/fi";
 import { useAuth } from "../state/auth";
 import { Skeleton } from "../ui/components/Skeleton";
+import { giftsPackQueryKey, leaderboardQueryKey, shopMeQueryKey } from "../lib/queryKeys";
 
 export function GiftsPage() {
   const me = useAuth((s) => s.me);
-  const [users, setUsers] = useState<LeaderboardRow[]>([]);
+  const queryClient = useQueryClient();
   const [toUserId, setToUserId] = useState<string>("");
   const [xpAmount, setXpAmount] = useState<number>(100);
-  const [coins, setCoins] = useState<number>(0);
   const [message, setMessage] = useState<string>("");
-  const [inbox, setInbox] = useState<GiftInboxItem[]>([]);
-  const [outbox, setOutbox] = useState<GiftOutboxItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sendBusy, setSendBusy] = useState(false);
   const markedViewedRef = useRef(false);
 
-  async function refresh() {
-    const [u, i, o, meShop] = await Promise.all([
-      apiFetch<LeaderboardRow[]>("/api/leaderboard"),
-      apiFetch<GiftInboxItem[]>("/api/gifts/inbox"),
-      apiFetch<GiftOutboxItem[]>("/api/gifts/outbox"),
-      apiFetch<{ coins: number }>("/api/shop/me"),
+  const giftsQuery = useQuery({
+    queryKey: giftsPackQueryKey(me?.id),
+    queryFn: async () => {
+      const [i, o, meShop] = await Promise.all([
+        apiFetch<GiftInboxItem[]>("/api/gifts/inbox"),
+        apiFetch<GiftOutboxItem[]>("/api/gifts/outbox"),
+        apiFetch<{ coins: number }>("/api/shop/me"),
+      ]);
+      return { inbox: i, outbox: o, coins: meShop.coins ?? 0 };
+    },
+    enabled: Boolean(me?.id),
+    staleTime: 25_000,
+  });
+
+  const leaderboardQuery = useQuery({
+    queryKey: leaderboardQueryKey,
+    queryFn: () => apiFetch<LeaderboardRow[]>("/api/leaderboard"),
+    staleTime: 55_000,
+    enabled: Boolean(me?.id),
+  });
+
+  const users = leaderboardQuery.data ?? [];
+  const inbox = giftsQuery.data?.inbox ?? [];
+  const outbox = giftsQuery.data?.outbox ?? [];
+  const coins = giftsQuery.data?.coins ?? 0;
+  const loading = giftsQuery.isLoading || leaderboardQuery.isLoading;
+  const fetchError =
+    (giftsQuery.error instanceof Error ? giftsQuery.error.message : null) ??
+    (leaderboardQuery.error instanceof Error ? leaderboardQuery.error.message : null);
+  const displayError = error ?? fetchError;
+
+  useEffect(() => {
+    if (!users.length || toUserId) return;
+    setToUserId(users.find((x) => x.id !== me?.id)?.id ?? "");
+  }, [users, me?.id, toUserId]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: giftsPackQueryKey(me?.id) }),
+      queryClient.invalidateQueries({ queryKey: leaderboardQueryKey }),
+      queryClient.invalidateQueries({ queryKey: shopMeQueryKey }),
     ]);
-    setUsers(u);
-    setInbox(i);
-    setOutbox(o);
-    setCoins(meShop.coins ?? 0);
-    if (!toUserId) setToUserId(u.find((x) => x.id !== me?.id)?.id ?? "");
-  }
+  }, [me?.id, queryClient]);
 
   useEffect(() => {
-    let mounted = true;
-    async function run() {
-      setLoading(true);
-      setError(null);
-      try {
-        await refresh();
-      } catch (e: any) {
-        if (!mounted) return;
-        setError(e?.message ?? "Ошибка загрузки подарков");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    run();
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (loading || markedViewedRef.current) return;
+    if (!giftsQuery.isSuccess || markedViewedRef.current) return;
     const hasUnread = inbox.some((g) => !g.isRead);
     if (!hasUnread) return;
     markedViewedRef.current = true;
     apiJson("/api/gifts/read", { markAll: true }, "POST").finally(() => {
-      refresh().catch(() => undefined);
+      void refresh();
     });
-  }, [loading, inbox]);
+  }, [giftsQuery.isSuccess, inbox, refresh]);
 
   const unreadInbox = inbox.filter((g) => !g.isRead).length;
 
@@ -103,8 +110,8 @@ export function GiftsPage() {
         </div>
       </Reveal>
 
-      {error ? (
-        <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div>
+      {displayError ? (
+        <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-100">{displayError}</div>
       ) : null}
 
       <Reveal className="steam-card steam-card--hover overflow-hidden p-0">

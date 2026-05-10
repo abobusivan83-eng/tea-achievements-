@@ -51,3 +51,9 @@ export function resolveAvatarUrl(url?: string | null) {
 export function resolveBannerUrl(url?: string | null) {
   return isValidImageUrl(url) ? (url as string) : DEFAULT_BANNER_URL;
 }
+
+/** Скриншот или видео-доказательство (URL бэкенда / CDN). */
+export function isEvidenceVideoUrl(url: string): boolean {
+  const clean = url.split("?")[0]?.toLowerCase() ?? "";
+  return clean.includes("/video/upload/") || /\.(mp4|webm|mov|m4v|mkv|avi|ogg)$/i.test(clean);
+}

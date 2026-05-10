@@ -1,6 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 import { awardAchievementToUser } from "./achievementAwards.js";
-import { invalidateLeaderboardCache, invalidateTasksListCache, invalidateUserProfileCache } from "./cache.js";
+import {
+  invalidateAchievementCatalogForUser,
+  invalidateLeaderboardCache,
+  invalidateTasksListCache,
+  invalidateUserProfileCache,
+} from "./cache.js";
 import { logger } from "./logger.js";
 
 /** Приоритет: актуальное имя в проде, затем заголовок из старого сида. */
@@ -31,6 +36,7 @@ export async function tryAwardStarterAchievementAfterRegistration(db: PrismaClie
     });
     invalidateUserProfileCache(userId);
     invalidateTasksListCache(userId);
+    invalidateAchievementCatalogForUser(userId);
     invalidateLeaderboardCache();
   } catch (err) {
     logger.error("[auth] Failed to award starter achievement after registration", {

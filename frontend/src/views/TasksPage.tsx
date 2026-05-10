@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import { apiFetch } from "../lib/api";
@@ -15,6 +16,7 @@ import { AchievementCard } from "../ui/components/AchievementCard";
 import { Button } from "../ui/components/Button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
+import { tasksListQueryKey } from "../lib/queryKeys";
 
 type TasksTab = "available" | "completed";
 const MAX_TASK_MEDIA_BYTES = 100 * 1024 * 1024;
@@ -59,9 +61,22 @@ function taskRarityRank(t: TaskItem): number {
 }
 
 export function TasksPage() {
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const tasksQuery = useQuery({
+    queryKey: tasksListQueryKey,
+    queryFn: async () => {
+      const list = await apiFetch<TaskItem[]>("/api/tasks");
+      return list.map((task) => ({
+        ...task,
+        mySubmission: task.mySubmission ?? (task as TaskItem & { submission?: TaskItem["mySubmission"] }).submission ?? null,
+      }));
+    },
+    staleTime: 40_000,
+  });
+
+  const tasks = tasksQuery.data ?? [];
+  const loading = tasksQuery.isLoading;
+  const error = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
   const [tab, setTab] = useState<TasksTab>("available");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -114,32 +129,8 @@ export function TasksPage() {
   }
 
   async function refresh() {
-    const list = await apiFetch<TaskItem[]>("/api/tasks");
-    setTasks(
-      list.map((task) => ({
-        ...task,
-        mySubmission: task.mySubmission ?? (task as TaskItem & { submission?: TaskItem["mySubmission"] }).submission ?? null,
-      })),
-    );
+    await queryClient.invalidateQueries({ queryKey: tasksListQueryKey });
   }
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        await refresh();
-      } catch (e: any) {
-        if (mounted) setError(e?.message ?? "Не удалось загрузить задания");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   // Keep time-based task locks/countdowns fresh without page reload.
   useEffect(() => {
@@ -178,7 +169,7 @@ export function TasksPage() {
 
     setSubmitting(true);
     setUploadProgress(0);
-    setUploadStatus("Загрузка видео в облако...");
+    setUploadStatus("Отправка файлов…");
     try {
       const res = await new Promise<Response>((resolve, reject) => {
         const xhr = new XMLHttpRequest();

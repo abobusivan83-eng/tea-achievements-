@@ -15,13 +15,13 @@ import { Skeleton } from "../ui/components/Skeleton";
 import { AchievementIcon } from "../ui/components/AchievementIcon";
 import { AvatarFrame, canUseFrame } from "../ui/components/AvatarFrame";
 import { useToasts } from "../state/toasts";
-import type { Achievement, Me, Rarity } from "../lib/types";
+import type { Achievement, LeaderboardRow, Me, Rarity } from "../lib/types";
 import { useSound } from "../state/sound";
 import { AchievementCard } from "../ui/components/AchievementCard";
 import { DEFAULT_BANNER_URL, resolveAvatarUrl, resolveBannerUrl } from "../lib/media";
 import { calculateLevelColor } from "../lib/levelColor";
 import { useQuery } from "@tanstack/react-query";
-import { profileQueryKey } from "../lib/queryKeys";
+import { leaderboardQueryKey, profileQueryKey } from "../lib/queryKeys";
 
 type ProfileResp = {
   user: {
@@ -88,12 +88,8 @@ export function ProfilePage() {
   const [burstKey, setBurstKey] = useState(0);
   const [tab, setTab] = useState<"main" | "achievements" | "leaderboard" | "settings">("main");
   const [statusEmoji, setStatusEmoji] = useState<string | null>(null);
-  const [ownedShopKeys, setOwnedShopKeys] = useState<Set<string> | null>(null);
   const [selectedAchievement, setSelectedAchievement] = useState<(Achievement & { ownerPct?: number }) | null>(null);
   const [iconLightboxUrl, setIconLightboxUrl] = useState<string | null>(null);
-  const [lbPos, setLbPos] = useState<{ pos: number | null; totalPoints: number; achievementCount: number } | null>(
-    null,
-  );
   const [bannerRemoteBroken, setBannerRemoteBroken] = useState(false);
 
   const profileUserId = params.id ?? me?.id;
@@ -155,48 +151,23 @@ export function ProfilePage() {
     img.src = url;
   }, [profile?.user.bannerUrl]);
 
-  useEffect(() => {
-    let mounted = true;
-    async function run() {
-      try {
-        const rows = await apiFetch<Array<{ id: string; totalPoints: number; achievementCount: number }>>(
-          "/api/leaderboard",
-        );
-        if (!mounted || !profileUserId) return;
-        const idx = rows.findIndex((r) => r.id === profileUserId);
-        if (idx >= 0) setLbPos({ pos: idx + 1, totalPoints: rows[idx]!.totalPoints, achievementCount: rows[idx]!.achievementCount });
-        else setLbPos({ pos: null, totalPoints: 0, achievementCount: 0 });
-      } catch {
-        if (mounted) setLbPos(null);
-      }
-    }
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, [profileUserId]);
+  const leaderboardQuery = useQuery({
+    queryKey: leaderboardQueryKey,
+    queryFn: () => apiFetch<LeaderboardRow[]>("/api/leaderboard"),
+    staleTime: 55_000,
+    enabled: Boolean(profileUserId),
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    async function run() {
-      if (!isOwnProfile) {
-        if (mounted) setOwnedShopKeys(null);
-        return;
-      }
-      try {
-        const data = await apiFetch<{ purchasedItems: Array<{ key: string; type: string }> }>("/api/shop/me");
-        if (!mounted) return;
-        setOwnedShopKeys(new Set((data.purchasedItems ?? []).map((x) => x.key)));
-      } catch {
-        if (!mounted) return;
-        setOwnedShopKeys(new Set());
-      }
+  const lbPos = useMemo(() => {
+    if (!profileUserId || !leaderboardQuery.data) return null;
+    const rows = leaderboardQuery.data;
+    const idx = rows.findIndex((r) => r.id === profileUserId);
+    if (idx >= 0) {
+      const row = rows[idx]!;
+      return { pos: idx + 1, totalPoints: row.totalPoints, achievementCount: row.achievementCount };
     }
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, [isOwnProfile, me?.id]);
+    return { pos: null, totalPoints: 0, achievementCount: 0 };
+  }, [leaderboardQuery.data, profileUserId]);
 
   useEffect(() => {
     if (!isOwnProfile && tab === "settings") setTab("main");

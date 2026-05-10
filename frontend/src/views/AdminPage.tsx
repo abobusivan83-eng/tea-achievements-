@@ -30,7 +30,11 @@ import { AchievementCard } from "../ui/components/AchievementCard";
 import { TaskQuestCard } from "../ui/components/TaskQuestCard";
 import { calculateLevelColor } from "../lib/levelColor";
 import { profileQueryKey } from "../lib/queryKeys";
+
+const TASK_SUBMISSIONS_PAGE = 100;
+import { isEvidenceVideoUrl } from "../lib/media";
 import { useSearchParams } from "react-router-dom";
+import { MediaLightbox } from "../ui/components/MediaLightbox";
 
 function adminTaskCardRarityClass(r: Rarity | undefined) {
   if (!r) return "rarity-common";
@@ -179,14 +183,6 @@ function taskScheduleRangeError(startsAtIso: string | null | undefined, endsAtIs
   return null;
 }
 
-function isVideoMedia(url: string) {
-  const clean = url.split("?")[0].toLowerCase();
-  return (
-    clean.includes("/video/upload/") ||
-    /\.(mp4|webm|mov|m4v|mkv|avi|ogg)$/i.test(clean)
-  );
-}
-
 function buildRejectReasonText(text: string) {
   return text.trim().replace(/\s+/g, " ");
 }
@@ -303,6 +299,8 @@ export function AdminPage() {
   const [shopItems, setShopItems] = useState<AdminShopItem[]>([]);
   const [tasks, setTasks] = useState<AdminTask[]>([]);
   const [taskSubmissions, setTaskSubmissions] = useState<AdminTaskSubmission[]>([]);
+  const [taskSubmissionsTotal, setTaskSubmissionsTotal] = useState(0);
+  const [taskSubmissionsLoadingMore, setTaskSubmissionsLoadingMore] = useState(false);
   const [selectedTaskSubmissionId, setSelectedTaskSubmissionId] = useState<string>("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
@@ -325,16 +323,10 @@ export function AdminPage() {
   const [taskAdminBucket, setTaskAdminBucket] = useState<"all" | "active" | "inactive" | "upcoming">("all");
   const [taskAdminSort, setTaskAdminSort] = useState<"new" | "rarity" | "coins">("new");
 
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerFiles, setViewerFiles] = useState<string[]>([]);
-  const [viewerIndex, setViewerIndex] = useState(0);
-  const [zoom, setZoom] = useState(1);
+  const [mediaViewer, setMediaViewer] = useState<{ urls: string[]; index: number } | null>(null);
 
   function openViewer(files: string[], index: number) {
-    setViewerFiles(files);
-    setViewerIndex(index);
-    setZoom(1);
-    setViewerOpen(true);
+    setMediaViewer({ urls: [...files], index });
   }
 
   const [shopName, setShopName] = useState("");
@@ -437,16 +429,31 @@ export function AdminPage() {
   }
 
   async function refreshTasks() {
-    const [taskRows, submissionRows] = await Promise.all([
+    const [taskRows, subPack] = await Promise.all([
       apiFetch<AdminTask[]>("/api/admin/tasks"),
-      apiFetch<AdminTaskSubmission[]>("/api/admin/tasks/submissions"),
+      apiFetch<{ items: AdminTaskSubmission[]; total: number }>(
+        `/api/admin/tasks/submissions?limit=${TASK_SUBMISSIONS_PAGE}&offset=0`,
+      ),
     ]);
     setTasks(taskRows);
-    setTaskSubmissions(submissionRows);
-    setAdminInboxCounts((prev) => ({
-      ...prev,
-      tasks: submissionRows.filter((item) => item.status === "PENDING").length,
-    }));
+    setTaskSubmissions(subPack.items);
+    setTaskSubmissionsTotal(subPack.total);
+    void refreshAdminInboxCounts();
+  }
+
+  async function loadMoreTaskSubmissions() {
+    if (taskSubmissionsLoadingMore) return;
+    if (taskSubmissions.length >= taskSubmissionsTotal) return;
+    setTaskSubmissionsLoadingMore(true);
+    try {
+      const subPack = await apiFetch<{ items: AdminTaskSubmission[]; total: number }>(
+        `/api/admin/tasks/submissions?limit=${TASK_SUBMISSIONS_PAGE}&offset=${taskSubmissions.length}`,
+      );
+      setTaskSubmissions((prev) => [...prev, ...subPack.items]);
+      setTaskSubmissionsTotal(subPack.total);
+    } finally {
+      setTaskSubmissionsLoadingMore(false);
+    }
   }
 
   async function refreshAdminInboxCounts() {
@@ -2417,6 +2424,22 @@ export function AdminPage() {
                   </span>
                 </div>
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2">
+                <span className="text-[10px] text-steam-muted">
+                  В списке: <span className="text-steam-text">{taskSubmissions.length}</span> / {taskSubmissionsTotal}
+                </span>
+                {taskSubmissions.length < taskSubmissionsTotal ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={taskSubmissionsLoadingMore}
+                    onClick={() => void loadMoreTaskSubmissions()}
+                  >
+                    {taskSubmissionsLoadingMore ? "Загрузка…" : "Загрузить ещё"}
+                  </Button>
+                ) : null}
+              </div>
 
               <div className="grid gap-3">
                 {[...unreadTaskSubmissions, ...readTaskSubmissions].map((submission) => {
@@ -2432,8 +2455,8 @@ export function AdminPage() {
                           try {
                             await apiJson(`/api/admin/tasks/submissions/${submission.id}`, { isRead: true }, "PATCH");
                             await refreshTasks();
-                          } catch (e) {
-                            console.error("Failed to mark submission as read", e);
+                          } catch {
+                            /* сеть/сервер — карточка всё равно открыта */
                           }
                         }
                       }}
@@ -2515,13 +2538,22 @@ export function AdminPage() {
                       <div className="flex items-center justify-between border-t border-white/5 pt-3">
                         <div className="flex -space-x-2">
                           {submission.evidence.slice(0, 4).map((file, i) => (
-                            <div key={i} className="h-8 w-12 overflow-hidden rounded-md border border-black/50 bg-[#0f172a]/80 shadow-md transition hover:scale-110 hover:z-10">
-                              {isVideoMedia(file) ? (
+                            <button
+                              key={i}
+                              type="button"
+                              className="relative z-20 h-8 w-12 overflow-hidden rounded-md border border-black/50 bg-[#0f172a]/80 shadow-md transition hover:z-30 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent/60"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                openViewer(submission.evidence, i);
+                              }}
+                              aria-label={`Открыть вложение ${i + 1}`}
+                            >
+                              {isEvidenceVideoUrl(file) ? (
                                 <div className="flex h-full w-full items-center justify-center bg-steam-accent/20 text-[8px] font-black text-steam-accent">MP4</div>
                               ) : (
-                                <img src={file} className="h-full w-full object-cover" />
+                                <img src={file} className="h-full w-full object-cover" loading="lazy" decoding="async" alt="" />
                               )}
-                            </div>
+                            </button>
                           ))}
                           {submission.evidence.length > 4 && (
                             <div className="flex h-8 w-8 items-center justify-center rounded-md border border-white/5 bg-[#1a2b44]/90 text-[10px] font-black text-steam-muted shadow-md">
@@ -2612,32 +2644,39 @@ export function AdminPage() {
                     <div className="grid gap-3">
                       <div className="text-[10px] font-black uppercase tracking-[0.3em] text-steam-accent/60">Медиа-вложения</div>
                       {selectedTaskSubmission.evidence.length ? (
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                           {selectedTaskSubmission.evidence.map((file, index) => {
-                            const isVideo = isVideoMedia(file);
+                            const isVideo = isEvidenceVideoUrl(file);
                             return (
-                              <div key={file} className="group relative overflow-hidden rounded-xl border border-cyan-200/10 bg-[linear-gradient(180deg,rgba(9,16,30,0.85),rgba(6,10,20,0.94))] shadow-inner backdrop-blur-lg">
+                              <button
+                                key={`${selectedTaskSubmission.id}-${index}-${file}`}
+                                type="button"
+                                onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
+                                className="group relative aspect-video overflow-hidden rounded-xl border border-cyan-200/15 bg-[linear-gradient(180deg,rgba(9,16,30,0.85),rgba(6,10,20,0.94))] shadow-inner backdrop-blur-lg transition hover:border-steam-accent/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent/50"
+                              >
                                 {isVideo ? (
-                                  <div className="aspect-video w-full bg-black">
-                                    <video
-                                      src={file}
-                                      controls
-                                      className="h-full w-full object-contain"
-                                      poster={`${file}?thumb=1`}
-                                    />
-                                  </div>
+                                  <video
+                                    src={file}
+                                    preload="metadata"
+                                    muted
+                                    playsInline
+                                    className="h-full w-full object-cover opacity-95 transition duration-700 group-hover:scale-[1.03] group-hover:opacity-100"
+                                  />
                                 ) : (
-                                  <button
-                                    onClick={() => openViewer(selectedTaskSubmission.evidence, index)}
-                                    className="block w-full overflow-hidden"
-                                  >
-                                    <img src={file} className="w-full object-contain transition duration-1000 group-hover:scale-[1.05]" alt={`Evidence ${index + 1}`} />
-                                    <div className="absolute bottom-3 right-3 rounded-lg bg-[#0f172a]/80 px-4 py-2 text-[10px] font-black tracking-[0.2em] text-white shadow-2xl backdrop-blur-xl border border-white/10 group-hover:border-steam-accent/40 transition-colors">
-                                      СКРИНШОТ #{index + 1}
-                                    </div>
-                                  </button>
+                                  <img
+                                    src={file}
+                                    loading="lazy"
+                                    decoding="async"
+                                    alt={`Вложение ${index + 1}`}
+                                    className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]"
+                                  />
                                 )}
-                              </div>
+                                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 py-2 text-left">
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-white/95">
+                                    {isVideo ? "Видео" : "Скриншот"} · {index + 1}/{selectedTaskSubmission.evidence.length}
+                                  </span>
+                                </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -3472,107 +3511,12 @@ export function AdminPage() {
         ) : null}
       </Modal>
 
-      <AnimatePresence>
-        {viewerOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 p-4 backdrop-blur-xl"
-            onClick={() => setViewerOpen(false)}
-          >
-            <div className="absolute right-6 top-6 flex items-center gap-4 z-[110]">
-              <div className="text-sm font-bold text-white/40">
-                {viewerIndex + 1} / {viewerFiles.length}
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setViewerOpen(false);
-                }}
-                className="rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
-              >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="relative flex h-full w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={viewerFiles[viewerIndex]}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.1 }}
-                  className="relative max-h-full max-w-full"
-                >
-                  {isVideoMedia(viewerFiles[viewerIndex]) ? (
-                    <video
-                      src={viewerFiles[viewerIndex]}
-                      controls
-                      autoPlay
-                      className="max-h-[85vh] max-w-[90vw] rounded-xl shadow-2xl"
-                    />
-                  ) : (
-                    <div className="relative overflow-hidden rounded-xl">
-                      <motion.img
-                        src={viewerFiles[viewerIndex]}
-                        className="max-h-[85vh] max-w-[90vw] cursor-zoom-in object-contain shadow-2xl"
-                        animate={{ scale: zoom }}
-                        onClick={() => setZoom(prev => prev === 1 ? 2 : 1)}
-                      />
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-
-              {viewerFiles.length > 1 && (
-                <>
-                  <button
-                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/5 p-4 text-white backdrop-blur-md transition hover:bg-white/15"
-                    onClick={() => setViewerIndex((prev) => (prev === 0 ? viewerFiles.length - 1 : prev - 1))}
-                  >
-                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/5 p-4 text-white backdrop-blur-md transition hover:bg-white/15"
-                    onClick={() => setViewerIndex((prev) => (prev === viewerFiles.length - 1 ? 0 : prev + 1))}
-                  >
-                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="mt-8 flex gap-2 overflow-x-auto p-2">
-              {viewerFiles.map((file, i) => (
-                <button
-                  key={file}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewerIndex(i);
-                  }}
-                  className={clsx(
-                    "h-16 w-24 shrink-0 overflow-hidden rounded-lg border-2 transition",
-                    i === viewerIndex ? "border-steam-accent scale-105 shadow-lg shadow-steam-accent/20" : "border-transparent opacity-50 hover:opacity-100"
-                  )}
-                >
-                  {isVideoMedia(file) ? (
-                    <div className="flex h-full w-full items-center justify-center bg-black/40 text-[10px] font-bold text-white">VIDEO</div>
-                  ) : (
-                    <img src={file} className="h-full w-full object-cover" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <MediaLightbox
+        open={mediaViewer !== null}
+        onClose={() => setMediaViewer(null)}
+        items={mediaViewer?.urls ?? []}
+        initialIndex={mediaViewer?.index ?? 0}
+      />
     </div>
   );
 }
