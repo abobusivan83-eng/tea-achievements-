@@ -5,6 +5,7 @@ import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppScreen, Button, ScreenHeader } from "../components";
+import { ShopFramePreview } from "../components/shop/ShopFramePreview";
 import { fetchShopItems, fetchShopMe } from "../api/shop";
 import { fetchPublicProfile, patchMyProfile, uploadMyAvatar, uploadMyBanner } from "../api/profile";
 import { profileMeKey, publicProfileKey, shopItemsKey, shopMeKey } from "../lib/queryKeys";
@@ -13,6 +14,8 @@ import { useToast } from "../providers/ToastProvider";
 import { useTabBarInset } from "../hooks/useTabBarInset";
 import { theme } from "../theme";
 import { shopItemVisual } from "../lib/shopMedia";
+import { frames as frameCatalog, creatorFrames, statusEmojiCatalog, badgeCatalog } from "../lib/cosmetics";
+import { canUseFrameKey } from "../lib/cosmeticsAccess";
 import type { ShopItem } from "../types/shop";
 
 const MAX_BADGES = 24;
@@ -43,6 +46,7 @@ export function ProfileEditScreen() {
   const navigation = useNavigation();
   const qc = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);
+  const userRole = useAuthStore((s) => s.user?.role ?? "USER");
   const { showToast } = useToast();
 
   const [nickname, setNickname] = useState("");
@@ -107,6 +111,27 @@ export function ProfileEditScreen() {
 
   const frames = shopMeQ.data?.unlockedFrames ?? [];
   const statuses = shopMeQ.data?.unlockedStatuses ?? [];
+
+  const selectableFrameKeys = useMemo(() => {
+    const unf = new Set(frames);
+    const allKeys = [...frameCatalog, ...creatorFrames].map((f) => f.key);
+    return allKeys.filter((k) => canUseFrameKey({ role: userRole, unlockedFrames: unf, frameKey: k }));
+  }, [frames, userRole]);
+
+  const statusEmojiForCatalogKey = useCallback((catalogKey: string) => {
+    const row = statusEmojiCatalog.find((s) => s.key === catalogKey);
+    return row?.emoji ?? "✨";
+  }, []);
+
+  const badgeEmojiOrVisual = useCallback(
+    (key: string) => {
+      const it = itemByKey.get(key);
+      if (it) return shopItemVisual(it);
+      const b = badgeCatalog.find((x) => x.key === key);
+      return { emoji: b?.icon ?? "🏅" } as const;
+    },
+    [itemByKey],
+  );
 
   const avatarPreview = pendingAvatar?.uri ?? profileQ.data?.user.avatarUrl ?? undefined;
   const bannerPreview = pendingBanner?.uri ?? profileQ.data?.user.bannerUrl ?? undefined;
@@ -265,26 +290,16 @@ export function ProfileEditScreen() {
             Без рамки
           </Text>
         </Pressable>
-        {frames.map((fk) => {
-          const it = itemByKey.get(fk);
-          const vis = it ? shopItemVisual(it) : { emoji: "✨" as const };
-          return (
+        {selectableFrameKeys.map((fk) => (
             <Pressable key={fk} onPress={() => setFrameKey(fk)} style={[styles.frameOpt, frameKey === fk && styles.chipOn]}>
               <View style={styles.frameThumb}>
-                {"uri" in vis ? (
-                  <Image source={{ uri: vis.uri }} style={styles.frameThumbImg} contentFit="cover" />
-                ) : (
-                  <Text style={styles.frameEmoji} allowFontScaling={false}>
-                    {vis.emoji}
-                  </Text>
-                )}
+                <ShopFramePreview frameKey={fk} size={44} />
               </View>
               <Text style={[styles.chipTxtMultiline, frameKey === fk && styles.chipTxtOn]} numberOfLines={2} allowFontScaling={false}>
                 {keyToName.get(fk) ?? fk}
               </Text>
             </Pressable>
-          );
-        })}
+          ))}
       </ScrollView>
 
       <Text style={styles.h}>Эмодзи статуса</Text>
@@ -297,17 +312,20 @@ export function ProfileEditScreen() {
             Нет
           </Text>
         </Pressable>
-        {statuses.map((em) => (
-          <Pressable
-            key={em}
-            onPress={() => setStatusEmoji(em)}
-            style={[styles.emojiChip, statusEmoji === em && styles.chipOn]}
-          >
-            <Text style={[styles.emojiLarge, statusEmoji === em && styles.emojiLargeOn]} allowFontScaling={false}>
-              {em}
-            </Text>
-          </Pressable>
-        ))}
+        {statuses.map((catalogKey) => {
+          const emoji = statusEmojiForCatalogKey(catalogKey);
+          return (
+            <Pressable
+              key={catalogKey}
+              onPress={() => setStatusEmoji(emoji)}
+              style={[styles.emojiChip, statusEmoji === emoji && styles.chipOn]}
+            >
+              <Text style={[styles.emojiLarge, statusEmoji === emoji && styles.emojiLargeOn]} allowFontScaling={false}>
+                {emoji}
+              </Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       <Text style={styles.h}>Значки ({badges.length}/{MAX_BADGES})</Text>
@@ -317,8 +335,7 @@ export function ProfileEditScreen() {
         <View style={styles.badgeGrid}>
           {ownedBadgeKeys.map((key) => {
             const on = badges.includes(key);
-            const it = itemByKey.get(key);
-            const vis = it ? shopItemVisual(it) : { emoji: "🏅" as const };
+            const vis = badgeEmojiOrVisual(key);
             return (
               <Pressable
                 key={key}

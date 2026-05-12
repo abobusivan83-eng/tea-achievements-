@@ -4,7 +4,7 @@ export { parseEnvelope, ApiError } from "./http";
 export { isPublicAuthUrl } from "./authPaths";
 export { API_TIMEOUT_MS, API_MAX_RETRIES } from "./config";
 
-export { loginRequest, fetchMe } from "./auth";
+export { loginRequest, fetchMe, registerRequest, registerVerify } from "./auth";
 export {
   fetchPublicProfile,
   patchMyProfile,

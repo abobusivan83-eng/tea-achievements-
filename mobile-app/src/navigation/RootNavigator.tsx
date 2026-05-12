@@ -2,6 +2,7 @@ import { StyleSheet, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { LoginScreen } from "../screens/LoginScreen";
+import { RegisterScreen } from "../screens/RegisterScreen";
 import { MainTabNavigator } from "./MainTabNavigator";
 import { useAuthStore } from "../store/authStore";
 import { theme } from "../theme";
@@ -49,7 +50,10 @@ export function RootNavigator() {
         {token ? (
           <Stack.Screen name="App" component={MainTabNavigator} />
         ) : (
-          <Stack.Screen name="Auth" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

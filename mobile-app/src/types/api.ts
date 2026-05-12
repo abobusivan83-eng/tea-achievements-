@@ -16,3 +16,11 @@ export type LoginResponse = {
   token: string;
   user: AuthUser;
 };
+
+export type RegisterRequestResponse = {
+  linkToken: string;
+  deepLink: string;
+  botUsername?: string;
+  codeSent: boolean;
+  activationNeeded: boolean;
+};

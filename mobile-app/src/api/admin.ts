@@ -70,7 +70,17 @@ export function fetchAdminShopItems() {
 
 export function patchAdminUser(
   id: string,
-  payload: { role?: "USER" | "ADMIN"; xp?: number; level?: number; adminNotes?: string | null },
+  payload: {
+    role?: "USER" | "ADMIN" | "CREATOR";
+    nickname?: string;
+    xp?: number;
+    level?: number;
+    adminNotes?: string | null;
+    adminTags?: string[];
+    frameKey?: string | null;
+    badges?: string[];
+    statusEmoji?: string | null;
+  },
 ) {
   return apiRequest.patch<AdminUserRow>(`/api/admin/users/${id}`, payload);
 }

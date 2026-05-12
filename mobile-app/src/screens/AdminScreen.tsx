@@ -27,8 +27,10 @@ import {
   fetchAdminAuditLogs,
   fetchAdminTelegramTemplates,
   sendAdminTelegramBroadcast,
+  patchAdminUser,
+  patchAdminUserCoins,
 } from "../api/admin";
-import type { AdminTaskSubmission, AdminSupportSuggestion, AdminSupportReport } from "../types/admin";
+import type { AdminTaskSubmission, AdminSupportSuggestion, AdminSupportReport, AdminUserRow } from "../types/admin";
 import type { SupportStatus } from "../types/tasks";
 import { useToast } from "../providers/ToastProvider";
 
@@ -83,6 +85,19 @@ export function AdminScreen() {
   const staff = role === "ADMIN" || role === "CREATOR";
   const [panel, setPanel] = useState<Panel>("dashboard");
   const [responses, setResponses] = useState<Record<string, string>>({});
+  const [userEditForm, setUserEditForm] = useState<{
+    id: string;
+    nickname: string;
+    adminNotes: string;
+    adminTags: string;
+    level: string;
+    xp: string;
+    frameKey: string;
+    statusEmoji: string;
+    badges: string;
+    rolePick: "USER" | "ADMIN";
+    coinsDelta: string;
+  } | null>(null);
 
   const countsQ = useQuery({ queryKey: adminInboxCountsKey, queryFn: fetchAdminInboxCounts, enabled: staff, staleTime: 20_000 });
   const tasksQ = useQuery({
@@ -148,6 +163,41 @@ export function AdminScreen() {
     onSuccess: async (r) => {
       showToast({ message: `Рассылка: отправлено ${r.sent}, ошибок ${r.failed}`, tone: "success" });
       setTgMessage("");
+    },
+    onError: (e) => showToast({ message: e instanceof Error ? e.message : "Ошибка", tone: "error" }),
+  });
+
+  const patchUserM = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: {
+        role?: "USER" | "ADMIN" | "CREATOR";
+        nickname?: string;
+        xp?: number;
+        level?: number;
+        adminNotes?: string | null;
+        adminTags?: string[];
+        frameKey?: string | null;
+        badges?: string[];
+        statusEmoji?: string | null;
+      };
+    }) => patchAdminUser(id, payload),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+      showToast({ message: "Пользователь обновлён", tone: "success" });
+      setUserEditForm(null);
+    },
+    onError: (e) => showToast({ message: e instanceof Error ? e.message : "Ошибка", tone: "error" }),
+  });
+
+  const coinsM = useMutation({
+    mutationFn: ({ id, delta }: { id: string; delta: number }) => patchAdminUserCoins(id, delta),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+      showToast({ message: "Монеты изменены", tone: "success" });
     },
     onError: (e) => showToast({ message: e instanceof Error ? e.message : "Ошибка", tone: "error" }),
   });
@@ -386,18 +436,201 @@ export function AdminScreen() {
         (usersQ.data?.length ?? 0) === 0 ? (
           <EmptyState title="Нет данных" subtitle="Пользователи загрузятся здесь." icon="people-outline" />
         ) : (
-          usersQ.data?.map((u) => (
-            <SteamCard key={u.id} style={styles.card}>
-              <Text style={styles.title}>
-                {u.nickname} · {u.role}
-              </Text>
-              <Text style={styles.meta}>
-                #{u.publicId ?? "—"} · ур. {u.level} · XP {u.xp}
-                {u.blocked ? " · ЗАБЛОКИРОВАН" : ""}
-              </Text>
-              {u.adminNotes ? <Text style={styles.body}>Заметки: {u.adminNotes}</Text> : null}
-            </SteamCard>
-          ))
+          usersQ.data?.map((u: AdminUserRow) => {
+            const expanded = userEditForm?.id === u.id;
+            const toggleEdit = () => {
+              if (expanded) setUserEditForm(null);
+              else {
+                setUserEditForm({
+                  id: u.id,
+                  nickname: u.nickname,
+                  adminNotes: u.adminNotes ?? "",
+                  adminTags: (u.adminTags ?? []).join(", "),
+                  level: String(u.level ?? 1),
+                  xp: String(u.xp ?? 0),
+                  frameKey: u.frameKey ?? "",
+                  statusEmoji: u.statusEmoji ?? "",
+                  badges: (u.badges ?? []).join(", "),
+                  rolePick: u.role === "ADMIN" ? "ADMIN" : "USER",
+                  coinsDelta: "",
+                });
+              }
+            };
+            return (
+              <SteamCard key={u.id} style={styles.card}>
+                <View style={styles.userHead}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.title}>
+                      {u.nickname} · {u.role}
+                    </Text>
+                    <Text style={styles.meta}>
+                      #{u.publicId ?? "—"} · ур. {u.level} · XP {u.xp}
+                      {u.blocked ? " · ЗАБЛОКИРОВАН" : ""}
+                    </Text>
+                  </View>
+                  <Button compact variant="ghost" onPress={toggleEdit}>
+                    {expanded ? "Свернуть" : "Редактировать"}
+                  </Button>
+                </View>
+                {u.adminNotes && !expanded ? <Text style={styles.body}>Заметки: {u.adminNotes}</Text> : null}
+                {expanded && userEditForm ? (
+                  <View style={{ marginTop: theme.space.sm, gap: theme.space.sm }}>
+                    <Text style={styles.meta}>Никнейм</Text>
+                    <TextInput
+                      value={userEditForm.nickname}
+                      onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, nickname: v } : f))}
+                      style={styles.input}
+                      placeholderTextColor={theme.colors.textMuted}
+                    />
+                    <Text style={styles.meta}>Заметки администратора</Text>
+                    <TextInput
+                      value={userEditForm.adminNotes}
+                      onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, adminNotes: v } : f))}
+                      style={styles.input}
+                      multiline
+                      placeholderTextColor={theme.colors.textMuted}
+                    />
+                    <Text style={styles.meta}>Теги (через запятую)</Text>
+                    <TextInput
+                      value={userEditForm.adminTags}
+                      onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, adminTags: v } : f))}
+                      style={styles.input}
+                      placeholderTextColor={theme.colors.textMuted}
+                    />
+                    <Text style={styles.meta}>Уровень / XP</Text>
+                    <View style={{ flexDirection: "row", gap: theme.space.sm }}>
+                      <TextInput
+                        value={userEditForm.level}
+                        onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, level: v } : f))}
+                        style={[styles.input, { flex: 1 }]}
+                        keyboardType="number-pad"
+                        placeholder="Уровень"
+                        placeholderTextColor={theme.colors.textMuted}
+                      />
+                      <TextInput
+                        value={userEditForm.xp}
+                        onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, xp: v } : f))}
+                        style={[styles.input, { flex: 2 }]}
+                        keyboardType="number-pad"
+                        placeholder="XP"
+                        placeholderTextColor={theme.colors.textMuted}
+                      />
+                    </View>
+                    <Text style={styles.meta}>Рамка (key), статус (эмодзи), значки (key через запятую)</Text>
+                    <TextInput
+                      value={userEditForm.frameKey}
+                      onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, frameKey: v } : f))}
+                      style={styles.input}
+                      placeholder="frameKey"
+                      placeholderTextColor={theme.colors.textMuted}
+                    />
+                    <TextInput
+                      value={userEditForm.statusEmoji}
+                      onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, statusEmoji: v } : f))}
+                      style={styles.input}
+                      placeholder="Статус (эмодзи)"
+                      placeholderTextColor={theme.colors.textMuted}
+                    />
+                    <TextInput
+                      value={userEditForm.badges}
+                      onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, badges: v } : f))}
+                      style={styles.input}
+                      placeholder="badge keys"
+                      placeholderTextColor={theme.colors.textMuted}
+                    />
+                    {role === "CREATOR" && u.role !== "CREATOR" ? (
+                      <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" }}>
+                        <Text style={styles.meta}>Роль:</Text>
+                        {(["USER", "ADMIN"] as const).map((r) => (
+                          <Pressable
+                            key={r}
+                            onPress={() => setUserEditForm((f) => (f ? { ...f, rolePick: r } : f))}
+                            style={[styles.statusChip, userEditForm.rolePick === r && styles.statusChipOn]}
+                          >
+                            <Text style={[styles.statusTxt, userEditForm.rolePick === r && styles.statusTxtOn]}>{r}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                    <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", alignItems: "center" }}>
+                      <Text style={styles.meta}>Монеты Δ</Text>
+                      <TextInput
+                        value={userEditForm.coinsDelta}
+                        onChangeText={(v) => setUserEditForm((f) => (f ? { ...f, coinsDelta: v } : f))}
+                        style={[styles.input, { width: 100 }]}
+                        keyboardType="number-pad"
+                        placeholder="±"
+                        placeholderTextColor={theme.colors.textMuted}
+                      />
+                      <Button
+                        compact
+                        loading={coinsM.isPending}
+                        onPress={() => {
+                          const d = parseInt(userEditForm.coinsDelta.trim(), 10);
+                          if (Number.isNaN(d) || d === 0) {
+                            Alert.alert("Монеты", "Введите ненулевое число (например 50 или -20).");
+                            return;
+                          }
+                          coinsM.mutate({ id: u.id, delta: d });
+                          setUserEditForm((f) => (f ? { ...f, coinsDelta: "" } : f));
+                        }}
+                      >
+                        Применить Δ
+                      </Button>
+                      <Button compact variant="ghost" onPress={() => coinsM.mutate({ id: u.id, delta: 50 })}>
+                        +50
+                      </Button>
+                      <Button compact variant="ghost" onPress={() => coinsM.mutate({ id: u.id, delta: -50 })}>
+                        −50
+                      </Button>
+                    </View>
+                    <Button
+                      loading={patchUserM.isPending}
+                      onPress={() => {
+                        const nick = userEditForm.nickname.trim();
+                        if (nick.length < 2 || nick.length > 24) {
+                          Alert.alert("Никнейм", "От 2 до 24 символов.");
+                          return;
+                        }
+                        const lvl = parseInt(userEditForm.level, 10);
+                        const xpV = parseInt(userEditForm.xp, 10);
+                        if (Number.isNaN(lvl) || Number.isNaN(xpV)) {
+                          Alert.alert("Уровень/XP", "Введите числа.");
+                          return;
+                        }
+                        const tags = userEditForm.adminTags
+                          .split(",")
+                          .map((x) => x.trim())
+                          .filter(Boolean);
+                        const badges = userEditForm.badges
+                          .split(",")
+                          .map((x) => x.trim())
+                          .filter(Boolean);
+                        const fk = userEditForm.frameKey.trim();
+                        const st = userEditForm.statusEmoji.trim();
+                        patchUserM.mutate({
+                          id: u.id,
+                          payload: {
+                            nickname: nick,
+                            adminNotes: userEditForm.adminNotes.trim() || null,
+                            adminTags: tags,
+                            level: lvl,
+                            xp: xpV,
+                            frameKey: fk.length ? fk : null,
+                            statusEmoji: st.length ? st : null,
+                            badges,
+                            ...(role === "CREATOR" && u.role !== "CREATOR" ? { role: userEditForm.rolePick } : {}),
+                          },
+                        });
+                      }}
+                    >
+                      Сохранить пользователя
+                    </Button>
+                  </View>
+                ) : null}
+              </SteamCard>
+            );
+          })
         )
       ) : null}
 
@@ -451,8 +684,8 @@ export function AdminScreen() {
         <SteamCard>
           <Text style={styles.title}>Кастомизация профиля</Text>
           <Text style={styles.body}>
-            Рамка, значки и эмодзи статуса настраиваются у пользователя на сайте (карточка пользователя в админке). Здесь
-            список участников — вкладка «Пользователи».
+            Рамка, эмодзи статуса, значки, уровень и монеты: вкладка «Пользователи» — карточка → «Редактировать». Полный
+            визуальный редактор как на сайте можно дополнять по мере необходимости.
           </Text>
         </SteamCard>
       ) : null}
@@ -550,4 +783,5 @@ const styles = StyleSheet.create({
   statusChipOn: { borderColor: theme.colors.accent, backgroundColor: "rgba(102,192,244,0.12)" },
   statusTxt: { ...theme.typography.xs, color: theme.colors.textMuted, fontWeight: "700" },
   statusTxtOn: { color: theme.colors.text },
+  userHead: { flexDirection: "row", alignItems: "flex-start", gap: theme.space.sm },
 });

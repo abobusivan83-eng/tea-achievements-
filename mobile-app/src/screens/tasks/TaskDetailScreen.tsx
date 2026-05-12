@@ -309,8 +309,14 @@ export function TaskDetailScreen() {
                   multiline
                   style={styles.input}
                 />
+                <Text style={styles.attachLabel} allowFontScaling={false}>
+                  Прикрепить файлы
+                </Text>
+                <Text style={styles.attachHint} allowFontScaling={false}>
+                  Нажмите кнопку ниже, чтобы выбрать фото или видео из галереи (до 8 вложений).
+                </Text>
                 <Button variant="ghost" onPress={pickMedia} compact style={styles.pickBtn}>
-                  Прикрепить фото или видео ({attachments.length}/8)
+                  Выбрать файлы из галереи ({attachments.length}/8)
                 </Button>
                 {attachments.length > 0 ? (
                   <View style={styles.queue}>
@@ -439,6 +445,19 @@ const styles = StyleSheet.create({
     padding: theme.space.sm,
     color: theme.colors.text,
     ...theme.typography.body,
+    marginBottom: theme.space.sm,
+  },
+  attachLabel: {
+    ...theme.typography.xs,
+    color: theme.colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  attachHint: {
+    ...theme.typography.sm,
+    color: theme.colors.textMuted,
     marginBottom: theme.space.sm,
   },
   pickBtn: { marginBottom: theme.space.sm },

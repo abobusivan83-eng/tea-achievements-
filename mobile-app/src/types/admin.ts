@@ -62,6 +62,9 @@ export type AdminUserRow = {
   blocked?: boolean;
   adminNotes?: string | null;
   adminTags?: string[];
+  frameKey?: string | null;
+  statusEmoji?: string | null;
+  badges?: string[];
 };
 
 export type AdminShopItem = {

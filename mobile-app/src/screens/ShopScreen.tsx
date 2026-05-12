@@ -55,12 +55,12 @@ function normalizeShopItems(list: ShopItem[] | undefined): ShopItem[] {
 }
 
 
-type Cat = "ALL" | ShopItemType;
+type Cat = "FRAMES" | "STATUSES" | "BADGES";
 
 const CATS: { id: Cat; label: string }[] = [
-  { id: "ALL", label: "Все" },
-  { id: "FRAME", label: "Рамки" },
-  { id: "BADGE", label: "Значки" },
+  { id: "FRAMES", label: "Рамки" },
+  { id: "STATUSES", label: "Статусы" },
+  { id: "BADGES", label: "Значки" },
 ];
 
 export function ShopScreen() {
@@ -70,7 +70,7 @@ export function ShopScreen() {
   const userId = useAuthStore((s) => s.user?.id);
   const { showToast } = useToast();
   const [buyingId, setBuyingId] = useState<string | null>(null);
-  const [cat, setCat] = useState<Cat>("ALL");
+  const [cat, setCat] = useState<Cat>("FRAMES");
   const [sheetItem, setSheetItem] = useState<ShopItem | null>(null);
 
   const itemsQ = useQuery({ queryKey: shopItemsKey, queryFn: fetchShopItems, staleTime: 60_000 });
@@ -87,8 +87,9 @@ export function ShopScreen() {
 
   const filtered = useMemo(() => {
     const all = itemsNormalized;
-    if (cat === "ALL") return all;
-    return all.filter((i) => i.type === cat);
+    if (cat === "FRAMES") return all.filter((i) => i.type === "FRAME");
+    if (cat === "STATUSES") return all.filter((i) => i.type === "BADGE" && i.key.startsWith("status:"));
+    return all.filter((i) => i.type === "BADGE" && !i.key.startsWith("status:"));
   }, [itemsNormalized, cat]);
 
   const buy = useCallback(
@@ -249,7 +250,7 @@ export function ShopScreen() {
               subtitle={
                 itemsNormalized.length === 0
                   ? "Товары появятся позже или проверьте подключение."
-                  : "В этой категории пока пусто."
+                  : "В этом разделе пока пусто."
               }
               icon="cart-outline"
               style={{ marginTop: theme.space.lg }}

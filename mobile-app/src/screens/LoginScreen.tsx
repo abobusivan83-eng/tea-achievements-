@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,13 +10,17 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { loginRequest } from "../api/auth";
 import { ApiError } from "../api/http";
 import { AppBackground, Button, ScreenHeader, SteamCard } from "../components";
 import { useAuthStore } from "../store/authStore";
 import { theme } from "../theme";
+import type { RootStackParamList } from "../navigation/types";
 
 export function LoginScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const setSession = useAuthStore((s) => s.setSession);
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +36,8 @@ export function LoginScreen() {
         password,
         rememberMe: true,
       });
-      await setSession(res.token, res.user, true);
+      const u = res.user as { publicId?: string | number };
+      await setSession(res.token, { ...res.user, publicId: String(u.publicId ?? "") }, true);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Не удалось войти";
       setError(msg);
@@ -91,8 +97,11 @@ export function LoginScreen() {
                 Войти
               </Button>
             </SteamCard>
+            <Pressable onPress={() => navigation.navigate("Register")} style={styles.registerLink}>
+              <Text style={styles.registerLinkTxt}>Регистрация</Text>
+            </Pressable>
             <Text style={styles.footer}>
-              Регистрация с подтверждением в Telegram — пока через сайт. Токен хранится в защищённом хранилище устройства.
+              Регистрация с подтверждением в Telegram. Токен хранится в защищённом хранилище устройства.
             </Text>
           </View>
         </ScrollView>
@@ -129,6 +138,8 @@ const styles = StyleSheet.create({
   inputGap: { marginTop: theme.space.sm },
   error: { ...theme.typography.sm, color: theme.colors.danger, marginTop: theme.space.sm },
   submit: { marginTop: theme.space.md },
+  registerLink: { alignItems: "center", paddingVertical: theme.space.sm },
+  registerLinkTxt: { ...theme.typography.sm, color: theme.colors.accent, fontWeight: "800" },
   footer: {
     ...theme.typography.xs,
     color: theme.colors.textMuted,
