@@ -1,3 +1,4 @@
+/** Дублирует `frontend/src/lib/cosmetics.ts` для превью рамок в приложении; при изменении каталога на сайте обновите и этот файл. */
 export type FrameRarity = "common" | "uncommon" | "rare" | "epic" | "legendary" | "secret";
 export type FrameShape = "circle" | "square" | "squircle";
 
