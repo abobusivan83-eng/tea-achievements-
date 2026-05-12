@@ -202,6 +202,10 @@ export type TaskItem = {
     createdAt: string;
     reviewedAt: string | null;
     adminResponse: string | null;
+    /** Текст заявки пользователя (API: message) */
+    message?: string | null;
+    /** URL вложений-доказательств (API: evidence) */
+    evidence?: string[];
     /** Модератор, принявший задание (если есть в БД) */
     reviewedByNickname?: string | null;
   } | null;
@@ -223,7 +227,7 @@ export type TaskSubmission = {
   id: string;
   taskId: string;
   userId: string;
-  message: string;
+  message: string | null;
   status: SupportStatus;
   adminResponse: string | null;
   isRead: boolean;

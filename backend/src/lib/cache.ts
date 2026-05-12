@@ -1,6 +1,6 @@
 import NodeCache from "node-cache";
 
-const shopItemsTtlSec = 120;
+const shopItemsTtlSec = 45;
 
 const shopCache = new NodeCache({
   stdTTL: shopItemsTtlSec,

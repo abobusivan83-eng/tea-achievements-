@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Чайные достижения",
+    "slug": "chai-achievements",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "icon": "./assets/icon.png",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a24",
+      "image": "./assets/splash.png"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ru.clan.salamanca.chaiachievements"
+    },
+    "android": {
+      "package": "ru.clan.salamanca.chaiachievements",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a24"
+      },
+      "versionCode": 1
+    },
+    "scheme": "chai-achievements",
+    "plugins": [],
+    "extra": {
+      "apiBaseUrl": "",
+      "stagingAccessToken": "",
+      "eas": {
+        "projectId": "9db84d8b-b0bd-4f5a-ab4c-8e499487ac58"
+      }
+    }
+  }
+}

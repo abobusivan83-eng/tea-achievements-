@@ -1,0 +1,49 @@
+name: Mobile Android APK (EAS Cloud)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS профиль (из mobile-app/eas.json)"
+        required: false
+        default: "preview-apk"
+
+concurrency:
+  group: mobile-eas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eas-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile-app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
+      EXPO_PUBLIC_STAGING_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_STAGING_ACCESS_TOKEN }}
+      EAS_PROFILE: ${{ github.event.inputs.profile }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18.1"
+          cache: npm
+          cache-dependency-path: mobile-app/package-lock.json
+
+      - run: npm ci
+
+      - name: EAS — собрать Android (cloud-apk gate + build --wait)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_TOKEN:-}" ]]; then
+            echo "::error::Секрет EXPO_TOKEN не задан (Expo → Access tokens)." >&2
+            exit 1
+          fi
+          if [[ -z "${EXPO_PUBLIC_API_BASE_URL:-}" ]]; then
+            echo "::error::Секрет EXPO_PUBLIC_API_BASE_URL не задан (HTTPS URL вашего API без завершающего /)." >&2
+            exit 1
+          fi
+          npm run build:apk:cloud

@@ -1,0 +1,18 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+npm-debug.*
+*.log
+.env
+.env.local
+
+# Native (генерируются `expo prebuild` локально; EAS Build создаёт их в облаке заново)
+/android/
+/ios/

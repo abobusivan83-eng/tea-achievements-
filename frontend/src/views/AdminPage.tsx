@@ -252,6 +252,8 @@ function toAdminTaskCardModel(submission: AdminTaskSubmission): TaskItem {
       createdAt: submission.createdAt,
       reviewedAt: submission.reviewedAt,
       adminResponse: submission.adminResponse,
+      message: submission.message,
+      evidence: submission.evidence,
       reviewedByNickname: null,
     },
   };

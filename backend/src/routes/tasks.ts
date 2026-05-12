@@ -32,6 +32,12 @@ function taskListWhere(userId: string): Prisma.TaskWhereInput {
   };
 }
 
+function submissionEvidenceUrls(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === "string");
+  return [];
+}
+
 function taskActiveWhere(userId: string, now: Date): Prisma.TaskWhereInput {
   // For submissions we must ensure the task is currently ACTIVE by schedule.
   return {
@@ -90,6 +96,8 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
         select: {
           id: true,
           status: true,
+          message: true,
+          evidenceJson: true,
           createdAt: true,
           reviewedAt: true,
           adminResponse: true,
@@ -111,6 +119,8 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
   const payload = rows.map((t) => {
     const sub = t.submissions[0];
     const earnedAt = earnedMap.get(t.achievementId) ?? null;
+    const evidence = submissionEvidenceUrls(sub?.evidenceJson);
+    const message = sub?.message ?? null;
     const normalizedSubmission =
       sub?.status === "RESOLVED" || earnedAt
         ? {
@@ -120,10 +130,18 @@ tasksRouter.get("/", async (req: AuthedRequest, res) => {
             reviewedAt: sub?.reviewedAt ?? earnedAt ?? null,
             adminResponse: sub?.adminResponse ?? null,
             reviewedByNickname: sub?.reviewedBy?.nickname ?? null,
+            message,
+            evidence,
           }
         : sub
           ? {
-              ...sub,
+              id: sub.id,
+              status: sub.status,
+              message,
+              evidence,
+              createdAt: sub.createdAt,
+              reviewedAt: sub.reviewedAt,
+              adminResponse: sub.adminResponse,
               reviewedByNickname: sub.reviewedBy?.nickname ?? null,
             }
           : null;
